@@ -1,8 +1,9 @@
 """FastAPI application entrypoint for the Step 0 sandbox Workplace Agent.
 
-Wires the consistent error contract, a per-request request id, and the
-read-only Step 0 routers. No LLM planning, write actions, or production
-integration are present.
+Wires the consistent error contract, per-request request ids, and the read-only
+Step 0 routers. No LLM planning, write actions, or production integration are
+present. The raw mock Nucleus API is mounted only when explicitly enabled in a
+sandbox environment.
 """
 
 from __future__ import annotations
@@ -39,12 +40,14 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
-    # Health/capabilities (unauthenticated).
     app.include_router(health_routes.router)
-    # Enforced Workplace-Agent tools (permission-checked).
     app.include_router(workplace_routes.router)
-    # Raw mock external organization API (system-of-record stand-in).
-    app.include_router(mock_api_routes.router)
+
+    # The raw mock surface represents the future Nucleus system of record. It is
+    # intentionally local/sandbox-only and is never mounted merely because the
+    # application happens to have the mock adapter available.
+    if settings.is_sandbox and settings.enable_raw_mock_api:
+        app.include_router(mock_api_routes.router)
 
     return app
 
