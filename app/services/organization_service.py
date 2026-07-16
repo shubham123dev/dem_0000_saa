@@ -50,15 +50,13 @@ class OrganizationService:
     ) -> tuple[OrganizationProfile, AccessContext]:
         """Shared prelude: resolve org, block production, authorize the user."""
 
-        # 1. Resolve the organization (raises OrganizationNotFoundError -> 404).
         profile = await self._gateway.get_profile(organization_id)
 
-        # 2. Sandbox-only enforcement. Production access is explicitly blocked.
         if profile.environment != Environment.SANDBOX:
             raise ProductionAccessBlockedError()
 
-        # 3. Backend-owned authorization (active membership + permission).
-        #    Reads never require a seat; seats gate future write/chat tools.
+        # Administrative reads require an active membership and permission.
+        # They deliberately do not require a licensed seat.
         access = await self._permissions.authorize(
             user=user,
             organization_id=organization_id,
