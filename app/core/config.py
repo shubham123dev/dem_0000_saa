@@ -2,7 +2,7 @@
 
 Settings are loaded from environment variables (and an optional local `.env`
 file). No secrets or personal information are stored here. Step 0 is
-sandbox-only; the configured environment must always be ``sandbox``.
+sandbox-only; production access remains explicitly out of scope.
 """
 
 from __future__ import annotations
@@ -23,12 +23,9 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "DBMR Workplace Agent (Sandbox)"
-
-    # Async SQLAlchemy URL for the mock sandbox database.
     database_url: str = "sqlite+aiosqlite:///./workplace_sandbox.db"
-
-    # Step 0 is sandbox-only. Production access is explicitly out of scope.
     environment: str = "sandbox"
+    enable_raw_mock_api: bool = False
 
     @property
     def is_sandbox(self) -> bool:
