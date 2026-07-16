@@ -1,69 +1,59 @@
 # Security Model (Step 0)
 
-## Backend-owned permissions
+## Backend-owned authorization
 
-- Roles and permissions live in the database (`employee_organization_roles`,
-  `role_permissions`) and are enforced by the backend permission service.
-- Authorization is **never** derived from the request body, query parameters,
-  headers (beyond employee identity), or any user-provided text.
-- There is **no default admin**. When the `X-Mock-Employee-Id` header is absent,
-  the request is `unauthenticated`.
+- Identity comes only from `X-Mock-User-Id` and must resolve to an active user.
+- Organization access requires an active row in `organization_memberships`.
+- Roles and permissions are stored in `organization_memberships` and `role_permissions` and are enforced by the backend permission service.
+- Authorization is never derived from request bodies, query parameters, prompts or user-provided text.
+- There is no default administrator.
 
-### Roles and permissions
+## Current roles
 
-| Role | Permissions |
-| ---- | ----------- |
-| `sandbox_admin` | `organization.profile.read`, `organization.profile.update`* |
-| `sandbox_reader` | `organization.profile.read` |
+Both roles receive the implemented read permissions. `sandbox_admin` also receives reserved organization-management write permissions for later controlled phases, but Step 0 exposes no write routes.
 
-\* `organization.profile.update` exists in the model for future steps. Step 0
-exposes and executes **no** update endpoint or write tool.
+Current read permissions are:
+
+- `organization.profile.read`
+- `organization.users.read`
+- `organization.seats.read`
+- `organization.reports.read`
+- `audit.read`
 
 ## Organization isolation
 
-- Every organization-scoped request verifies the employee has a role in that
-  specific organization before any data is returned.
-- Audit events are queried strictly by `organization_id`, so one organization's
-  audit log never includes another's events.
+- Every organization-scoped request verifies active membership in that exact organization.
+- Data and audit queries are constrained by `organization_id`.
+- Administrative reads do not require a seat; membership and permission are the authorization boundary.
 
 ## Sandbox-only enforcement
 
 - Only organizations with `environment = sandbox` are accessible.
-- Any non-sandbox organization access is rejected with
-  `production_access_blocked`.
-- Production access, production credentials, and production integrations are
-  entirely out of scope.
+- Non-sandbox access is rejected with `production_access_blocked`.
+- Production credentials and integrations are out of scope.
 
-## No prompt-provided authorization
+## Fixed tool surface
 
-- The system does not accept roles, permissions, or authorization claims from
-  prompts or user text. Identity comes only from the mock auth header and is
-  resolved against the database.
+- Five read-only workplace tools are implemented.
+- No arbitrary SQL, URL/HTTP execution, shell access, browser automation or LLM planner exists.
+- No workplace `POST`, `PUT`, `PATCH` or `DELETE` route exists.
 
-## No arbitrary tools
+## Repository separation
 
-- No arbitrary SQL execution, no arbitrary URL/HTTP execution, no shell tools,
-  no browser automation, and no LLM planner exist in Step 0.
-- The only tool is the read-only `get_organization_profile`.
+- SARA/chatbot runtime code, clients, credentials, gateways and permissions are not part of this repository.
+- Any future model/provider integration must use a provider-neutral Workplace Agent contract.
+- Fake providers, fixtures and deterministic responses belong under `tests/` only.
 
 ## Audit requirements
 
-- Every successful profile read appends an **append-only** audit event.
-- Audit rows are never updated or deleted by application behavior.
-- Audit events capture actor, organization, event type, operation, outcome,
-  resource, and structured details.
+- Every successful business read appends an immutable audit event.
+- Audit rows are not updated or deleted by application behavior.
+- Audit events record actor, organization, event type, operation, outcome, resource and structured details.
+- Reading the audit log is not itself audited to avoid recursive growth.
 
-## Secret-redaction policy
+## Secret and error policy
 
-- API error responses use a single consistent contract with a generated
-  `request_id` and never leak stack traces, database paths, SQL, or secrets.
-- Full exception detail is logged server-side only.
-- No secrets or personal information are committed; `.env` is git-ignored and
-  only `.env.example` (with placeholder values) is tracked.
-- Employee emails are synthetic test values (`*@example.test`).
-
-## Production access blocked
-
-- Production is explicitly blocked at the service layer via sandbox-only
-  enforcement and advertised as `production_access: false` on
-  `GET /workplace/capabilities`.
+- Error responses use a consistent contract with a generated `request_id`.
+- Responses do not expose stack traces, database paths, SQL or secrets.
+- `.env` is ignored; `.env.example` contains only non-secret local defaults.
+- Seed identities and email addresses are synthetic.
