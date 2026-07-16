@@ -1,52 +1,33 @@
 # Agent Tool Contracts
 
-The Workplace Agent exposes a **small, fixed** set of tools. Tools are not
-arbitrary: there is no arbitrary SQL, shell, browser control, or unrestricted
-HTTP. Step 0 exposes exactly one tool, and it is read-only.
+The Workplace Agent exposes a small fixed set of read-only tools. There is no arbitrary SQL, shell, browser control or unrestricted HTTP execution.
 
----
+| Tool | Permission | Input | Output |
+|---|---|---|---|
+| `get_organization_profile` | `organization.profile.read` | `organization_id` | organization profile |
+| `list_organization_users` | `organization.users.read` | `organization_id` | organization members |
+| `get_organization_seat_summary` | `organization.seats.read` | `organization_id` | calculated seat summary |
+| `list_organization_reports` | `organization.reports.read` | `organization_id` | report catalog with access annotations |
+| `check_organization_report_access` | `organization.reports.read` | `organization_id`, `report_id` | exact access decision |
 
-## Tool: `get_organization_profile`
+All tools are sandbox-only and backed by `OrganizationApiGateway`. They authenticate with `X-Mock-User-Id`, authorize against database-owned membership and permission data, and append audit events for successful business reads.
 
-| Field | Value |
-| ----- | ----- |
-| **Risk** | `read_only` |
-| **Permission** | `organization.profile.read` |
-| **Environment** | `sandbox` |
-| **Input** | `organization_id` |
-| **Output** | organization profile |
-| **Backing endpoint** | `GET /sandbox/organizations/{organization_id}/profile` |
-| **Status** | implemented (Step 0) |
-
-### Failure cases
+## Failure cases
 
 | HTTP | Error code | When |
-| ---- | ---------- | ---- |
-| 401 | `unauthenticated` | missing/unknown `X-Mock-Employee-Id` |
-| 403 | `employee_disabled` | employee account disabled |
-| 403 | `organization_access_denied` | employee has no role in the organization |
-| 403 | `permission_denied` | employee lacks `organization.profile.read` |
-| 403 | `production_access_blocked` | organization is not `sandbox` |
+|---|---|---|
+| 401 | `unauthenticated` | missing or unknown user identity |
+| 403 | `user_disabled` | user account is disabled |
+| 403 | `organization_access_denied` | user lacks active organization membership |
+| 403 | `permission_denied` | membership role lacks the required permission |
+| 403 | `production_access_blocked` | organization is not sandbox |
 | 404 | `organization_not_found` | organization does not exist |
-| 500 | `internal_error` | unexpected server error |
+| 500 | `internal_error` | unexpected failure |
 
-### Side effects
+## Write boundary
 
-- Appends one append-only audit event (`organization.profile.read`).
+Step 0 registers no write tools and exposes no workplace `POST`, `PUT`, `PATCH` or `DELETE` routes. Future writes must follow explicit proposal, approval, verification, audit and rollback controls.
 
----
+## Testing boundary
 
-## Tool: `update_organization_display_name`
-
-| Field | Value |
-| ----- | ----- |
-| **Risk** | `write` |
-| **Permission** | `organization.profile.update` |
-| **Environment** | `sandbox` |
-| **Input** | `organization_id`, `new_display_name`, `expected_version` |
-| **Output** | updated organization profile |
-| **Status** | **`NOT_IMPLEMENTED_STEP_0`** |
-
-This tool is intentionally **not implemented** in Step 0. It is listed here only
-to lock its name and contract ahead of the first controlled write workflow. No
-write tool is registered, exposed, or executable in Step 0.
+Runtime code under `app/` contains production-facing contracts and sandbox adapters only. Test doubles, fake planners, fixtures and deterministic model responses must be placed under `tests/`.
