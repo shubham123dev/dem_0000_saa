@@ -1,43 +1,46 @@
-# DBMR Workplace Agent — Step 0 (Contract-First Read-Only Sandbox)
+# DBMR Workplace Agent — Step 0
 
-This is a **new, separate backend repository** for the DBMR Workplace Agent.
+This repository is a separate, sandbox-only backend foundation for the future DBMR Workplace Agent. The existing SARA/chatbot repository remains unchanged and is not integrated in Step 0.
 
-> The existing SARA/chatbot repository is completely out of scope. This service
-> does not modify it, copy its pipelines, integrate with `/ai-search_1`, change
-> chatbot behavior, create frontend code, or connect to production systems.
+## What Step 0 proves
 
-Step 0 delivers a **contract-first, production-structured, read-only sandbox
-foundation**. It proves exactly one flow and nothing more:
-
-```
-Mock internal employee
-→ authenticated mock context (X-Mock-Employee-Id)
-→ sandbox organization selected
-→ employee permission checked
-→ organization profile read from mock database
-→ exact state returned
-→ read event recorded in audit log
+```text
+X-Mock-User-Id
+→ active mock user
+→ active organization membership
+→ backend-owned permission check
+→ sandbox organization guard
+→ OrganizationApiGateway
+→ MockOrganizationApiAdapter
+→ SQLite mock database
+→ append-only audit event
 ```
 
-Step 0 intentionally **does not** implement LLM planning, write actions, approval
-flows, browser automation, arbitrary SQL/HTTP tools, or production integration.
+Step 0 exposes five read-only workplace capabilities:
 
-## Technology
+- `get_organization_profile`
+- `list_organization_users`
+- `get_organization_seat_summary`
+- `list_organization_reports`
+- `check_organization_report_access`
 
-- Python + FastAPI
-- Pydantic v2
-- SQLAlchemy 2.x (async) with SQLite + `aiosqlite`
-- Alembic migrations
-- pytest / pytest-asyncio / httpx
+It deliberately contains no LLM planner, write action, approval execution, arbitrary SQL, arbitrary HTTP, shell tool, browser automation, production credential, or frontend code.
 
-## Project layout
+## Domain model
 
-```
-app/          FastAPI app, domain, schemas, db, repositories, permissions, adapters, services
-alembic/      Migration environment + versions
-docs/         Requirements, architecture, contracts, security model
-tests/        pytest suite (isolated temporary databases)
-```
+The mock sandbox persists nine tables:
+
+1. `organizations`
+2. `users`
+3. `organization_memberships`
+4. `organization_seat_pools`
+5. `seat_assignments`
+6. `reports`
+7. `organization_report_access`
+8. `role_permissions`
+9. `audit_events`
+
+Users and seats are separate. An organization may have any number of members, while only selected users consume licensed seats. Report access belongs to the organization and is resolved by backend data.
 
 ## Setup
 
@@ -45,29 +48,26 @@ tests/        pytest suite (isolated temporary databases)
 python -m venv .venv
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
-# macOS / Linux
+# macOS/Linux
 source .venv/bin/activate
 
 pip install -e ".[dev]"
-
-cp .env.example .env          # copy env (Windows: copy .env.example .env)
+copy .env.example .env   # Windows
+# cp .env.example .env  # macOS/Linux
 ```
 
-## Database: migrate + seed
+## Database
+
+Alembic is the only application schema authority:
 
 ```bash
 alembic upgrade head
 python -m app.db.seed
 ```
 
-The seed is **idempotent** — running it twice produces no duplicate data.
+The seed is deterministic and idempotent. It does not call `create_all()`.
 
-Seeded synthetic data:
-
-- Organization `org_sandbox_001` (Demo Enterprise Sandbox, environment `sandbox`)
-- `emp_admin_001` — role `sandbox_admin`
-- `emp_reader_001` — role `sandbox_reader`
-- `emp_outsider_001` — no role in `org_sandbox_001`
+Seeded data includes one sandbox organization, six synthetic users, five memberships, five licensed seats, three active seat assignments, five reports and three organization report grants.
 
 ## Run
 
@@ -75,53 +75,48 @@ Seeded synthetic data:
 uvicorn app.main:app --reload
 ```
 
-## Step 0 endpoints
+The raw mock Nucleus API is disabled by default. Enable it only for isolated local contract testing:
 
-| Method | Path | Auth | Notes |
-| ------ | ---- | ---- | ----- |
-| GET | `/health` | none | liveness |
-| GET | `/ready` | none | database connectivity |
-| GET | `/workplace/capabilities` | none | one read tool, zero write tools |
-| GET | `/sandbox/organizations/{organization_id}/profile` | `X-Mock-Employee-Id` | read profile + audit |
-| GET | `/sandbox/organizations/{organization_id}/audit-log` | `X-Mock-Employee-Id` | append-only events |
-
-No `POST`/`PATCH`/`PUT`/`DELETE` organization routes exist in Step 0.
-
-## Sample requests
-
-Authorized read:
-
-```bash
-curl -H "X-Mock-Employee-Id: emp_admin_001" \
-  http://127.0.0.1:8000/sandbox/organizations/org_sandbox_001/profile
+```env
+WORKPLACE_ENABLE_RAW_MOCK_API=true
 ```
 
-Unauthorized read (no membership → 403):
+## Main endpoints
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/health` | none |
+| GET | `/ready` | none |
+| GET | `/workplace/capabilities` | none |
+| GET | `/workplace/organizations/{organization_id}/profile` | `X-Mock-User-Id` |
+| GET | `/workplace/organizations/{organization_id}/users` | `X-Mock-User-Id` |
+| GET | `/workplace/organizations/{organization_id}/seats` | `X-Mock-User-Id` |
+| GET | `/workplace/organizations/{organization_id}/reports` | `X-Mock-User-Id` |
+| GET | `/workplace/organizations/{organization_id}/reports/{report_id}/access` | `X-Mock-User-Id` |
+| GET | `/workplace/organizations/{organization_id}/audit-log` | `X-Mock-User-Id` |
+
+No workplace `POST`, `PUT`, `PATCH` or `DELETE` route exists in Step 0.
+
+## Example
 
 ```bash
-curl -H "X-Mock-Employee-Id: emp_outsider_001" \
-  http://127.0.0.1:8000/sandbox/organizations/org_sandbox_001/profile
+curl -H "X-Mock-User-Id: usr_admin_001" \
+  http://127.0.0.1:8000/workplace/organizations/org_sandbox_001/profile
 ```
 
 ## Tests
 
 ```bash
+python -m compileall -q app tests
 pytest -q
 ```
 
-Tests use isolated temporary databases and never touch a developer's local
-SQLite file.
+Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
 
-## Documentation
+## Next phase
 
-- [`docs/WORKPLACE_REQUIREMENTS.md`](docs/WORKPLACE_REQUIREMENTS.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/ORGANIZATION_API_CONTRACTS.md`](docs/ORGANIZATION_API_CONTRACTS.md)
-- [`docs/AGENT_TOOL_CONTRACTS.md`](docs/AGENT_TOOL_CONTRACTS.md)
-- [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md)
+The first write phase is intentionally not implemented yet:
 
-## Scope boundary
-
-This foundation stops after Step 0. The next step (not implemented here) will
-introduce the first controlled write workflow: inspect → propose immutable
-action → approve → update → re-read → verify → audit → rollback.
+```text
+inspect → propose immutable action → approve → execute → re-read → verify → audit → rollback
+```

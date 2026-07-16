@@ -1,14 +1,15 @@
 """Async database engine and session management.
 
-Provides an application engine/sessionmaker plus a FastAPI dependency
-(``get_session``). Test suites create their own isolated engines and override
-the dependency, so nothing here binds tests to a developer's local database.
+Provides an application engine/sessionmaker plus a FastAPI dependency. SQLite
+foreign-key enforcement is enabled on every connection so the mock sandbox
+cannot persist invalid organization, user, seat, or report-access references.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -22,13 +23,31 @@ _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
+def _enable_sqlite_foreign_keys(engine: AsyncEngine) -> None:
+    if engine.url.get_backend_name() != "sqlite":
+        return
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
+def create_engine(database_url: str) -> AsyncEngine:
+    """Create a configured async engine for application and test use."""
+
+    engine = create_async_engine(database_url, future=True)
+    _enable_sqlite_foreign_keys(engine)
+    return engine
+
+
 def get_engine() -> AsyncEngine:
     """Return the process-wide async engine, creating it on first use."""
 
     global _engine
     if _engine is None:
-        settings = get_settings()
-        _engine = create_async_engine(settings.database_url, future=True)
+        _engine = create_engine(get_settings().database_url)
     return _engine
 
 

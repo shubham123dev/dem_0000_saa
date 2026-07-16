@@ -1,5 +1,4 @@
 """Audit-log tests: reads are audited; the log is organization-scoped."""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -16,7 +15,6 @@ PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
 async def test_read_creates_audit_event(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
-    # No reads yet -> empty audit log (reading the log is itself not audited).
     before = await client.get(AUDIT_URL, headers=admin_headers)
     assert before.status_code == 200
     assert before.json()["events"] == []
@@ -41,15 +39,9 @@ async def test_each_read_tool_records_its_own_event(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
     await client.get(PROFILE_URL, headers=admin_headers)
-    await client.get(
-        "/workplace/organizations/org_sandbox_001/users", headers=admin_headers
-    )
-    await client.get(
-        "/workplace/organizations/org_sandbox_001/seats", headers=admin_headers
-    )
-    await client.get(
-        "/workplace/organizations/org_sandbox_001/reports", headers=admin_headers
-    )
+    await client.get("/workplace/organizations/org_sandbox_001/users", headers=admin_headers)
+    await client.get("/workplace/organizations/org_sandbox_001/seats", headers=admin_headers)
+    await client.get("/workplace/organizations/org_sandbox_001/reports", headers=admin_headers)
     await client.get(
         "/workplace/organizations/org_sandbox_001/reports/rpt_market_001/access",
         headers=admin_headers,
@@ -85,6 +77,8 @@ async def test_audit_events_are_scoped_to_organization(
             updated_at=now,
         )
     )
+    # With SQLite FK enforcement enabled, persist the parent before the child.
+    await db_session.flush()
     db_session.add(
         OrganizationMembershipORM(
             organization_id="org_sandbox_002",
@@ -96,7 +90,6 @@ async def test_audit_events_are_scoped_to_organization(
     )
     await db_session.commit()
 
-    # Read org 1 twice, org 2 once.
     await client.get(PROFILE_URL, headers=admin_headers)
     await client.get(PROFILE_URL, headers=admin_headers)
     await client.get(
@@ -114,6 +107,4 @@ async def test_audit_events_are_scoped_to_organization(
     assert all(e["organization_id"] == "org_sandbox_002" for e in log2)
     assert len(log1) >= 2
     assert len(log2) >= 1
-    ids1 = {e["id"] for e in log1}
-    ids2 = {e["id"] for e in log2}
-    assert ids1.isdisjoint(ids2)
+    assert {e["id"] for e in log1}.isdisjoint({e["id"] for e in log2})

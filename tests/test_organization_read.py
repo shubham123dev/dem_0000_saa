@@ -1,5 +1,4 @@
 """Organization profile read-flow and cross-cutting guarantees."""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -22,7 +21,6 @@ from app.db.seed import seed
 from app.main import app
 
 PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
-
 EXPECTED_ORG = {
     "id": "org_sandbox_001",
     "display_name": "Demo Enterprise Sandbox",
@@ -52,9 +50,8 @@ async def test_reader_can_read_organization(
 ) -> None:
     resp = await client.get(PROFILE_URL, headers=reader_headers)
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["organization"] == EXPECTED_ORG
-    assert body["access"]["user_id"] == "usr_member_001"
+    assert resp.json()["organization"] == EXPECTED_ORG
+    assert resp.json()["access"]["user_id"] == "usr_member_001"
 
 
 async def test_unknown_organization_returns_404(
@@ -86,7 +83,8 @@ async def test_production_organization_access_is_blocked(
             updated_at=now,
         )
     )
-    # Even a fully-privileged active membership must not bypass sandbox-only rules.
+    # Persist the parent first because SQLite foreign keys are deliberately on.
+    await db_session.flush()
     db_session.add(
         OrganizationMembershipORM(
             organization_id="org_prod_001",
@@ -159,12 +157,12 @@ async def test_responses_do_not_leak_sql_or_db_paths(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
     leak_markers = ["sqlite", "aiosqlite", "SELECT ", "Traceback", "test_sandbox.db"]
-
-    ok = await client.get(PROFILE_URL, headers=admin_headers)
-    not_found = await client.get(
-        "/workplace/organizations/org_missing/profile", headers=admin_headers
-    )
-    for resp in (ok, not_found):
-        text = resp.text
+    responses = [
+        await client.get(PROFILE_URL, headers=admin_headers),
+        await client.get(
+            "/workplace/organizations/org_missing/profile", headers=admin_headers
+        ),
+    ]
+    for resp in responses:
         for marker in leak_markers:
-            assert marker not in text
+            assert marker not in resp.text

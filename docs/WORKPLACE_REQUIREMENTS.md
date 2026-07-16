@@ -1,56 +1,55 @@
 # Workplace Agent — Requirements (Step 0)
 
-## Relationship to the existing chatbot
+## Product boundary
 
-- The existing **SARA/chatbot** repository remains **separate and unchanged**.
-- This Workplace Agent is a **separate backend/product area** with its own
-  repository, data model, and lifecycle.
-- Step 0 does **not** integrate with `/ai-search_1`, does not reuse chatbot
-  pipelines, and does not alter any current chatbot behavior.
+- Existing SARA/chatbot remains separate and unchanged.
+- Workplace Agent is a separate backend/product area.
+- Initial users are internal company users represented by synthetic sandbox identities.
+- Initial environment is sandbox only; production access is blocked.
+- Current Nucleus administration pages are a frontend/sessionStorage prototype.
+- Real Nucleus APIs and live organization database are not available yet.
 
-## Users and environment
+## Step 0 scope
 
-- The initial users are **internal employees**.
-- The **initial environment is sandbox only**. Production access is explicitly
-  **out of scope** and is actively blocked by the backend.
+Step 0 provides a production-structured mock foundation for:
 
-## Current state of Nucleus data
-
-- Real Nucleus pages currently rely on a **frontend/`sessionStorage` prototype**
-  for data.
-- Real **Nucleus organization APIs are not yet available**.
-- Step 0 therefore provides a **mock database** and a **mock adapter** that
-  stands in for the future Nucleus organization API.
-
-## What Step 0 delivers
-
-Step 0 proves exactly one flow:
-
-```
-Mock internal employee
-→ authenticated mock context (X-Mock-Employee-Id)
-→ sandbox organization selected
-→ employee permission checked
-→ organization profile read from mock database
-→ exact state returned
-→ read event recorded in audit log
+```text
+X-Mock-User-Id
+→ active user
+→ active organization membership
+→ backend-owned role/permission check
+→ sandbox organization guard
+→ mock organization adapter/API
+→ SQLite sandbox database
+→ append-only audit event
 ```
 
-## Explicit non-goals for Step 0
+Read capabilities:
 
-- No LLM planner, no chain-of-thought logic, no OpenAI/LLM SDK.
-- No write actions, approval flows, or execution of proposed changes.
-- No arbitrary SQL, arbitrary HTTP/URL execution, shell tools, or browser
-  automation.
-- No production integration, production credentials, or real employee data.
-- No frontend code, billing features, API-key creation, or security-policy
-  modification.
+- organization profile
+- organization users/memberships
+- seat entitlement and calculated usage
+- report catalog with organization access
+- exact organization/report access check
+
+## Business rules
+
+- Users and seats are different entities.
+- An organization may contain any number of users.
+- Seat usage is calculated from active seat assignments; it is never stored as a counter.
+- Report access belongs to the organization.
+- Administrative reads require active user + active membership + permission, but not an active seat.
+- Future chatbot/report consumption will additionally require seat and report-access checks.
+
+## Explicit non-goals
+
+No LLM planner, write execution, approval flow, arbitrary SQL, arbitrary HTTP, shell access, browser automation, production integration, real employee data, billing mutation, API-key creation, security-policy mutation or frontend code.
 
 ## Guardrails
 
-- Permissions are **backend-owned** and read from the database. Authorization
-  is never taken from the request body or user text.
-- The service and API layers depend on an **organization adapter contract**,
-  not on the SQLite ORM.
-- Audit events are **append-only**.
-- API responses never leak stack traces, database paths, SQL, or secrets.
+- Permissions are resolved only from backend data.
+- Prompt text cannot grant authorization.
+- Service/API layers depend on adapter contracts, not ORM objects.
+- Audit events are append-only.
+- Raw mock API is disabled by default and may be enabled only in sandbox.
+- API errors do not leak SQL, paths, stack traces or secrets.
