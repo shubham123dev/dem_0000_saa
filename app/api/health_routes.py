@@ -33,6 +33,6 @@ async def ready(session: SessionDep) -> dict[str, str]:
 
 @router.get("/workplace/capabilities", response_model=CapabilitiesResponse)
 async def capabilities() -> CapabilitiesResponse:
-    """Advertise Step 0 capabilities: one read tool, zero write tools."""
+    """Advertise Step 0 capabilities: five read tools, zero write tools."""
 
     return CapabilitiesResponse()

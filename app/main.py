@@ -11,9 +11,10 @@ import uuid
 
 from fastapi import FastAPI, Request
 
-from app.api import health_routes, sandbox_routes
+from app.api import health_routes, workplace_routes
 from app.core.config import get_settings
 from app.core.errors import REQUEST_ID_HEADER, register_exception_handlers
+from app.mock_api import routes as mock_api_routes
 
 
 def create_app() -> FastAPI:
@@ -38,8 +39,12 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    # Health/capabilities (unauthenticated).
     app.include_router(health_routes.router)
-    app.include_router(sandbox_routes.router)
+    # Enforced Workplace-Agent tools (permission-checked).
+    app.include_router(workplace_routes.router)
+    # Raw mock external organization API (system-of-record stand-in).
+    app.include_router(mock_api_routes.router)
 
     return app
 

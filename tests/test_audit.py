@@ -1,4 +1,4 @@
-"""Audit-log tests (Step 0 tests 10, 11)."""
+"""Audit-log tests: reads are audited; the log is organization-scoped."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ from datetime import datetime, timezone
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.orm_models import EmployeeOrganizationRoleORM, OrganizationORM
+from app.db.orm_models import OrganizationMembershipORM, OrganizationORM
 
-AUDIT_URL = "/sandbox/organizations/org_sandbox_001/audit-log"
-PROFILE_URL = "/sandbox/organizations/org_sandbox_001/profile"
+AUDIT_URL = "/workplace/organizations/org_sandbox_001/audit-log"
+PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
 
 
 async def test_read_creates_audit_event(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
-    # No reads yet -> empty audit log.
+    # No reads yet -> empty audit log (reading the log is itself not audited).
     before = await client.get(AUDIT_URL, headers=admin_headers)
     assert before.status_code == 200
     assert before.json()["events"] == []
@@ -26,17 +26,44 @@ async def test_read_creates_audit_event(
 
     after = await client.get(AUDIT_URL, headers=admin_headers)
     events = after.json()["events"]
-    # The profile read + the first audit-log read both authorize with a read
-    # permission; only the profile read records an audit event.
     read_events = [e for e in events if e["resource_id"] == "org_sandbox_001"]
     assert len(read_events) >= 1
     event = read_events[0]
-    assert event["actor_employee_id"] == "emp_admin_001"
+    assert event["actor_user_id"] == "usr_admin_001"
     assert event["organization_id"] == "org_sandbox_001"
     assert event["event_type"] == "organization.profile.read"
     assert event["operation"] == "read"
     assert event["outcome"] == "success"
     assert event["resource_type"] == "organization"
+
+
+async def test_each_read_tool_records_its_own_event(
+    client: AsyncClient, admin_headers: dict[str, str]
+) -> None:
+    await client.get(PROFILE_URL, headers=admin_headers)
+    await client.get(
+        "/workplace/organizations/org_sandbox_001/users", headers=admin_headers
+    )
+    await client.get(
+        "/workplace/organizations/org_sandbox_001/seats", headers=admin_headers
+    )
+    await client.get(
+        "/workplace/organizations/org_sandbox_001/reports", headers=admin_headers
+    )
+    await client.get(
+        "/workplace/organizations/org_sandbox_001/reports/rpt_market_001/access",
+        headers=admin_headers,
+    )
+
+    events = (await client.get(AUDIT_URL, headers=admin_headers)).json()["events"]
+    event_types = {e["event_type"] for e in events}
+    assert event_types == {
+        "organization.profile.read",
+        "organization.users.read",
+        "organization.seats.read",
+        "organization.reports.read",
+        "organization.reports.access_check",
+    }
 
 
 async def test_audit_events_are_scoped_to_organization(
@@ -59,10 +86,12 @@ async def test_audit_events_are_scoped_to_organization(
         )
     )
     db_session.add(
-        EmployeeOrganizationRoleORM(
-            employee_id="emp_admin_001",
+        OrganizationMembershipORM(
             organization_id="org_sandbox_002",
+            user_id="usr_admin_001",
             role="sandbox_admin",
+            membership_status="active",
+            joined_at=now,
         )
     )
     await db_session.commit()
@@ -71,19 +100,18 @@ async def test_audit_events_are_scoped_to_organization(
     await client.get(PROFILE_URL, headers=admin_headers)
     await client.get(PROFILE_URL, headers=admin_headers)
     await client.get(
-        "/sandbox/organizations/org_sandbox_002/profile", headers=admin_headers
+        "/workplace/organizations/org_sandbox_002/profile", headers=admin_headers
     )
 
     log1 = (await client.get(AUDIT_URL, headers=admin_headers)).json()["events"]
     log2 = (
         await client.get(
-            "/sandbox/organizations/org_sandbox_002/audit-log", headers=admin_headers
+            "/workplace/organizations/org_sandbox_002/audit-log", headers=admin_headers
         )
     ).json()["events"]
 
     assert all(e["organization_id"] == "org_sandbox_001" for e in log1)
     assert all(e["organization_id"] == "org_sandbox_002" for e in log2)
-    # org 1 has strictly more read events than org 2.
     assert len(log1) >= 2
     assert len(log2) >= 1
     ids1 = {e["id"] for e in log1}

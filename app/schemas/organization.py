@@ -39,9 +39,9 @@ class OrganizationOut(BaseModel):
 
 
 class OrganizationAccessOut(BaseModel):
-    """The access context under which the profile was read."""
+    """The access context under which a read tool was invoked."""
 
-    employee_id: str
+    user_id: str
     permission: str
 
 
@@ -56,6 +56,14 @@ class CapabilitiesResponse(BaseModel):
     """Advertised Step 0 capabilities. Zero write tools; no production access."""
 
     environment: str = "sandbox"
-    read_tools: list[str] = Field(default_factory=lambda: ["get_organization_profile"])
+    read_tools: list[str] = Field(
+        default_factory=lambda: [
+            "get_organization_profile",
+            "list_organization_users",
+            "get_organization_seat_summary",
+            "list_organization_reports",
+            "check_organization_report_access",
+        ]
+    )
     write_tools: list[str] = Field(default_factory=list)
     production_access: bool = False

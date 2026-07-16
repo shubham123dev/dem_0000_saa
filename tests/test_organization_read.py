@@ -1,4 +1,4 @@
-"""Organization read-flow tests (Step 0 tests 4, 5, 9, 12, 13, 14, 15)."""
+"""Organization profile read-flow and cross-cutting guarantees."""
 
 from __future__ import annotations
 
@@ -9,12 +9,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.orm_models import (
-    EmployeeORM,
-    EmployeeOrganizationRoleORM,
+    OrganizationMembershipORM,
     OrganizationORM,
+    OrganizationReportAccessORM,
+    OrganizationSeatPoolORM,
+    ReportORM,
+    RolePermissionORM,
+    SeatAssignmentORM,
+    UserORM,
 )
 from app.db.seed import seed
 from app.main import app
+
+PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
 
 EXPECTED_ORG = {
     "id": "org_sandbox_001",
@@ -30,14 +37,12 @@ EXPECTED_ORG = {
 async def test_admin_can_read_organization(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
-    resp = await client.get(
-        "/sandbox/organizations/org_sandbox_001/profile", headers=admin_headers
-    )
+    resp = await client.get(PROFILE_URL, headers=admin_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert body["organization"] == EXPECTED_ORG
     assert body["access"] == {
-        "employee_id": "emp_admin_001",
+        "user_id": "usr_admin_001",
         "permission": "organization.profile.read",
     }
 
@@ -45,20 +50,18 @@ async def test_admin_can_read_organization(
 async def test_reader_can_read_organization(
     client: AsyncClient, reader_headers: dict[str, str]
 ) -> None:
-    resp = await client.get(
-        "/sandbox/organizations/org_sandbox_001/profile", headers=reader_headers
-    )
+    resp = await client.get(PROFILE_URL, headers=reader_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert body["organization"] == EXPECTED_ORG
-    assert body["access"]["employee_id"] == "emp_reader_001"
+    assert body["access"]["user_id"] == "usr_member_001"
 
 
 async def test_unknown_organization_returns_404(
     client: AsyncClient, admin_headers: dict[str, str]
 ) -> None:
     resp = await client.get(
-        "/sandbox/organizations/org_does_not_exist/profile", headers=admin_headers
+        "/workplace/organizations/org_does_not_exist/profile", headers=admin_headers
     )
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "organization_not_found"
@@ -83,18 +86,20 @@ async def test_production_organization_access_is_blocked(
             updated_at=now,
         )
     )
-    # Even a fully-privileged role in the org must not bypass sandbox-only rules.
+    # Even a fully-privileged active membership must not bypass sandbox-only rules.
     db_session.add(
-        EmployeeOrganizationRoleORM(
-            employee_id="emp_admin_001",
+        OrganizationMembershipORM(
             organization_id="org_prod_001",
+            user_id="usr_admin_001",
             role="sandbox_admin",
+            membership_status="active",
+            joined_at=now,
         )
     )
     await db_session.commit()
 
     resp = await client.get(
-        "/sandbox/organizations/org_prod_001/profile", headers=admin_headers
+        "/workplace/organizations/org_prod_001/profile", headers=admin_headers
     )
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "production_access_blocked"
@@ -112,13 +117,22 @@ async def test_no_write_routes_exist() -> None:
 async def test_seed_is_idempotent(
     sessionmaker_: async_sessionmaker[AsyncSession],
 ) -> None:
-    async def _counts(session: AsyncSession) -> tuple[int, int, int]:
-        orgs = await session.scalar(select(func.count()).select_from(OrganizationORM))
-        emps = await session.scalar(select(func.count()).select_from(EmployeeORM))
-        roles = await session.scalar(
-            select(func.count()).select_from(EmployeeOrganizationRoleORM)
-        )
-        return orgs, emps, roles
+    async def _counts(session: AsyncSession) -> dict[str, int]:
+        async def n(model) -> int:
+            return int(
+                await session.scalar(select(func.count()).select_from(model)) or 0
+            )
+
+        return {
+            "orgs": await n(OrganizationORM),
+            "users": await n(UserORM),
+            "memberships": await n(OrganizationMembershipORM),
+            "pools": await n(OrganizationSeatPoolORM),
+            "assignments": await n(SeatAssignmentORM),
+            "reports": await n(ReportORM),
+            "access": await n(OrganizationReportAccessORM),
+            "role_permissions": await n(RolePermissionORM),
+        }
 
     async with sessionmaker_() as session:
         await seed(session)
@@ -129,7 +143,16 @@ async def test_seed_is_idempotent(
         second = await _counts(session)
 
     assert first == second
-    assert first == (1, 3, 2)
+    assert first == {
+        "orgs": 1,
+        "users": 6,
+        "memberships": 5,
+        "pools": 1,
+        "assignments": 3,
+        "reports": 5,
+        "access": 3,
+        "role_permissions": 21,
+    }
 
 
 async def test_responses_do_not_leak_sql_or_db_paths(
@@ -137,11 +160,9 @@ async def test_responses_do_not_leak_sql_or_db_paths(
 ) -> None:
     leak_markers = ["sqlite", "aiosqlite", "SELECT ", "Traceback", "test_sandbox.db"]
 
-    ok = await client.get(
-        "/sandbox/organizations/org_sandbox_001/profile", headers=admin_headers
-    )
+    ok = await client.get(PROFILE_URL, headers=admin_headers)
     not_found = await client.get(
-        "/sandbox/organizations/org_missing/profile", headers=admin_headers
+        "/workplace/organizations/org_missing/profile", headers=admin_headers
     )
     for resp in (ok, not_found):
         text = resp.text

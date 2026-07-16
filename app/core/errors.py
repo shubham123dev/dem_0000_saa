@@ -32,7 +32,7 @@ REQUEST_ID_HEADER = "X-Request-Id"
 ERROR_CODES = frozenset(
     {
         "unauthenticated",
-        "employee_disabled",
+        "user_disabled",
         "organization_not_found",
         "organization_access_denied",
         "permission_denied",
@@ -61,10 +61,14 @@ class UnauthenticatedError(AppError):
     message = "Authentication is required."
 
 
-class EmployeeDisabledError(AppError):
-    code = "employee_disabled"
+class UserDisabledError(AppError):
+    code = "user_disabled"
     status_code = status.HTTP_403_FORBIDDEN
-    message = "Employee account is disabled."
+    message = "User account is disabled."
+
+
+# Backwards-compatible alias for the pre-rename exception name.
+EmployeeDisabledError = UserDisabledError
 
 
 class OrganizationNotFoundError(AppError):
@@ -76,13 +80,13 @@ class OrganizationNotFoundError(AppError):
 class OrganizationAccessDeniedError(AppError):
     code = "organization_access_denied"
     status_code = status.HTTP_403_FORBIDDEN
-    message = "Employee does not have access to the requested organization."
+    message = "User does not have access to the requested organization."
 
 
 class PermissionDeniedError(AppError):
     code = "permission_denied"
     status_code = status.HTTP_403_FORBIDDEN
-    message = "Employee does not have the required permission."
+    message = "User does not have the required permission."
 
 
 class ProductionAccessBlockedError(AppError):

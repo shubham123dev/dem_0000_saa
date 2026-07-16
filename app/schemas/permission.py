@@ -12,7 +12,7 @@ class AccessContext(BaseModel):
     request input or user text.
     """
 
-    employee_id: str
+    user_id: str
     organization_id: str
     roles: list[str]
     permissions: list[str]

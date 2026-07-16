@@ -1,25 +1,47 @@
 """Mock organization adapter backed by the sandbox SQLite database.
 
-This satisfies the ``OrganizationGateway`` contract. The future production
-implementation, ``NucleusOrganizationApiAdapter``, will call the real Nucleus
-organization API and is intentionally NOT implemented in Step 0.
+``MockOrganizationApiAdapter`` satisfies the ``OrganizationApiGateway`` contract
+by delegating to the in-process ``MockOrganizationApi`` (which stands in for the
+future real Nucleus organization API). This is the seam that a production
+``NucleusOrganizationApiAdapter`` replaces later without touching the Workplace
+Agent core.
 """
 
 from __future__ import annotations
 
-from app.core.errors import OrganizationNotFoundError
-from app.domain.models import OrganizationProfile
-from app.repositories.organization_repository import OrganizationRepository
+from app.domain.models import (
+    OrganizationMember,
+    OrganizationProfile,
+    ReportAccessDecision,
+    ReportWithAccess,
+    SeatSummary,
+)
+from app.mock_api.service import MockOrganizationApi
 
 
-class MockOrganizationAdapter:
-    """Reads organization state from the mock database via a repository."""
+class MockOrganizationApiAdapter:
+    """Adapts the mock organization API to the ``OrganizationApiGateway``."""
 
-    def __init__(self, organization_repository: OrganizationRepository) -> None:
-        self._organizations = organization_repository
+    def __init__(self, mock_api: MockOrganizationApi) -> None:
+        self._api = mock_api
 
     async def get_profile(self, organization_id: str) -> OrganizationProfile:
-        profile = await self._organizations.get_profile(organization_id)
-        if profile is None:
-            raise OrganizationNotFoundError()
-        return profile
+        return await self._api.get_organization(organization_id)
+
+    async def list_members(self, organization_id: str) -> list[OrganizationMember]:
+        return await self._api.list_users(organization_id)
+
+    async def get_seat_summary(self, organization_id: str) -> SeatSummary:
+        return await self._api.get_seat_summary(organization_id)
+
+    async def list_reports(self, organization_id: str) -> list[ReportWithAccess]:
+        return await self._api.list_reports(organization_id)
+
+    async def check_report_access(
+        self, organization_id: str, report_id: str
+    ) -> ReportAccessDecision:
+        return await self._api.check_report_access(organization_id, report_id)
+
+
+# Backwards-compatible alias for the pre-expansion adapter name.
+MockOrganizationAdapter = MockOrganizationApiAdapter

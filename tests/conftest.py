@@ -75,14 +75,29 @@ async def client(sessionmaker_, seeded) -> AsyncIterator[AsyncClient]:
 
 @pytest.fixture
 def admin_headers() -> dict[str, str]:
-    return {"X-Mock-Employee-Id": "emp_admin_001"}
+    """Active admin, active membership, holds a seat."""
+    return {"X-Mock-User-Id": "usr_admin_001"}
 
 
 @pytest.fixture
 def reader_headers() -> dict[str, str]:
-    return {"X-Mock-Employee-Id": "emp_reader_001"}
+    """Active reader, active membership, holds a seat."""
+    return {"X-Mock-User-Id": "usr_member_001"}
+
+
+@pytest.fixture
+def unseated_headers() -> dict[str, str]:
+    """Active reader, active membership, but NO seat (reads still allowed)."""
+    return {"X-Mock-User-Id": "usr_member_003"}
+
+
+@pytest.fixture
+def invited_headers() -> dict[str, str]:
+    """Invited (not-yet-active) membership: denied at the org boundary."""
+    return {"X-Mock-User-Id": "usr_invited_001"}
 
 
 @pytest.fixture
 def outsider_headers() -> dict[str, str]:
-    return {"X-Mock-Employee-Id": "emp_outsider_001"}
+    """Active user with no membership at all."""
+    return {"X-Mock-User-Id": "usr_outsider_001"}

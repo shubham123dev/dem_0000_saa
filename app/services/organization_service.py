@@ -1,22 +1,33 @@
-"""Organization service: orchestrates the Step 0 read-only flow.
+"""Organization service: orchestrates the Step 0 read-only tools.
 
-Flow:
-    resolve organization (via adapter contract)
+Every read tool follows the same backend-owned pipeline:
+
+    resolve organization (via the OrganizationApiGateway contract)
     → enforce sandbox-only environment (block production)
-    → authorize employee (membership + permission)
-    → append read audit event
-    → return exact profile + access context
+    → authorize user (active membership + required permission)
+    → fetch data (via the gateway)
+    → append an append-only audit event
+    → return domain data + access context
 
-The service depends on the ``OrganizationGateway`` adapter contract, never on
-the ORM directly.
+The service depends only on the ``OrganizationApiGateway`` adapter contract and
+the permission/audit collaborators — never on the ORM directly. Access is
+always decided by backend data, never by any model, prompt, or request text.
 """
 
 from __future__ import annotations
 
-from app.adapters.organization.contract import OrganizationGateway
+from app.adapters.organization.contract import OrganizationApiGateway
 from app.core.errors import ProductionAccessBlockedError
 from app.domain.enums import Environment, Permission
-from app.domain.models import Employee, OrganizationProfile
+from app.domain.models import (
+    AuditEvent,
+    OrganizationMember,
+    OrganizationProfile,
+    ReportAccessDecision,
+    ReportWithAccess,
+    SeatSummary,
+    User,
+)
 from app.permissions.permission_service import PermissionService
 from app.repositories.audit_repository import AuditRepository
 from app.schemas.permission import AccessContext
@@ -26,7 +37,7 @@ class OrganizationService:
     def __init__(
         self,
         *,
-        organization_gateway: OrganizationGateway,
+        organization_gateway: OrganizationApiGateway,
         permission_service: PermissionService,
         audit_repository: AuditRepository,
     ) -> None:
@@ -34,10 +45,10 @@ class OrganizationService:
         self._permissions = permission_service
         self._audit = audit_repository
 
-    async def read_profile(
-        self, *, employee: Employee, organization_id: str
+    async def _resolve_and_authorize(
+        self, *, user: User, organization_id: str, required_permission: str
     ) -> tuple[OrganizationProfile, AccessContext]:
-        """Read a sandbox organization profile and record a read audit event."""
+        """Shared prelude: resolve org, block production, authorize the user."""
 
         # 1. Resolve the organization (raises OrganizationNotFoundError -> 404).
         profile = await self._gateway.get_profile(organization_id)
@@ -46,17 +57,26 @@ class OrganizationService:
         if profile.environment != Environment.SANDBOX:
             raise ProductionAccessBlockedError()
 
-        # 3. Backend-owned authorization (membership + required permission).
-        required = Permission.ORGANIZATION_PROFILE_READ.value
+        # 3. Backend-owned authorization (active membership + permission).
+        #    Reads never require a seat; seats gate future write/chat tools.
         access = await self._permissions.authorize(
-            employee=employee,
+            user=user,
             organization_id=organization_id,
-            required_permission=required,
+            required_permission=required_permission,
         )
+        return profile, access
 
-        # 4. Record the append-only read audit event.
+    async def read_profile(
+        self, *, user: User, organization_id: str
+    ) -> tuple[OrganizationProfile, AccessContext]:
+        """Tool: ``get_organization_profile``."""
+
+        required = Permission.ORGANIZATION_PROFILE_READ.value
+        profile, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
+        )
         await self._audit.append(
-            actor_employee_id=employee.id,
+            actor_user_id=user.id,
             organization_id=organization_id,
             event_type="organization.profile.read",
             operation="read",
@@ -65,26 +85,126 @@ class OrganizationService:
             resource_id=organization_id,
             details={"permission": required, "tool": "get_organization_profile"},
         )
-
         return profile, access
 
+    async def list_users(
+        self, *, user: User, organization_id: str
+    ) -> tuple[list[OrganizationMember], AccessContext]:
+        """Tool: ``list_organization_users``."""
+
+        required = Permission.ORGANIZATION_USERS_READ.value
+        _, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
+        )
+        members = await self._gateway.list_members(organization_id)
+        await self._audit.append(
+            actor_user_id=user.id,
+            organization_id=organization_id,
+            event_type="organization.users.read",
+            operation="read",
+            outcome="success",
+            resource_type="organization_users",
+            resource_id=organization_id,
+            details={
+                "permission": required,
+                "tool": "list_organization_users",
+                "count": len(members),
+            },
+        )
+        return members, access
+
+    async def get_seat_summary(
+        self, *, user: User, organization_id: str
+    ) -> tuple[SeatSummary, AccessContext]:
+        """Tool: ``get_organization_seat_summary``."""
+
+        required = Permission.ORGANIZATION_SEATS_READ.value
+        _, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
+        )
+        summary = await self._gateway.get_seat_summary(organization_id)
+        await self._audit.append(
+            actor_user_id=user.id,
+            organization_id=organization_id,
+            event_type="organization.seats.read",
+            operation="read",
+            outcome="success",
+            resource_type="organization_seats",
+            resource_id=organization_id,
+            details={
+                "permission": required,
+                "tool": "get_organization_seat_summary",
+                "total_seats": summary.total_seats,
+                "active_assignments": summary.active_assignments,
+            },
+        )
+        return summary, access
+
+    async def list_reports(
+        self, *, user: User, organization_id: str
+    ) -> tuple[list[ReportWithAccess], AccessContext]:
+        """Tool: ``list_organization_reports``."""
+
+        required = Permission.ORGANIZATION_REPORTS_READ.value
+        _, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
+        )
+        reports = await self._gateway.list_reports(organization_id)
+        await self._audit.append(
+            actor_user_id=user.id,
+            organization_id=organization_id,
+            event_type="organization.reports.read",
+            operation="read",
+            outcome="success",
+            resource_type="organization_reports",
+            resource_id=organization_id,
+            details={
+                "permission": required,
+                "tool": "list_organization_reports",
+                "count": len(reports),
+                "accessible": sum(1 for r in reports if r.has_access),
+            },
+        )
+        return reports, access
+
+    async def check_report_access(
+        self, *, user: User, organization_id: str, report_id: str
+    ) -> tuple[ReportAccessDecision, AccessContext]:
+        """Tool: ``check_organization_report_access``."""
+
+        required = Permission.ORGANIZATION_REPORTS_READ.value
+        _, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
+        )
+        decision = await self._gateway.check_report_access(organization_id, report_id)
+        await self._audit.append(
+            actor_user_id=user.id,
+            organization_id=organization_id,
+            event_type="organization.reports.access_check",
+            operation="read",
+            outcome="success",
+            resource_type="report",
+            resource_id=report_id,
+            details={
+                "permission": required,
+                "tool": "check_organization_report_access",
+                "has_access": decision.has_access,
+            },
+        )
+        return decision, access
+
     async def list_audit_events(
-        self, *, employee: Employee, organization_id: str
-    ):
+        self, *, user: User, organization_id: str
+    ) -> tuple[list[AuditEvent], AccessContext]:
         """Return append-only audit events scoped to a sandbox organization.
 
-        Requires ``organization.profile.read`` in Step 0.
+        Requires ``audit.read``. Reading the audit log is itself not audited, to
+        avoid unbounded self-referential growth.
         """
 
-        # Resolve + sandbox enforcement so audit reads honor the same bounds.
-        profile = await self._gateway.get_profile(organization_id)
-        if profile.environment != Environment.SANDBOX:
-            raise ProductionAccessBlockedError()
-
-        await self._permissions.authorize(
-            employee=employee,
-            organization_id=organization_id,
-            required_permission=Permission.ORGANIZATION_PROFILE_READ.value,
+        required = Permission.AUDIT_READ.value
+        _, access = await self._resolve_and_authorize(
+            user=user, organization_id=organization_id, required_permission=required
         )
-
-        return await self._audit.list_for_organization(organization_id)
+        events = await self._audit.list_for_organization(organization_id)
+        return events, access

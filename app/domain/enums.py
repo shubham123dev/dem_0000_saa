@@ -22,7 +22,7 @@ class OrganizationStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
-class EmployeeStatus(str, Enum):
+class UserStatus(str, Enum):
     ACTIVE = "active"
     DISABLED = "disabled"
 
@@ -32,19 +32,100 @@ class Role(str, Enum):
     SANDBOX_READER = "sandbox_reader"
 
 
+class MembershipStatus(str, Enum):
+    INVITED = "invited"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    REMOVED = "removed"
+
+
+class SeatType(str, Enum):
+    STANDARD = "standard"
+
+
+class SeatPoolStatus(str, Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    EXPIRED = "expired"
+
+
+class SeatAssignmentStatus(str, Enum):
+    ACTIVE = "active"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+class ReportStatus(str, Enum):
+    ACTIVE = "active"
+    RETIRED = "retired"
+
+
+class ReportAccessLevel(str, Enum):
+    VIEW = "view"
+    CHAT = "chat"
+    DOWNLOAD = "download"
+    FULL = "full"
+
+
+class ReportAccessStatus(str, Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
 class Permission(str, Enum):
     ORGANIZATION_PROFILE_READ = "organization.profile.read"
-    # Defined for future steps; Step 0 must not expose or execute an update.
     ORGANIZATION_PROFILE_UPDATE = "organization.profile.update"
+
+    ORGANIZATION_USERS_READ = "organization.users.read"
+    ORGANIZATION_USERS_INVITE = "organization.users.invite"
+    ORGANIZATION_USERS_UPDATE = "organization.users.update"
+    ORGANIZATION_USERS_REMOVE = "organization.users.remove"
+
+    ORGANIZATION_SEATS_READ = "organization.seats.read"
+    ORGANIZATION_SEATS_ASSIGN = "organization.seats.assign"
+    ORGANIZATION_SEATS_REVOKE = "organization.seats.revoke"
+
+    ORGANIZATION_REPORTS_READ = "organization.reports.read"
+    ORGANIZATION_REPORTS_GRANT = "organization.reports.grant"
+    ORGANIZATION_REPORTS_REVOKE = "organization.reports.revoke"
+
+    CHATBOT_REPORT_QUERY = "chatbot.report.query"
+    CHATBOT_REPORT_SUMMARIZE = "chatbot.report.summarize"
+
+    AUDIT_READ = "audit.read"
+
+
+# Read permissions shared by every sandbox role. Write/mutating permissions
+# (update/invite/assign/grant/etc.) are defined above for future steps but are
+# NOT exercised by any Step 0 endpoint.
+_READER_PERMISSIONS: tuple[Permission, ...] = (
+    Permission.ORGANIZATION_PROFILE_READ,
+    Permission.ORGANIZATION_USERS_READ,
+    Permission.ORGANIZATION_SEATS_READ,
+    Permission.ORGANIZATION_REPORTS_READ,
+    Permission.CHATBOT_REPORT_QUERY,
+    Permission.AUDIT_READ,
+)
+
+_ADMIN_ONLY_PERMISSIONS: tuple[Permission, ...] = (
+    Permission.ORGANIZATION_PROFILE_UPDATE,
+    Permission.ORGANIZATION_USERS_INVITE,
+    Permission.ORGANIZATION_USERS_UPDATE,
+    Permission.ORGANIZATION_USERS_REMOVE,
+    Permission.ORGANIZATION_SEATS_ASSIGN,
+    Permission.ORGANIZATION_SEATS_REVOKE,
+    Permission.ORGANIZATION_REPORTS_GRANT,
+    Permission.ORGANIZATION_REPORTS_REVOKE,
+    Permission.CHATBOT_REPORT_SUMMARIZE,
+)
 
 
 # Canonical role -> permission mapping used to seed the ``role_permissions``
 # table. The permission service reads authoritative data from the database;
 # this constant is the single source of truth for seeding.
 ROLE_PERMISSIONS: dict[Role, tuple[Permission, ...]] = {
-    Role.SANDBOX_ADMIN: (
-        Permission.ORGANIZATION_PROFILE_READ,
-        Permission.ORGANIZATION_PROFILE_UPDATE,
-    ),
-    Role.SANDBOX_READER: (Permission.ORGANIZATION_PROFILE_READ,),
+    Role.SANDBOX_ADMIN: _READER_PERMISSIONS + _ADMIN_ONLY_PERMISSIONS,
+    Role.SANDBOX_READER: _READER_PERMISSIONS,
 }

@@ -1,14 +1,19 @@
 """SQLAlchemy ORM models for the mock sandbox database.
 
-Five persistent tables:
+Nine persistent tables:
 
 1. organizations
-2. employees
-3. employee_organization_roles
-4. role_permissions
-5. audit_events
+2. users
+3. organization_memberships
+4. organization_seat_pools
+5. seat_assignments
+6. reports
+7. organization_report_access
+8. role_permissions
+9. audit_events
 
-``audit_events`` is append-only from application behavior.
+``audit_events`` is append-only from application behavior. Seat usage is never
+stored; it is calculated from active ``seat_assignments`` rows.
 """
 
 from __future__ import annotations
@@ -19,9 +24,11 @@ from sqlalchemy import (
     JSON,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,12 +58,12 @@ class OrganizationORM(Base):
     )
 
 
-class EmployeeORM(Base):
-    __tablename__ = "employees"
+class UserORM(Base):
+    __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     display_name: Mapped[str] = mapped_column(String, nullable=False)
-    # Synthetic test email only.
+    # Synthetic test email only (``@example.test``).
     email: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
@@ -66,32 +73,175 @@ class EmployeeORM(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
-    roles: Mapped[list["EmployeeOrganizationRoleORM"]] = relationship(
-        back_populates="employee", cascade="all, delete-orphan"
+    memberships: Mapped[list["OrganizationMembershipORM"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )
 
 
-class EmployeeOrganizationRoleORM(Base):
-    __tablename__ = "employee_organization_roles"
+class OrganizationMembershipORM(Base):
+    """Any number of users per organization; one user may join many orgs."""
+
+    __tablename__ = "organization_memberships"
     __table_args__ = (
         UniqueConstraint(
-            "employee_id",
-            "organization_id",
-            "role",
-            name="uq_employee_org_role",
+            "organization_id", "user_id", name="uq_org_membership_user"
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    employee_id: Mapped[str] = mapped_column(
-        String, ForeignKey("employees.id"), nullable=False, index=True
-    )
     organization_id: Mapped[str] = mapped_column(
         String, ForeignKey("organizations.id"), nullable=False, index=True
     )
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False, index=True
+    )
     role: Mapped[str] = mapped_column(String, nullable=False)
+    membership_status: Mapped[str] = mapped_column(
+        String, nullable=False, default="active"
+    )
+    joined_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
 
-    employee: Mapped["EmployeeORM"] = relationship(back_populates="roles")
+    user: Mapped["UserORM"] = relationship(back_populates="memberships")
+
+
+class OrganizationSeatPoolORM(Base):
+    """Licensed seat capacity. ``total_seats`` is the entitlement, not usage."""
+
+    __tablename__ = "organization_seat_pools"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "seat_type", name="uq_seat_pool_org_type"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        String, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    seat_type: Mapped[str] = mapped_column(String, nullable=False, default="standard")
+    total_seats: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class SeatAssignmentORM(Base):
+    """Which users consume seats. Active usage = count of ``status='active'``.
+
+    A partial unique index enforces that a user cannot hold two *active*
+    assignments in the same seat pool (i.e. same organization + seat type).
+    """
+
+    __tablename__ = "seat_assignments"
+    __table_args__ = (
+        Index(
+            "uq_active_seat_per_user_pool",
+            "organization_id",
+            "seat_pool_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        String, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    seat_pool_id: Mapped[str] = mapped_column(
+        String, ForeignKey("organization_seat_pools.id"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    assigned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    assigned_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class ReportORM(Base):
+    """Mock report catalog. ``external_report_id`` maps to the future system."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    external_report_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    market_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class OrganizationReportAccessORM(Base):
+    """Report access belongs to the organization; members inherit it.
+
+    One active row per organization/report combination is sufficient for the
+    first version.
+    """
+
+    __tablename__ = "organization_report_access"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "report_id", name="uq_org_report_access"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        String, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    report_id: Mapped[str] = mapped_column(
+        String, ForeignKey("reports.id"), nullable=False, index=True
+    )
+    access_level: Mapped[str] = mapped_column(String, nullable=False, default="view")
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    granted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    granted_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
 
 
 class RolePermissionORM(Base):
@@ -109,7 +259,7 @@ class AuditEventORM(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    actor_employee_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    actor_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     organization_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     operation: Mapped[str] = mapped_column(String, nullable=False)

@@ -19,7 +19,7 @@ class AuditRepository:
     async def append(
         self,
         *,
-        actor_employee_id: str,
+        actor_user_id: str,
         organization_id: str,
         event_type: str,
         operation: str,
@@ -32,7 +32,7 @@ class AuditRepository:
 
         row = AuditEventORM(
             id=uuid.uuid4().hex,
-            actor_employee_id=actor_employee_id,
+            actor_user_id=actor_user_id,
             organization_id=organization_id,
             event_type=event_type,
             operation=operation,
@@ -59,7 +59,7 @@ class AuditRepository:
     def _to_domain(row: AuditEventORM) -> AuditEvent:
         return AuditEvent(
             id=row.id,
-            actor_employee_id=row.actor_employee_id,
+            actor_user_id=row.actor_user_id,
             organization_id=row.organization_id,
             event_type=row.event_type,
             operation=row.operation,

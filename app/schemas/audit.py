@@ -14,7 +14,7 @@ class AuditEventOut(BaseModel):
     """Public representation of an append-only audit event."""
 
     id: str
-    actor_employee_id: str
+    actor_user_id: str
     organization_id: str
     event_type: str
     operation: str
@@ -28,7 +28,7 @@ class AuditEventOut(BaseModel):
     def from_domain(cls, event: AuditEvent) -> "AuditEventOut":
         return cls(
             id=event.id,
-            actor_employee_id=event.actor_employee_id,
+            actor_user_id=event.actor_user_id,
             organization_id=event.organization_id,
             event_type=event.event_type,
             operation=event.operation,
