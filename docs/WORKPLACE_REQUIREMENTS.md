@@ -2,12 +2,14 @@
 
 ## Product boundary
 
-- Existing SARA/chatbot remains separate and unchanged.
+- The existing SARA/chatbot remains in its own repository and is not integrated here.
+- This repository must not contain SARA adapters, SARA API clients, SARA credentials, chatbot gateways or chatbot-specific permissions.
 - Workplace Agent is a separate backend/product area.
 - Initial users are internal company users represented by synthetic sandbox identities.
 - Initial environment is sandbox only; production access is blocked.
 - Current Nucleus administration pages are a frontend/sessionStorage prototype.
-- Real Nucleus APIs and live organization database are not available yet.
+- Real Nucleus APIs and the live organization database are not available yet.
+- Automated test doubles, fixtures and test-only helpers belong under `tests/`, not under `app/`.
 
 ## Step 0 scope
 
@@ -39,11 +41,11 @@ Read capabilities:
 - Seat usage is calculated from active seat assignments; it is never stored as a counter.
 - Report access belongs to the organization.
 - Administrative reads require active user + active membership + permission, but not an active seat.
-- Future chatbot/report consumption will additionally require seat and report-access checks.
+- Any future agent/model integration must use a provider-neutral contract owned by this repository; tests must use test doubles under `tests/`.
 
 ## Explicit non-goals
 
-No LLM planner, write execution, approval flow, arbitrary SQL, arbitrary HTTP, shell access, browser automation, production integration, real employee data, billing mutation, API-key creation, security-policy mutation or frontend code.
+No SARA integration, LLM planner, write execution, approval flow, arbitrary SQL, arbitrary HTTP, shell access, browser automation, production integration, real employee data, billing mutation, API-key creation, security-policy mutation or frontend code.
 
 ## Guardrails
 
