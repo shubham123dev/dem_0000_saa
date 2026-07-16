@@ -1,0 +1,1 @@
+"""Backend-owned permission enforcement."""
