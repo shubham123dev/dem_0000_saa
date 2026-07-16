@@ -1,19 +1,13 @@
-"""Idempotent seed for deterministic synthetic sandbox data.
+"""Idempotent deterministic seed for the migrated sandbox database.
 
-Run as a module::
+Run only after ``alembic upgrade head``::
 
+    alembic upgrade head
     python -m app.db.seed
 
-Seeding is idempotent: running it twice never produces duplicate data. The
-seed function accepts an existing ``AsyncSession`` so tests can reuse it against
-isolated temporary databases.
-
-Seed shape (proves users != seats):
-    - 1 organization (org_sandbox_001)
-    - 1 standard seat pool with 5 total seats
-    - 6 users, 5 memberships (1 invited), 1 outsider with no membership
-    - 3 active seat assignments (usage 3 < capacity 5, users 6 > seats 5)
-    - 5 catalog reports; organization has access to 3 (2 inaccessible)
+The seed intentionally does not call ``Base.metadata.create_all``. Alembic is
+the only application schema authority; tests may create isolated schemas from
+metadata in their own fixtures.
 """
 
 from __future__ import annotations
@@ -24,9 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
 from app.db.orm_models import (
-    AuditEventORM,  # noqa: F401  (ensures table is registered on metadata)
     OrganizationMembershipORM,
     OrganizationORM,
     OrganizationReportAccessORM,
@@ -54,8 +46,6 @@ from app.domain.enums import (
 
 _EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
-# --- Deterministic synthetic seed data -------------------------------------
-
 ORGANIZATION = {
     "id": "org_sandbox_001",
     "display_name": "Demo Enterprise Sandbox",
@@ -68,7 +58,7 @@ ORGANIZATION = {
 
 SEAT_POOL = {
     "id": "seatpool_sandbox_standard",
-    "organization_id": "org_sandbox_001",
+    "organization_id": ORGANIZATION["id"],
     "seat_type": SeatType.STANDARD.value,
     "total_seats": 5,
     "status": SeatPoolStatus.ACTIVE.value,
@@ -77,45 +67,14 @@ SEAT_POOL = {
 }
 
 USERS = [
-    {
-        "id": "usr_admin_001",
-        "display_name": "Sandbox Admin",
-        "email": "admin@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
-    {
-        "id": "usr_member_001",
-        "display_name": "Seated Member One",
-        "email": "member1@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
-    {
-        "id": "usr_member_002",
-        "display_name": "Seated Member Two",
-        "email": "member2@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
-    {
-        "id": "usr_member_003",
-        "display_name": "Unseated Member",
-        "email": "member3@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
-    {
-        "id": "usr_invited_001",
-        "display_name": "Invited Member",
-        "email": "invited@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
-    {
-        "id": "usr_outsider_001",
-        "display_name": "Outsider User",
-        "email": "outsider@example.test",
-        "status": UserStatus.ACTIVE.value,
-    },
+    ("usr_admin_001", "Sandbox Admin", "admin@example.test"),
+    ("usr_member_001", "Seated Member One", "member1@example.test"),
+    ("usr_member_002", "Seated Member Two", "member2@example.test"),
+    ("usr_member_003", "Unseated Member", "member3@example.test"),
+    ("usr_invited_001", "Invited Member", "invited@example.test"),
+    ("usr_outsider_001", "Outsider User", "outsider@example.test"),
 ]
 
-# (user_id, role, membership_status) — the outsider intentionally has none.
 MEMBERSHIPS = [
     ("usr_admin_001", Role.SANDBOX_ADMIN.value, MembershipStatus.ACTIVE.value),
     ("usr_member_001", Role.SANDBOX_READER.value, MembershipStatus.ACTIVE.value),
@@ -124,8 +83,6 @@ MEMBERSHIPS = [
     ("usr_invited_001", Role.SANDBOX_READER.value, MembershipStatus.INVITED.value),
 ]
 
-# Only these users consume seats (usr_member_003 is an active member WITHOUT a
-# seat; the invited user and outsider hold none).
 SEAT_ASSIGNMENTS = [
     ("seat_admin_001", "usr_admin_001"),
     ("seat_member_001", "usr_member_001"),
@@ -140,7 +97,6 @@ REPORTS = [
     ("rpt_market_005", "RPT-1005", "Semiconductor Supply Chain", "Semiconductors"),
 ]
 
-# The organization can access 3 of the 5 reports (rpt_market_004/005 excluded).
 REPORT_ACCESS = [
     ("orgacc_001", "rpt_market_001", ReportAccessLevel.CHAT.value),
     ("orgacc_002", "rpt_market_002", ReportAccessLevel.VIEW.value),
@@ -148,23 +104,28 @@ REPORT_ACCESS = [
 ]
 
 
-async def _upsert_organization(session: AsyncSession) -> None:
+async def seed(session: AsyncSession) -> None:
+    """Idempotently seed all synthetic sandbox rows."""
+
     if await session.get(OrganizationORM, ORGANIZATION["id"]) is None:
         session.add(OrganizationORM(**ORGANIZATION))
 
-
-async def _upsert_seat_pool(session: AsyncSession) -> None:
     if await session.get(OrganizationSeatPoolORM, SEAT_POOL["id"]) is None:
         session.add(OrganizationSeatPoolORM(**SEAT_POOL))
 
+    for user_id, display_name, email in USERS:
+        if await session.get(UserORM, user_id) is None:
+            session.add(
+                UserORM(
+                    id=user_id,
+                    display_name=display_name,
+                    email=email,
+                    status=UserStatus.ACTIVE.value,
+                )
+            )
 
-async def _upsert_users(session: AsyncSession) -> None:
-    for data in USERS:
-        if await session.get(UserORM, data["id"]) is None:
-            session.add(UserORM(**data))
+    await session.flush()
 
-
-async def _upsert_memberships(session: AsyncSession) -> None:
     for user_id, role, membership_status in MEMBERSHIPS:
         stmt = select(OrganizationMembershipORM).where(
             OrganizationMembershipORM.organization_id == ORGANIZATION["id"],
@@ -181,8 +142,6 @@ async def _upsert_memberships(session: AsyncSession) -> None:
                 )
             )
 
-
-async def _upsert_seat_assignments(session: AsyncSession) -> None:
     for assignment_id, user_id in SEAT_ASSIGNMENTS:
         if await session.get(SeatAssignmentORM, assignment_id) is None:
             session.add(
@@ -197,22 +156,20 @@ async def _upsert_seat_assignments(session: AsyncSession) -> None:
                 )
             )
 
-
-async def _upsert_reports(session: AsyncSession) -> None:
-    for report_id, external_id, title, market in REPORTS:
+    for report_id, external_id, title, market_name in REPORTS:
         if await session.get(ReportORM, report_id) is None:
             session.add(
                 ReportORM(
                     id=report_id,
                     external_report_id=external_id,
                     title=title,
-                    market_name=market,
+                    market_name=market_name,
                     status=ReportStatus.ACTIVE.value,
                 )
             )
 
+    await session.flush()
 
-async def _upsert_report_access(session: AsyncSession) -> None:
     for access_id, report_id, access_level in REPORT_ACCESS:
         if await session.get(OrganizationReportAccessORM, access_id) is None:
             session.add(
@@ -227,8 +184,6 @@ async def _upsert_report_access(session: AsyncSession) -> None:
                 )
             )
 
-
-async def _upsert_role_permissions(session: AsyncSession) -> None:
     for role, permissions in ROLE_PERMISSIONS.items():
         for permission in permissions:
             stmt = select(RolePermissionORM).where(
@@ -240,31 +195,14 @@ async def _upsert_role_permissions(session: AsyncSession) -> None:
                     RolePermissionORM(role=role.value, permission=permission.value)
                 )
 
-
-async def seed(session: AsyncSession) -> None:
-    """Idempotently seed all synthetic data into the provided session."""
-
-    await _upsert_organization(session)
-    await _upsert_seat_pool(session)
-    await _upsert_users(session)
-    await _upsert_memberships(session)
-    await _upsert_seat_assignments(session)
-    await _upsert_reports(session)
-    await _upsert_report_access(session)
-    await _upsert_role_permissions(session)
     await session.commit()
 
 
 async def _run() -> None:
-    engine = get_engine()
-    # Ensure tables exist even if the seed is run before/without Alembic.
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         await seed(session)
-    await engine.dispose()
+    await get_engine().dispose()
     print("Seed complete (idempotent). Organization: org_sandbox_001")
 
 
