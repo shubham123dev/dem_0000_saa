@@ -19,4 +19,18 @@ jobs:
       - run: python -m compileall -q app tests
       - run: alembic upgrade head
       - run: python -m app.db.seed
-      - run: pytest -q
+      - name: Run pytest
+        id: pytest
+        continue-on-error: true
+        run: pytest -q > pytest-output.txt 2>&1
+      - name: Upload pytest output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-output
+          path: pytest-output.txt
+      - name: Fail when pytest failed
+        if: steps.pytest.outcome == 'failure'
+        run: |
+          cat pytest-output.txt
+          exit 1
