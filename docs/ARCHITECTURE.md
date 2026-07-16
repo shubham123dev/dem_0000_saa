@@ -1,70 +1,80 @@
 # Architecture (Step 0)
 
+## Repository boundary
+
+This repository contains only the standalone Workplace Agent backend. The existing SARA/chatbot system remains in a different repository and is not referenced by runtime code here. Test doubles and fixtures belong under `tests/`.
+
 ## Request flow
 
-```
-Frontend Workplace tab
+```text
+Workplace client
         │
         ▼
-Workplace Agent backend (FastAPI)
+FastAPI workplace route
         │
         ▼
-Authentication / organization context     (X-Mock-Employee-Id → Employee)
+X-Mock-User-Id → active User
         │
         ▼
-Permission service                         (backend-owned roles & permissions)
+Active organization membership
         │
         ▼
-Organization adapter contract              (OrganizationGateway protocol)
+Backend-owned role and permission check
         │
         ▼
-Mock organization API / database           (MockOrganizationAdapter → SQLite)
+Sandbox-only organization guard
         │
         ▼
-Audit log                                  (append-only audit_events)
+OrganizationApiGateway
+        │
+        ▼
+MockOrganizationApiAdapter → repositories → SQLite
+        │
+        ▼
+Append-only audit event
 ```
 
-Every read of an organization profile records an append-only audit event.
+Each successful workplace tool read records an audit event, except reading the audit log itself to avoid self-referential growth.
 
 ## Layered design
 
 | Layer | Responsibility | Touches ORM? |
-| ----- | -------------- | ------------ |
-| `app/api` | HTTP routes, request dependencies, auth resolution | No |
-| `app/services` | Orchestration of the read flow | No |
-| `app/permissions` | Backend-owned authorization | No (via repo) |
-| `app/adapters/organization` | Replaceable gateway to the org system of record | No (via repo) |
-| `app/repositories` | Only components that use SQLAlchemy directly | **Yes** |
-| `app/db` | Engine/session, ORM models, seed | Yes |
-| `app/domain` | Enums + framework-agnostic domain models | No |
-| `app/schemas` | Pydantic request/response contracts | No |
+|---|---|---|
+| `app/api` | HTTP routes, dependencies and identity resolution | No |
+| `app/services` | Read-tool orchestration | No |
+| `app/permissions` | Backend-owned authorization | No, via repository |
+| `app/adapters/organization` | Replaceable organization-system gateway | No, via repositories |
+| `app/repositories` | SQLAlchemy persistence queries | Yes |
+| `app/db` | Engine, sessions, ORM models and seed | Yes |
+| `app/domain` | Framework-neutral enums and domain models | No |
+| `app/schemas` | Pydantic HTTP contracts | No |
+| `tests` | Fixtures, test doubles and automated verification | Test-only |
 
-The service and API layers depend on the **adapter contract**
-(`OrganizationGateway`), never on the SQLite ORM.
+The service and API layers depend on `OrganizationApiGateway`, never directly on SQLite ORM objects.
 
 ## Adapter replacement plan
 
-The adapter is the seam that lets the mock database be replaced by the real
-Nucleus organization API without changing services or routes:
-
-```
-MockOrganizationAdapter          (Step 0 — backed by mock SQLite database)
+```text
+MockOrganizationApiAdapter       current sandbox implementation
         │
-        ▼  (future replacement, same OrganizationGateway contract)
-NucleusOrganizationApiAdapter    (NOT implemented in Step 0)
+        ▼ same OrganizationApiGateway contract
+NucleusOrganizationApiAdapter    future implementation, not present in Step 0
 ```
 
-Both implementations satisfy:
-
-```python
-async def get_profile(organization_id: str) -> OrganizationProfile
-```
+The gateway covers organization profile, members, seat summary, report listing and report-access checks.
 
 ## Persistence
 
-Five mock tables (see `docs/ORGANIZATION_API_CONTRACTS.md` and the ORM models):
-`organizations`, `employees`, `employee_organization_roles`,
-`role_permissions`, `audit_events`.
+The sandbox schema contains nine tables:
 
-Schema is managed by Alembic (`alembic upgrade head`) and populated by an
-idempotent seed (`python -m app.db.seed`).
+1. `organizations`
+2. `users`
+3. `organization_memberships`
+4. `organization_seat_pools`
+5. `seat_assignments`
+6. `reports`
+7. `organization_report_access`
+8. `role_permissions`
+9. `audit_events`
+
+Alembic is the schema authority. `python -m app.db.seed` populates deterministic synthetic sandbox data after migration.
