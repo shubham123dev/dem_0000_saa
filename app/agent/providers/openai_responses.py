@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
+from app.agent.answer_contracts import AgentAnswerDraft, AgentEvidenceItem
 from app.agent.contracts import AgentPlan, AgentToolDefinition
 from app.agent.errors import AgentModelRequestFailedError, AgentModelResponseInvalidError
 
@@ -41,14 +42,29 @@ class OpenAIResponsesAgentModelGateway:
         user_request: str,
         available_tools: tuple[AgentToolDefinition, ...],
     ) -> AgentPlan:
-        request_payload = self._build_request_payload(
-            user_request=user_request,
-            available_tools=available_tools,
+        response_payload = await self._post_with_retries(
+            self._build_plan_request_payload(
+                user_request=user_request,
+                available_tools=available_tools,
+            )
         )
-        response_payload = await self._post_with_retries(request_payload)
         return self._parse_plan(response_payload)
 
-    def _build_request_payload(
+    async def create_answer(
+        self,
+        *,
+        user_request: str,
+        evidence: tuple[AgentEvidenceItem, ...],
+    ) -> AgentAnswerDraft:
+        response_payload = await self._post_with_retries(
+            self._build_answer_request_payload(
+                user_request=user_request,
+                evidence=evidence,
+            )
+        )
+        return self._parse_answer(response_payload)
+
+    def _build_plan_request_payload(
         self,
         *,
         user_request: str,
@@ -139,6 +155,74 @@ class OpenAIResponsesAgentModelGateway:
             },
         }
 
+    def _build_answer_request_payload(
+        self,
+        *,
+        user_request: str,
+        evidence: tuple[AgentEvidenceItem, ...],
+    ) -> dict[str, Any]:
+        evidence_ids = [item.id for item in evidence]
+        return {
+            "model": self._model,
+            "store": False,
+            "max_output_tokens": self._maximum_output_tokens,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Answer only from the supplied authorized evidence. Do not "
+                                "request tools, invent facts, change scope, or cite unknown "
+                                "evidence identifiers. Cite at least one evidence identifier."
+                            ),
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": json.dumps(
+                                {
+                                    "request": user_request,
+                                    "evidence": [
+                                        item.model_dump(mode="json") for item in evidence
+                                    ],
+                                },
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            ),
+                        }
+                    ],
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "grounded_agent_answer",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["answer", "evidence_ids"],
+                        "properties": {
+                            "answer": {"type": "string", "minLength": 1},
+                            "evidence_ids": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 5,
+                                "uniqueItems": True,
+                                "items": {"type": "string", "enum": evidence_ids},
+                            },
+                        },
+                    },
+                }
+            },
+        }
+
     async def _post_with_retries(
         self,
         request_payload: dict[str, Any],
@@ -187,11 +271,10 @@ class OpenAIResponsesAgentModelGateway:
 
         raise AgentModelRequestFailedError()
 
-    def _parse_plan(self, response_payload: dict[str, Any]) -> AgentPlan:
+    def _extract_output_text(self, response_payload: dict[str, Any]) -> str:
         output_items = response_payload.get("output")
         if not isinstance(output_items, list):
             raise AgentModelResponseInvalidError()
-
         for output_item in output_items:
             if not isinstance(output_item, dict):
                 continue
@@ -204,23 +287,32 @@ class OpenAIResponsesAgentModelGateway:
                 if content_item.get("type") != "output_text":
                     continue
                 output_text = content_item.get("text")
-                if not isinstance(output_text, str):
-                    raise AgentModelResponseInvalidError()
-                try:
-                    plan_payload = json.loads(output_text)
-                    tool_calls = plan_payload.get("tool_calls")
-                    if not isinstance(tool_calls, list):
-                        raise AgentModelResponseInvalidError()
-                    for tool_call in tool_calls:
-                        if not isinstance(tool_call, dict):
-                            raise AgentModelResponseInvalidError()
-                        arguments = tool_call.get("arguments")
-                        if not isinstance(arguments, dict):
-                            raise AgentModelResponseInvalidError()
-                        if arguments.get("report_id") is None:
-                            arguments.pop("report_id", None)
-                    return AgentPlan.model_validate(plan_payload)
-                except (json.JSONDecodeError, ValidationError) as exception:
-                    raise AgentModelResponseInvalidError() from exception
-
+                if isinstance(output_text, str):
+                    return output_text
+                raise AgentModelResponseInvalidError()
         raise AgentModelResponseInvalidError()
+
+    def _parse_plan(self, response_payload: dict[str, Any]) -> AgentPlan:
+        try:
+            plan_payload = json.loads(self._extract_output_text(response_payload))
+            tool_calls = plan_payload.get("tool_calls")
+            if not isinstance(tool_calls, list):
+                raise AgentModelResponseInvalidError()
+            for tool_call in tool_calls:
+                if not isinstance(tool_call, dict):
+                    raise AgentModelResponseInvalidError()
+                arguments = tool_call.get("arguments")
+                if not isinstance(arguments, dict):
+                    raise AgentModelResponseInvalidError()
+                if arguments.get("report_id") is None:
+                    arguments.pop("report_id", None)
+            return AgentPlan.model_validate(plan_payload)
+        except (json.JSONDecodeError, ValidationError) as exception:
+            raise AgentModelResponseInvalidError() from exception
+
+    def _parse_answer(self, response_payload: dict[str, Any]) -> AgentAnswerDraft:
+        try:
+            answer_payload = json.loads(self._extract_output_text(response_payload))
+            return AgentAnswerDraft.model_validate(answer_payload)
+        except (json.JSONDecodeError, ValidationError) as exception:
+            raise AgentModelResponseInvalidError() from exception
