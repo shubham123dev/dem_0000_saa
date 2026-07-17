@@ -145,6 +145,26 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             reason=reason,
         )
 
+    async def cancel(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        proposal_id: str,
+        reason: str | None,
+    ) -> AgentActionProposal:
+        await self._authorize(
+            user=user,
+            organization_id=organization_id,
+            required_permission=Permission.AGENT_ACTIONS_EXECUTE.value,
+        )
+        return await super().cancel(
+            user=user,
+            organization_id=organization_id,
+            proposal_id=proposal_id,
+            reason=reason,
+        )
+
     async def execute(
         self,
         *,
