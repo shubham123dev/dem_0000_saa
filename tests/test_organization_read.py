@@ -102,9 +102,15 @@ async def test_production_organization_access_is_blocked(
     assert resp.json()["error"]["code"] == "production_access_blocked"
 
 
-async def test_only_read_only_agent_post_route_exists() -> None:
-    allowed_post_path = "/workplace/organizations/{organization_id}/agent/query"
-    workplace_post_paths: list[str] = []
+async def test_only_explicit_workplace_post_routes_exist() -> None:
+    allowed_post_paths = {
+        "/workplace/organizations/{organization_id}/agent/query",
+        "/workplace/organizations/{organization_id}/agent/actions/propose",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute",
+    }
+    workplace_post_paths: set[str] = set()
 
     for route in app.routes:
         route_path = getattr(route, "path", "")
@@ -112,9 +118,9 @@ async def test_only_read_only_agent_post_route_exists() -> None:
         if route_path.startswith("/workplace"):
             assert not (route_methods & {"PUT", "PATCH", "DELETE"})
             if "POST" in route_methods:
-                workplace_post_paths.append(route_path)
+                workplace_post_paths.add(route_path)
 
-    assert workplace_post_paths == [allowed_post_path]
+    assert workplace_post_paths == allowed_post_paths
 
 
 async def test_seed_is_idempotent(
