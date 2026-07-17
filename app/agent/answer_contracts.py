@@ -4,6 +4,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent.action_contracts import AgentActionProposal
 from app.agent.contracts import AgentToolResult
 
 
@@ -36,6 +37,17 @@ class AgentCompletedExecution(BaseModel):
     results: tuple[AgentToolResult, ...]
     evidence: tuple[AgentEvidenceItem, ...]
     synthesis: AgentSynthesisResult
+
+
+class AgentQueryCompletion(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    mode: Literal["read", "action_proposal"]
+    answer: str
+    answer_source: Literal["model", "deterministic"]
+    evidence_ids: tuple[str, ...] = ()
+    results: tuple[AgentToolResult, ...] = ()
+    action_proposal: AgentActionProposal | None = None
 
 
 class AgentAnswerGateway(Protocol):
