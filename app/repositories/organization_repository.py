@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.orm_models import OrganizationORM
@@ -32,6 +33,31 @@ class OrganizationRepository:
         await self._session.commit()
         await self._session.refresh(row)
         return self._to_domain(row)
+
+    async def update_contact_email_if_version(
+        self,
+        organization_id: str,
+        contact_email: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        statement = (
+            update(OrganizationORM)
+            .where(
+                OrganizationORM.id == organization_id,
+                OrganizationORM.version == expected_version,
+            )
+            .values(
+                contact_email=contact_email,
+                version=expected_version + 1,
+            )
+        )
+        result = await self._session.execute(statement)
+        if result.rowcount != 1:
+            await self._session.rollback()
+            return None
+        await self._session.commit()
+        row = await self._session.get(OrganizationORM, organization_id)
+        return self._to_domain(row) if row is not None else None
 
     @staticmethod
     def _to_domain(row: OrganizationORM) -> OrganizationProfile:
