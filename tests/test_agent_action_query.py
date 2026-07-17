@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.action_contracts import AgentActionProposalInput
 from app.agent.contracts import AgentPlan
-from app.api.agent_dependencies import get_agent_model_gateway
+from app.api.agent_dependencies import (
+    get_agent_answer_gateway,
+    get_agent_model_gateway,
+)
 from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import AuditEventORM, OrganizationORM
 from app.main import app
@@ -50,6 +53,7 @@ class ActionPlanGateway:
 def override_action_plan_gateway() -> ActionPlanGateway:
     gateway = ActionPlanGateway()
     app.dependency_overrides[get_agent_model_gateway] = lambda: gateway
+    app.dependency_overrides[get_agent_answer_gateway] = lambda: gateway
     return gateway
 
 
@@ -78,9 +82,15 @@ async def test_natural_language_action_creates_pending_dry_run_only(
     assert body["results"] == []
     assert body["evidence_ids"] == []
     proposal = body["action_proposal"]
+    assert set(proposal) == {
+        "id",
+        "action_name",
+        "risk_level",
+        "status",
+        "changes",
+        "expires_at",
+    }
     assert proposal["status"] == "pending_approval"
-    assert proposal["organization_id"] == ORGANIZATION_ID
-    assert proposal["requested_by_user_id"] == "usr_admin_001"
     assert proposal["changes"] == [
         {
             "field": "contact_email",
@@ -110,6 +120,7 @@ async def test_natural_language_action_creates_pending_dry_run_only(
     audit_event = audit_result.scalars().one()
     assert audit_event.details_json["proposal_source"] == "agent_query"
     assert audit_event.details_json["planner"] == "configured_model"
+    assert audit_event.details_json["request_id"] == response.headers["X-Request-Id"]
     assert len(audit_event.details_json["request_hash"]) == 64
     assert "Change our contact email" not in str(audit_event.details_json)
 
