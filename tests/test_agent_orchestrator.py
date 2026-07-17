@@ -15,10 +15,18 @@ class FakeAgentModelGateway:
         self.agent_plan = agent_plan
         self.received_user_request: str | None = None
         self.received_tool_names: tuple[str, ...] = ()
+        self.received_action_names: tuple[str, ...] = ()
 
-    async def create_plan(self, *, user_request: str, available_tools):
+    async def create_plan(
+        self,
+        *,
+        user_request: str,
+        available_tools,
+        available_actions,
+    ):
         self.received_user_request = user_request
         self.received_tool_names = tuple(tool.name for tool in available_tools)
+        self.received_action_names = tuple(action.name for action in available_actions)
         return self.agent_plan
 
 
@@ -115,6 +123,9 @@ async def test_agent_executes_allowlisted_tool_with_backend_context() -> None:
 
     assert model_gateway.received_user_request == "Show the organization profile"
     assert "get_organization_profile" in model_gateway.received_tool_names
+    assert model_gateway.received_action_names == (
+        "update_organization_contact_email",
+    )
     assert organization_service.calls == [
         (
             "get_organization_profile",
@@ -256,3 +267,26 @@ async def test_agent_executes_multiple_validated_calls_in_order() -> None:
         "list_organization_reports",
         "get_organization_audit_log",
     ]
+
+
+async def test_read_executor_rejects_action_plan() -> None:
+    orchestrator = ReadOnlyAgentOrchestrator(
+        model_gateway=FakeAgentModelGateway(
+            AgentPlan(
+                intent="action_proposal",
+                action_proposal={
+                    "action_name": "update_organization_contact_email",
+                    "arguments": {"contact_email": "new@example.test"},
+                },
+            )
+        ),
+        tool_registry=ReadOnlyAgentToolRegistry(),
+        organization_service=FakeOrganizationService(),
+    )
+
+    with pytest.raises(InvalidAgentToolCallError):
+        await orchestrator.execute(
+            user=build_user(),
+            organization_id="org_request_001",
+            user_request="Change the email",
+        )
