@@ -8,6 +8,7 @@ from app.db.orm_models import (
     OrganizationMembershipORM,
     OrganizationReportAccessORM,
     SeatAssignmentORM,
+    UserORM,
 )
 
 ORGANIZATION_ID = "org_sandbox_001"
@@ -27,18 +28,49 @@ async def propose(
     )
 
 
+async def add_peer_admins(db_session: AsyncSession) -> tuple[dict[str, str], dict[str, str]]:
+    for suffix in ("inverse_a", "inverse_b"):
+        user_id = f"usr_{suffix}"
+        db_session.add(
+            UserORM(
+                id=user_id,
+                display_name=suffix,
+                email=f"{suffix}@example.test",
+                status="active",
+            )
+        )
+        db_session.add(
+            OrganizationMembershipORM(
+                organization_id=ORGANIZATION_ID,
+                user_id=user_id,
+                role="sandbox_admin",
+                membership_status="active",
+                version=1,
+            )
+        )
+    await db_session.commit()
+    return (
+        {"X-Mock-User-Id": "usr_inverse_a"},
+        {"X-Mock-User-Id": "usr_inverse_b"},
+    )
+
+
 async def approve_execute(
     client: AsyncClient,
     headers: dict[str, str],
     proposal_id: str,
     key: str,
+    *,
+    approvers: tuple[dict[str, str], ...] | None = None,
 ):
-    approval = await client.post(
-        f"{ACTION_BASE_URL}/{proposal_id}/approve",
-        headers=headers,
-        json={"reason": "Reviewed inverse lifecycle change"},
-    )
-    assert approval.status_code == 200
+    decision_headers = approvers or (headers,)
+    for decision_header in decision_headers:
+        approval = await client.post(
+            f"{ACTION_BASE_URL}/{proposal_id}/approve",
+            headers=decision_header,
+            json={"reason": "Reviewed inverse lifecycle change"},
+        )
+        assert approval.status_code == 200
     return await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/execute",
         headers=headers,
@@ -62,7 +94,6 @@ async def test_activate_invited_membership(
     assert proposal["changes"] == [
         {"field": "membership_status", "before": "invited", "after": "active"}
     ]
-
     execution = await approve_execute(
         client,
         admin_headers,
@@ -70,7 +101,6 @@ async def test_activate_invited_membership(
         "activate-invited-member-001",
     )
     assert execution.status_code == 200
-
     membership = await db_session.scalar(
         select(OrganizationMembershipORM).where(
             OrganizationMembershipORM.organization_id == ORGANIZATION_ID,
@@ -89,6 +119,7 @@ async def test_update_member_role_is_versioned(
     db_session: AsyncSession,
     admin_headers: dict[str, str],
 ) -> None:
+    approvers = await add_peer_admins(db_session)
     response = await propose(
         client,
         admin_headers,
@@ -97,15 +128,14 @@ async def test_update_member_role_is_versioned(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-
     execution = await approve_execute(
         client,
         admin_headers,
         proposal["id"],
         "promote-member-003-001",
+        approvers=approvers,
     )
     assert execution.status_code == 200
-
     membership = await db_session.scalar(
         select(OrganizationMembershipORM).where(
             OrganizationMembershipORM.organization_id == ORGANIZATION_ID,
@@ -137,6 +167,7 @@ async def test_remove_invited_member_preserves_history(
     db_session: AsyncSession,
     admin_headers: dict[str, str],
 ) -> None:
+    approvers = await add_peer_admins(db_session)
     response = await propose(
         client,
         admin_headers,
@@ -145,15 +176,14 @@ async def test_remove_invited_member_preserves_history(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-
     execution = await approve_execute(
         client,
         admin_headers,
         proposal["id"],
         "remove-invited-member-001",
+        approvers=approvers,
     )
     assert execution.status_code == 200
-
     membership = await db_session.scalar(
         select(OrganizationMembershipORM).where(
             OrganizationMembershipORM.organization_id == ORGANIZATION_ID,
@@ -193,7 +223,6 @@ async def test_revoke_active_seat_preserves_assignment_record(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-
     execution = await approve_execute(
         client,
         admin_headers,
@@ -201,7 +230,6 @@ async def test_revoke_active_seat_preserves_assignment_record(
         "revoke-member-seat-001",
     )
     assert execution.status_code == 200
-
     assignment = await db_session.scalar(
         select(SeatAssignmentORM).where(
             SeatAssignmentORM.organization_id == ORGANIZATION_ID,
@@ -229,7 +257,6 @@ async def test_revoke_report_access_preserves_grant_record(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-
     execution = await approve_execute(
         client,
         admin_headers,
@@ -237,7 +264,6 @@ async def test_revoke_report_access_preserves_grant_record(
         "revoke-report-access-001",
     )
     assert execution.status_code == 200
-
     access = await db_session.scalar(
         select(OrganizationReportAccessORM).where(
             OrganizationReportAccessORM.organization_id == ORGANIZATION_ID,
