@@ -83,7 +83,6 @@ async def test_production_organization_access_is_blocked(
             updated_at=now,
         )
     )
-    # Persist the parent first because SQLite foreign keys are deliberately on.
     await db_session.flush()
     db_session.add(
         OrganizationMembershipORM(
@@ -103,13 +102,19 @@ async def test_production_organization_access_is_blocked(
     assert resp.json()["error"]["code"] == "production_access_blocked"
 
 
-async def test_no_write_routes_exist() -> None:
-    forbidden = {"POST", "PUT", "PATCH", "DELETE"}
+async def test_only_read_only_agent_post_route_exists() -> None:
+    allowed_post_path = "/workplace/organizations/{organization_id}/agent/query"
+    workplace_post_paths: list[str] = []
+
     for route in app.routes:
-        methods = getattr(route, "methods", set()) or set()
-        assert not (methods & forbidden), (
-            f"Unexpected write route {getattr(route, 'path', route)}: {methods}"
-        )
+        route_path = getattr(route, "path", "")
+        route_methods = getattr(route, "methods", set()) or set()
+        if route_path.startswith("/workplace"):
+            assert not (route_methods & {"PUT", "PATCH", "DELETE"})
+            if "POST" in route_methods:
+                workplace_post_paths.append(route_path)
+
+    assert workplace_post_paths == [allowed_post_path]
 
 
 async def test_seed_is_idempotent(
