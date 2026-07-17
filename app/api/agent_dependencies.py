@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.agent.action_contracts import AgentActionDefinition
+from app.agent.action_registry import AgentActionRegistry
 from app.agent.answer_contracts import (
     AgentAnswerDraft,
     AgentAnswerGateway,
@@ -17,6 +19,7 @@ from app.agent.providers.openai_responses import OpenAIResponsesAgentModelGatewa
 from app.agent.response_service import ReadOnlyAgentResponseService
 from app.agent.synthesis import AgentAnswerSynthesisService
 from app.agent.tool_registry import ReadOnlyAgentToolRegistry
+from app.api.action_dependencies import AgentActionServiceDep, get_agent_action_registry
 from app.api.dependencies import OrganizationServiceDep
 from app.core.config import get_settings
 
@@ -27,6 +30,7 @@ class UnavailableAgentModelGateway:
         *,
         user_request: str,
         available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
     ) -> AgentPlan:
         raise AgentModelUnavailableError()
 
@@ -77,10 +81,15 @@ def get_read_only_agent_orchestrator(
         ReadOnlyAgentToolRegistry,
         Depends(get_read_only_agent_tool_registry),
     ],
+    action_registry: Annotated[
+        AgentActionRegistry,
+        Depends(get_agent_action_registry),
+    ],
 ) -> ReadOnlyAgentOrchestrator:
     return ReadOnlyAgentOrchestrator(
         model_gateway=model_gateway,
         tool_registry=tool_registry,
+        action_registry=action_registry,
         organization_service=organization_service,
     )
 
@@ -104,11 +113,13 @@ def get_read_only_agent_response_service(
         AgentAnswerSynthesisService,
         Depends(get_agent_synthesis_service),
     ],
+    action_service: AgentActionServiceDep,
 ) -> ReadOnlyAgentResponseService:
     return ReadOnlyAgentResponseService(
         orchestrator=orchestrator,
         evidence_compiler=evidence_compiler,
         synthesis_service=synthesis_service,
+        action_service=action_service,
     )
 
 
