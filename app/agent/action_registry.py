@@ -108,6 +108,7 @@ class AgentActionRegistry:
         risk_level: str,
     ) -> AgentActionDefinition:
         permission_value = permission.value
+        high_risk = risk_level == "high"
         return AgentActionDefinition(
             name=name,
             description=description,
@@ -118,9 +119,9 @@ class AgentActionRegistry:
             requires_approval=True,
             supports_dry_run=True,
             approval_policy=AgentApprovalPolicy(
-                self_approval_allowed=True,
+                self_approval_allowed=not high_risk,
                 required_approver_permission=permission_value,
-                minimum_approvals=1,
+                minimum_approvals=2 if high_risk else 1,
             ),
         )
 
