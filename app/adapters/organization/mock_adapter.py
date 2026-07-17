@@ -40,5 +40,17 @@ class MockOrganizationApiAdapter:
     ) -> OrganizationProfile:
         return await self._api.update_contact_email(organization_id, contact_email)
 
+    async def update_contact_email_if_version(
+        self,
+        organization_id: str,
+        contact_email: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        return await self._api.update_contact_email_if_version(
+            organization_id,
+            contact_email,
+            expected_version,
+        )
+
 
 MockOrganizationAdapter = MockOrganizationApiAdapter
