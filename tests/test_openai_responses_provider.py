@@ -44,9 +44,14 @@ def response_payload(plan: dict) -> dict:
 def read_plan(tool_name: str, report_id: str | None = None) -> dict:
     return {
         "intent": "read",
-        "tool_calls": [{"tool_name": tool_name, "report_id": report_id}],
+        "tool_calls": [
+            {
+                "tool_name": tool_name,
+                "arguments": {"report_id": report_id},
+            }
+        ],
         "action_name": None,
-        "contact_email": None,
+        "action_arguments": {"contact_email": None},
     }
 
 
@@ -73,6 +78,11 @@ async def test_provider_builds_safe_structured_request_and_parses_read_plan() ->
                 name="get_organization_profile",
                 description="Read the profile.",
             ),
+            AgentToolDefinition(
+                name="check_organization_report_access",
+                description="Check report access.",
+                required_argument_names=("report_id",),
+            ),
         ),
         available_actions=available_actions(),
     )
@@ -86,6 +96,10 @@ async def test_provider_builds_safe_structured_request_and_parses_read_plan() ->
     assert "update_organization_contact_email" in request_text
     assert "organization.profile.update" not in request_text
     assert "org_sandbox_001" not in request_text
+    schema = captured_request["text"]["format"]["schema"]
+    assert schema["properties"]["action_arguments"]["required"] == [
+        "contact_email"
+    ]
     await gateway._http_client.aclose()
 
 
@@ -132,7 +146,9 @@ async def test_provider_parses_action_proposal_without_execution_state() -> None
                     "intent": "action_proposal",
                     "tool_calls": [],
                     "action_name": "update_organization_contact_email",
-                    "contact_email": "new.operations@example.test",
+                    "action_arguments": {
+                        "contact_email": "new.operations@example.test"
+                    },
                 }
             ),
         )
@@ -162,40 +178,65 @@ async def test_provider_parses_action_proposal_without_execution_state() -> None
     await gateway._http_client.aclose()
 
 
-async def test_provider_rejects_mixed_or_incomplete_action_plan() -> None:
-    gateway = build_gateway(
-        httpx.MockTransport(
-            lambda request: httpx.Response(
-                200,
-                json=response_payload(
-                    {
-                        "intent": "action_proposal",
-                        "tool_calls": [
-                            {
-                                "tool_name": "get_organization_profile",
-                                "report_id": None,
-                            }
-                        ],
-                        "action_name": "update_organization_contact_email",
-                        "contact_email": "new.operations@example.test",
-                    }
-                ),
+async def test_provider_rejects_mixed_or_inexact_plans() -> None:
+    invalid_plans = (
+        {
+            "intent": "action_proposal",
+            "tool_calls": [
+                {
+                    "tool_name": "get_organization_profile",
+                    "arguments": {"report_id": None},
+                }
+            ],
+            "action_name": "update_organization_contact_email",
+            "action_arguments": {
+                "contact_email": "new.operations@example.test"
+            },
+        },
+        {
+            "intent": "read",
+            "tool_calls": [
+                {
+                    "tool_name": "get_organization_profile",
+                    "arguments": {"report_id": None},
+                }
+            ],
+            "action_name": "update_organization_contact_email",
+            "action_arguments": {"contact_email": None},
+        },
+        {
+            "intent": "action_proposal",
+            "tool_calls": [],
+            "action_name": "update_organization_contact_email",
+            "action_arguments": {"contact_email": None},
+        },
+    )
+    for invalid_plan in invalid_plans:
+        gateway = build_gateway(
+            httpx.MockTransport(
+                lambda request, plan=invalid_plan: httpx.Response(
+                    200,
+                    json=response_payload(plan),
+                )
             )
         )
-    )
-
-    with pytest.raises(AgentModelResponseInvalidError):
-        await gateway.create_plan(
-            user_request="Read and change",
-            available_tools=(
-                AgentToolDefinition(
-                    name="get_organization_profile",
-                    description="Read profile.",
+        with pytest.raises(AgentModelResponseInvalidError):
+            await gateway.create_plan(
+                user_request="Invalid plan",
+                available_tools=(
+                    AgentToolDefinition(
+                        name="get_organization_profile",
+                        description="Read profile.",
+                    ),
+                    AgentToolDefinition(
+                        name="check_organization_report_access",
+                        description="Check report access.",
+                        required_argument_names=("report_id",),
+                    ),
                 ),
-            ),
-            available_actions=available_actions(),
-        )
-    await gateway._http_client.aclose()
+                available_actions=available_actions(),
+            )
+        await gateway._http_client.aclose()
 
 
 async def test_provider_retries_retryable_status_then_succeeds() -> None:
@@ -218,6 +259,11 @@ async def test_provider_retries_retryable_status_then_succeeds() -> None:
             AgentToolDefinition(
                 name="list_organization_reports",
                 description="List reports.",
+            ),
+            AgentToolDefinition(
+                name="check_organization_report_access",
+                description="Check report access.",
+                required_argument_names=("report_id",),
             ),
         ),
         available_actions=available_actions(),
