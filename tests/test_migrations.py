@@ -11,6 +11,9 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_DATABASE_TABLE_NAMES = {
+    "agent_action_approvals",
+    "agent_action_executions",
+    "agent_action_proposals",
     "alembic_version",
     "audit_events",
     "organization_memberships",
@@ -50,7 +53,11 @@ def read_table_names(database_connection: sqlite3.Connection) -> set[str]:
     table_rows = database_connection.execute(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
     ).fetchall()
-    return {table_row[0] for table_row in table_rows if not table_row[0].startswith("sqlite_")}
+    return {
+        table_row[0]
+        for table_row in table_rows
+        if not table_row[0].startswith("sqlite_")
+    }
 
 
 def create_legacy_database_schema(database_file_path: Path) -> None:
@@ -210,7 +217,7 @@ def test_fresh_database_upgrades_to_head_and_is_repeatable(tmp_path: Path) -> No
         current_revision = database_connection.execute(
             "SELECT version_num FROM alembic_version"
         ).fetchone()
-        assert current_revision == ("0003_remove_chatbot_permissions",)
+        assert current_revision == ("0004_add_agent_action_approvals",)
 
 
 def test_legacy_database_upgrade_preserves_identity_membership_and_audit_data(
@@ -250,7 +257,10 @@ def test_legacy_database_upgrade_preserves_identity_membership_and_audit_data(
             "sandbox_reader",
             "active",
         )
-        assert all(timestamp_value is not None for timestamp_value in migrated_memberships[0][4:7])
+        assert all(
+            timestamp_value is not None
+            for timestamp_value in migrated_memberships[0][4:7]
+        )
 
         migrated_audit_actor = database_connection.execute(
             "SELECT actor_user_id FROM audit_events WHERE id = ?",
@@ -269,7 +279,7 @@ def test_legacy_database_upgrade_preserves_identity_membership_and_audit_data(
         current_revision = database_connection.execute(
             "SELECT version_num FROM alembic_version"
         ).fetchone()
-        assert current_revision == ("0003_remove_chatbot_permissions",)
+        assert current_revision == ("0004_add_agent_action_approvals",)
 
 
 def test_legacy_upgrade_enforces_one_membership_per_user_and_organization(
@@ -282,9 +292,9 @@ def test_legacy_upgrade_enforces_one_membership_per_user_and_organization(
     with sqlite3.connect(database_file_path) as database_connection:
         with pytest.raises(sqlite3.IntegrityError):
             database_connection.execute(
-                "INSERT INTO organization_memberships(" 
+                "INSERT INTO organization_memberships("
                 "organization_id, user_id, role, membership_status, "
-                "joined_at, created_at, updated_at" 
+                "joined_at, created_at, updated_at"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     "org_legacy_001",
