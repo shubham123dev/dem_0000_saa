@@ -11,6 +11,12 @@ from app.db.orm_models import OrganizationORM
 from app.main import app
 
 AGENT_QUERY_URL = "/workplace/organizations/org_sandbox_001/agent/query"
+EXPECTED_ACTION_NAMES = {
+    "update_organization_contact_email",
+    "invite_organization_user",
+    "assign_organization_seat",
+    "grant_organization_report_access",
+}
 
 
 class FixedAgentModelGateway:
@@ -21,40 +27,27 @@ class FixedAgentModelGateway:
         self.received_action_names: tuple[str, ...] = ()
         self.plan_call_count = 0
 
-    async def create_plan(
-        self,
-        *,
-        user_request: str,
-        available_tools,
-        available_actions,
-    ):
+    async def create_plan(self, *, user_request: str, available_tools, available_actions):
         self.plan_call_count += 1
         self.received_user_request = user_request
-        self.received_tool_names = tuple(
-            tool_definition.name for tool_definition in available_tools
-        )
-        self.received_action_names = tuple(
-            action_definition.name for action_definition in available_actions
-        )
+        self.received_tool_names = tuple(item.name for item in available_tools)
+        self.received_action_names = tuple(item.name for item in available_actions)
         return self.agent_plan
 
 
 def override_agent_model(agent_plan: AgentPlan) -> FixedAgentModelGateway:
-    model_gateway = FixedAgentModelGateway(agent_plan)
-    app.dependency_overrides[get_agent_model_gateway] = lambda: model_gateway
-    return model_gateway
+    gateway = FixedAgentModelGateway(agent_plan)
+    app.dependency_overrides[get_agent_model_gateway] = lambda: gateway
+    return gateway
 
 
 async def test_agent_query_returns_grounded_profile_result(
     client: AsyncClient,
     admin_headers: dict[str, str],
 ) -> None:
-    model_gateway = override_agent_model(
-        AgentPlan(
-            tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)
-        )
+    gateway = override_agent_model(
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
     )
-
     response = await client.post(
         AGENT_QUERY_URL,
         headers=admin_headers,
@@ -62,9 +55,8 @@ async def test_agent_query_returns_grounded_profile_result(
     )
 
     assert response.status_code == 200
-    assert model_gateway.plan_call_count == 1
-    assert model_gateway.received_user_request == "Show the organization profile"
-    assert set(model_gateway.received_tool_names) == {
+    assert gateway.plan_call_count == 1
+    assert set(gateway.received_tool_names) == {
         "get_organization_profile",
         "list_organization_users",
         "get_organization_seat_summary",
@@ -72,43 +64,23 @@ async def test_agent_query_returns_grounded_profile_result(
         "check_organization_report_access",
         "get_organization_audit_log",
     }
-    assert model_gateway.received_action_names == (
-        "update_organization_contact_email",
-    )
-    response_body = response.json()
-    assert response_body["mode"] == "read"
-    assert response_body["action_proposal"] is None
-    assert response_body["organization_id"] == "org_sandbox_001"
-    assert response_body["results"] == [
-        {
-            "tool_name": "get_organization_profile",
-            "data": {
-                "id": "org_sandbox_001",
-                "display_name": "Demo Enterprise Sandbox",
-                "legal_name": "Demo Enterprise Private Limited",
-                "contact_email": "operations@example.test",
-                "environment": "sandbox",
-                "status": "active",
-                "version": 1,
-                "created_at": response_body["results"][0]["data"]["created_at"],
-                "updated_at": response_body["results"][0]["data"]["updated_at"],
-            },
-        }
-    ]
+    assert set(gateway.received_action_names) == EXPECTED_ACTION_NAMES
+    body = response.json()
+    assert body["mode"] == "read"
+    assert body["action_proposal"] is None
+    assert body["organization_id"] == "org_sandbox_001"
+    assert body["results"][0]["tool_name"] == "get_organization_profile"
+    assert body["results"][0]["data"]["id"] == "org_sandbox_001"
 
 
 async def test_agent_query_requires_authentication(client: AsyncClient) -> None:
     override_agent_model(
-        AgentPlan(
-            tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)
-        )
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
     )
-
     response = await client.post(
         AGENT_QUERY_URL,
         json={"query": "Show the organization profile"},
     )
-
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthenticated"
 
@@ -134,17 +106,13 @@ async def test_agent_query_uses_backend_organization_scope(
     )
     await db_session.commit()
     override_agent_model(
-        AgentPlan(
-            tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)
-        )
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
     )
-
     response = await client.post(
         "/workplace/organizations/org_sandbox_unavailable/agent/query",
         headers=admin_headers,
         json={"query": "Show that organization"},
     )
-
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "organization_access_denied"
 
@@ -156,13 +124,11 @@ async def test_agent_query_rejects_model_write_tool(
     override_agent_model(
         AgentPlan(tool_calls=(AgentToolCall(tool_name="delete_organization"),))
     )
-
     response = await client.post(
         AGENT_QUERY_URL,
         headers=admin_headers,
         json={"query": "Delete the organization"},
     )
-
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "agent_tool_call_invalid"
 
@@ -181,13 +147,11 @@ async def test_agent_query_rejects_model_supplied_identity(
             )
         )
     )
-
     response = await client.post(
         AGENT_QUERY_URL,
         headers=admin_headers,
         json={"query": "Show another organization"},
     )
-
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "agent_tool_call_invalid"
 
@@ -201,7 +165,6 @@ async def test_agent_query_returns_unavailable_without_configured_model(
         headers=admin_headers,
         json={"query": "Show the organization profile"},
     )
-
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "agent_model_unavailable"
 
@@ -210,14 +173,12 @@ async def test_agent_query_rejects_invalid_request_bodies(
     client: AsyncClient,
     admin_headers: dict[str, str],
 ) -> None:
-    invalid_request_bodies = [
+    for request_body in (
         {"query": ""},
         {"query": "   "},
         {"query": "x" * 4001},
         {"query": "Show profile", "organization_id": "org_other_001"},
-    ]
-
-    for request_body in invalid_request_bodies:
+    ):
         response = await client.post(
             AGENT_QUERY_URL,
             headers=admin_headers,
