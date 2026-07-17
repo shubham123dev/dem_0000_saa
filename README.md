@@ -1,46 +1,67 @@
-# DBMR Workplace Agent — Step 0
+# DBMR Workplace Agent — Sandbox Backend
 
-This repository is a separate, sandbox-only backend foundation for the future DBMR Workplace Agent. The existing SARA/chatbot repository remains unchanged and is not integrated in Step 0.
+This repository is a separate backend for the DBMR Workplace Agent. The existing SARA/chatbot codebase remains unchanged and is not integrated here.
 
-## What Step 0 proves
+## Runtime model
 
 ```text
 X-Mock-User-Id
-→ active mock user
+→ active backend user
 → active organization membership
 → backend-owned permission check
-→ sandbox organization guard
-→ OrganizationApiGateway
-→ MockOrganizationApiAdapter
-→ SQLite mock database
-→ append-only audit event
+→ sandbox and organization-status guard
+→ one structured planner call
+→ read execution or immutable action proposal
+→ explicit approval
+→ version-checked execution
+→ verification, audit and reconciliation
 ```
 
-Step 0 exposes five read-only workplace capabilities:
+Production organizations are blocked. Model output cannot provide organization scope, actor identity, permissions, approval state, proposal IDs, execution commands or idempotency keys.
+
+## Read capabilities
 
 - `get_organization_profile`
 - `list_organization_users`
 - `get_organization_seat_summary`
 - `list_organization_reports`
 - `check_organization_report_access`
+- `get_organization_audit_log`
 
-It deliberately contains no LLM planner, write action, approval execution, arbitrary SQL, arbitrary HTTP, shell tool, browser automation, production credential, or frontend code.
+## Approval-gated actions
 
-## Domain model
+- `update_organization_contact_email`
+- `invite_organization_user`
+- `assign_organization_seat`
+- `grant_organization_report_access`
 
-The mock sandbox persists nine tables:
+Every action follows the same backend-owned lifecycle:
 
-1. `organizations`
-2. `users`
-3. `organization_memberships`
-4. `organization_seat_pools`
-5. `seat_assignments`
-6. `reports`
-7. `organization_report_access`
-8. `role_permissions`
-9. `audit_events`
+```text
+dry-run proposal
+→ immutable reviewed change set
+→ explicit approval or rejection
+→ fingerprint and permission revalidation
+→ optimistic resource-version check
+→ single-use idempotent execution
+→ success, failure, stale or reconciliation-required outcome
+```
 
-Users and seats are separate. An organization may have any number of members, while only selected users consume licensed seats. Report access belongs to the organization and is resolved by backend data.
+Natural-language requests may create proposals but never approve or execute them.
+
+## Guardrails
+
+- Sandbox only; production access is denied.
+- No arbitrary SQL, arbitrary URL/HTTP, shell or browser tool.
+- No frontend code.
+- No production credentials or real employee data.
+- Permissions are loaded from backend role data.
+- Approval policy is owned by the action registry.
+- Concurrent approval and execution transitions use conditional database updates.
+- Seat assignment checks active membership and available capacity.
+- Report grants require an active report.
+- Successful mutations are not reversed when audit persistence fails.
+- Uncertain outcomes are reconciled by inspection without repeating an unapproved mutation.
 
 ## Setup
 
@@ -65,9 +86,7 @@ alembic upgrade head
 python -m app.db.seed
 ```
 
-The seed is deterministic and idempotent. It does not call `create_all()`.
-
-Seeded data includes one sandbox organization, six synthetic users, five memberships, five licensed seats, three active seat assignments, five reports and three organization report grants.
+The current migration head is `0006_expand_operational_actions`. The deterministic seed is idempotent and does not call `create_all()`.
 
 ## Run
 
@@ -75,7 +94,7 @@ Seeded data includes one sandbox organization, six synthetic users, five members
 uvicorn app.main:app --reload
 ```
 
-The raw mock Nucleus API is disabled by default. Enable it only for isolated local contract testing:
+The raw mock Nucleus API is disabled by default. Enable it only for isolated sandbox contract testing:
 
 ```env
 WORKPLACE_ENABLE_RAW_MOCK_API=true
@@ -83,40 +102,30 @@ WORKPLACE_ENABLE_RAW_MOCK_API=true
 
 ## Main endpoints
 
-| Method | Path | Auth |
+| Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | none |
-| GET | `/ready` | none |
-| GET | `/workplace/capabilities` | none |
-| GET | `/workplace/organizations/{organization_id}/profile` | `X-Mock-User-Id` |
-| GET | `/workplace/organizations/{organization_id}/users` | `X-Mock-User-Id` |
-| GET | `/workplace/organizations/{organization_id}/seats` | `X-Mock-User-Id` |
-| GET | `/workplace/organizations/{organization_id}/reports` | `X-Mock-User-Id` |
-| GET | `/workplace/organizations/{organization_id}/reports/{report_id}/access` | `X-Mock-User-Id` |
-| GET | `/workplace/organizations/{organization_id}/audit-log` | `X-Mock-User-Id` |
+| GET | `/health` | Liveness |
+| GET | `/ready` | Database readiness |
+| GET | `/workplace/capabilities` | Read tools and action catalogue |
+| POST | `/workplace/organizations/{organization_id}/agent/query` | Read plan or dry-run action proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/propose` | Explicit dry-run proposal |
+| GET | `/workplace/organizations/{organization_id}/agent/actions` | List proposals |
+| GET | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}` | Read a proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Explicit approval |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Explicit rejection |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel` | Cancel pending/approved proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Single-use execution |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile` | Inspect uncertain outcome |
 
-No workplace `POST`, `PUT`, `PATCH` or `DELETE` route exists in Step 0.
+All organization endpoints require `X-Mock-User-Id` except health, readiness and capabilities.
 
-## Example
-
-```bash
-curl -H "X-Mock-User-Id: usr_admin_001" \
-  http://127.0.0.1:8000/workplace/organizations/org_sandbox_001/profile
-```
-
-## Tests
+## Validation
 
 ```bash
 python -m compileall -q app tests
+alembic upgrade head
+python -m app.db.seed
 pytest -q
 ```
 
 Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
-
-## Next phase
-
-The first write phase is intentionally not implemented yet:
-
-```text
-inspect → propose immutable action → approve → execute → re-read → verify → audit → rollback
-```
