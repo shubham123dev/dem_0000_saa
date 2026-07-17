@@ -58,7 +58,12 @@ jobs:
           python -m app.db.seed
 
       - name: Run test suite
-        run: python -m pytest -q | tee pytest-output-${{ matrix.python-version }}.txt
+        run: |
+          set +e
+          python -m pytest -q > pytest-output-${{ matrix.python-version }}.txt 2>&1
+          pytest_exit_code=$?
+          cat pytest-output-${{ matrix.python-version }}.txt
+          exit $pytest_exit_code
 
       - name: Upload test output
         if: always()
