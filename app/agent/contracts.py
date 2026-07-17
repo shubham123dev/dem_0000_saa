@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.agent.action_contracts import AgentActionDefinition, AgentActionProposalInput
 
 
 class AgentToolDefinition(BaseModel):
@@ -23,7 +25,20 @@ class AgentToolCall(BaseModel):
 class AgentPlan(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    tool_calls: tuple[AgentToolCall, ...] = Field(min_length=1, max_length=5)
+    intent: Literal["read", "action_proposal"] = "read"
+    tool_calls: tuple[AgentToolCall, ...] = Field(default_factory=tuple, max_length=5)
+    action_proposal: AgentActionProposalInput | None = None
+
+    @model_validator(mode="after")
+    def validate_exclusive_intent(self) -> AgentPlan:
+        if self.intent == "read":
+            if not self.tool_calls or self.action_proposal is not None:
+                raise ValueError("Read plans require tool calls and forbid action proposals")
+        elif self.tool_calls or self.action_proposal is None:
+            raise ValueError(
+                "Action proposal plans require one proposal and forbid read tool calls"
+            )
+        return self
 
 
 class AgentToolResult(BaseModel):
@@ -45,5 +60,6 @@ class AgentModelGateway(Protocol):
         *,
         user_request: str,
         available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
     ) -> AgentPlan:
         ...
