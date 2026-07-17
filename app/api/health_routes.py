@@ -1,28 +1,24 @@
-"""Health, readiness, and capability routes (no authentication required)."""
-
+"""Health, readiness, and capability routes."""
 from __future__ import annotations
 
 from fastapi import APIRouter
 from sqlalchemy import text
 
+from app.agent.action_registry import AgentActionRegistry
 from app.api.dependencies import SessionDep
 from app.core.config import get_settings
-from app.schemas.organization import CapabilitiesResponse
+from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
 async def health() -> dict[str, str]:
-    """Liveness probe."""
-
     return {"status": "healthy"}
 
 
 @router.get("/ready")
 async def ready(session: SessionDep) -> dict[str, str]:
-    """Readiness probe: verifies database connectivity."""
-
     await session.execute(text("SELECT 1"))
     return {
         "status": "ready",
@@ -33,6 +29,16 @@ async def ready(session: SessionDep) -> dict[str, str]:
 
 @router.get("/workplace/capabilities", response_model=CapabilitiesResponse)
 async def capabilities() -> CapabilitiesResponse:
-    """Advertise Step 0 capabilities: five read tools, zero write tools."""
-
-    return CapabilitiesResponse()
+    definitions = AgentActionRegistry().list_definitions()
+    return CapabilitiesResponse(
+        write_actions=tuple(
+            CapabilityActionOut(
+                name=definition.name,
+                required_arguments=definition.required_argument_names,
+                risk_level=definition.risk_level,
+                requires_approval=definition.requires_approval,
+                supports_dry_run=definition.supports_dry_run,
+            )
+            for definition in definitions
+        )
+    )
