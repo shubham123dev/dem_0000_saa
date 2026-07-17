@@ -24,6 +24,7 @@ class AgentActionProposalORM(Base):
     )
     action_name: Mapped[str] = mapped_column(String, nullable=False)
     arguments_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    changes_json: Mapped[list] = mapped_column(JSON, nullable=False)
     action_fingerprint: Mapped[str] = mapped_column(String, nullable=False, index=True)
     risk_level: Mapped[str] = mapped_column(String, nullable=False)
     resource_type: Mapped[str] = mapped_column(String, nullable=False)
