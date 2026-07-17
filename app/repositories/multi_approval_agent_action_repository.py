@@ -61,7 +61,11 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
         decision_reason: str | None,
     ) -> AgentActionApproval:
         now = _utcnow()
-        proposal = await self._session.get(AgentActionProposalORM, proposal_id)
+        proposal = await self._session.scalar(
+            select(AgentActionProposalORM)
+            .where(AgentActionProposalORM.id == proposal_id)
+            .with_for_update()
+        )
         if (
             proposal is None
             or proposal.status != "pending_approval"
@@ -116,7 +120,11 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
         idempotency_key: str,
     ) -> AgentActionExecutionResult:
         now = _utcnow()
-        proposal = await self._session.get(AgentActionProposalORM, proposal_id)
+        proposal = await self._session.scalar(
+            select(AgentActionProposalORM)
+            .where(AgentActionProposalORM.id == proposal_id)
+            .with_for_update()
+        )
         if (
             proposal is None
             or proposal.status != "approved"
