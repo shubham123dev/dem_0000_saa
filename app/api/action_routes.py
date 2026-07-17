@@ -40,7 +40,7 @@ async def propose_agent_action(
         organization_id=organization_id,
         proposal_input=AgentActionProposalInput(
             action_name=request_body.action_name,
-            arguments={"contact_email": request_body.contact_email},
+            arguments=request_body.resolved_arguments(),
         ),
     )
     return AgentActionProposalResponse(proposal=proposal)
