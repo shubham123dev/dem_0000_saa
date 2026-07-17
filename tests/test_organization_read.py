@@ -108,7 +108,9 @@ async def test_only_explicit_workplace_post_routes_exist() -> None:
         "/workplace/organizations/{organization_id}/agent/actions/propose",
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve",
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel",
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile",
     }
     workplace_post_paths: set[str] = set()
 
