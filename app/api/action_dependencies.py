@@ -6,7 +6,12 @@ from fastapi import Depends
 
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.agent.action_contracts import AgentActionHandler
-from app.agent.action_handlers import UpdateOrganizationContactEmailHandler
+from app.agent.action_handlers import (
+    AssignOrganizationSeatHandler,
+    GrantOrganizationReportAccessHandler,
+    InviteOrganizationUserHandler,
+    UpdateOrganizationContactEmailHandler,
+)
 from app.agent.action_registry import AgentActionRegistry
 from app.api.dependencies import (
     MockOrganizationApiDep,
@@ -18,10 +23,9 @@ from app.permissions.permission_service import PermissionService
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.audit_repository import AuditRepository
 from app.repositories.user_repository import UserRepository
-from app.services.agent_action_reconciliation_service import (
-    AgentActionReconciliationService,
-)
+from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
 from app.services.agent_action_service import AgentActionService
+from app.services.operational_resource_service import OperationalResourceService
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
@@ -34,12 +38,23 @@ def get_agent_action_registry() -> AgentActionRegistry:
 
 def get_agent_action_handlers(
     api: MockOrganizationApiDep,
+    session: SessionDep,
 ) -> dict[str, AgentActionHandler]:
-    gateway = MockOrganizationApiAdapter(api)
+    organization_gateway = MockOrganizationApiAdapter(api)
+    operational_resources = OperationalResourceService(session)
     return {
         "update_organization_contact_email": UpdateOrganizationContactEmailHandler(
-            gateway
-        )
+            organization_gateway
+        ),
+        "invite_organization_user": InviteOrganizationUserHandler(
+            operational_resources
+        ),
+        "assign_organization_seat": AssignOrganizationSeatHandler(
+            operational_resources
+        ),
+        "grant_organization_report_access": GrantOrganizationReportAccessHandler(
+            operational_resources
+        ),
     }
 
 
