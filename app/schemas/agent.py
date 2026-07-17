@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -22,6 +22,7 @@ class AgentQueryRequest(BaseModel):
 class AgentToolResultOut(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    evidence_id: str
     tool_name: str
     data: Any
 
@@ -30,4 +31,7 @@ class AgentQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     organization_id: str
+    answer: str
+    evidence_ids: tuple[str, ...]
+    answer_source: Literal["model", "deterministic"]
     results: tuple[AgentToolResultOut, ...]
