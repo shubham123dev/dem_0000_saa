@@ -16,6 +16,7 @@ class AgentActionRegistry:
         self._definitions = {
             "update_organization_contact_email": AgentActionDefinition(
                 name="update_organization_contact_email",
+                description="Propose changing the organization contact email.",
                 required_argument_names=("contact_email",),
                 required_permission=Permission.ORGANIZATION_PROFILE_UPDATE.value,
                 resource_type="organization",
@@ -25,6 +26,9 @@ class AgentActionRegistry:
             )
         }
 
+    def list_definitions(self) -> tuple[AgentActionDefinition, ...]:
+        return tuple(self._definitions.values())
+
     def get_definition(self, action_name: str) -> AgentActionDefinition:
         action_definition = self._definitions.get(action_name)
         if action_definition is None:
@@ -32,9 +36,6 @@ class AgentActionRegistry:
         return action_definition
 
     def validate(self, proposal_input: AgentActionProposalInput) -> AgentActionDefinition:
-        action_definition = self.get_definition(proposal_input.action_name)
-        if set(proposal_input.arguments) != set(action_definition.required_argument_names):
-            raise InvalidAgentActionProposalError("Agent action arguments are invalid")
         forbidden_argument_names = {
             "organization_id",
             "user_id",
@@ -43,9 +44,18 @@ class AgentActionRegistry:
             "role",
             "approved",
             "approval",
+            "approval_decision",
+            "proposal_id",
+            "idempotency_key",
+            "execute",
         }
         if set(proposal_input.arguments) & forbidden_argument_names:
-            raise InvalidAgentActionProposalError("Identity and approval arguments are forbidden")
+            raise InvalidAgentActionProposalError(
+                "Identity, authorization, approval, and execution arguments are forbidden"
+            )
+        action_definition = self.get_definition(proposal_input.action_name)
+        if set(proposal_input.arguments) != set(action_definition.required_argument_names):
+            raise InvalidAgentActionProposalError("Agent action arguments are invalid")
         return action_definition
 
 
