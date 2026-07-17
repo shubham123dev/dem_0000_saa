@@ -1,5 +1,4 @@
 """Organization API schemas."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,12 +8,6 @@ from app.domain.models import OrganizationProfile
 
 
 class OrganizationOut(BaseModel):
-    """Public organization profile representation.
-
-    This is intentionally decoupled from the ORM: internal ORM objects are
-    never exposed directly.
-    """
-
     model_config = ConfigDict(from_attributes=False)
 
     id: str
@@ -39,31 +32,37 @@ class OrganizationOut(BaseModel):
 
 
 class OrganizationAccessOut(BaseModel):
-    """The access context under which a read tool was invoked."""
-
     user_id: str
     permission: str
 
 
 class OrganizationProfileResponse(BaseModel):
-    """Response body for the profile read endpoint."""
-
     organization: OrganizationOut
     access: OrganizationAccessOut
 
 
-class CapabilitiesResponse(BaseModel):
-    """Advertised Step 0 capabilities. Zero write tools; no production access."""
+class CapabilityActionOut(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
+    name: str
+    required_arguments: tuple[str, ...]
+    risk_level: str
+    requires_approval: bool
+    supports_dry_run: bool
+
+
+class CapabilitiesResponse(BaseModel):
     environment: str = "sandbox"
-    read_tools: list[str] = Field(
-        default_factory=lambda: [
+    read_tools: tuple[str, ...] = Field(
+        default=(
             "get_organization_profile",
             "list_organization_users",
             "get_organization_seat_summary",
             "list_organization_reports",
             "check_organization_report_access",
-        ]
+            "get_organization_audit_log",
+        )
     )
-    write_tools: list[str] = Field(default_factory=list)
+    write_actions: tuple[CapabilityActionOut, ...] = ()
+    approval_required: bool = True
     production_access: bool = False
