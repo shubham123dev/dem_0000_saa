@@ -1,12 +1,3 @@
-"""Mock organization adapter backed by the sandbox SQLite database.
-
-``MockOrganizationApiAdapter`` satisfies the ``OrganizationApiGateway`` contract
-by delegating to the in-process ``MockOrganizationApi`` (which stands in for the
-future real Nucleus organization API). This is the seam that a production
-``NucleusOrganizationApiAdapter`` replaces later without touching the Workplace
-Agent core.
-"""
-
 from __future__ import annotations
 
 from app.domain.models import (
@@ -20,8 +11,6 @@ from app.mock_api.service import MockOrganizationApi
 
 
 class MockOrganizationApiAdapter:
-    """Adapts the mock organization API to the ``OrganizationApiGateway``."""
-
     def __init__(self, mock_api: MockOrganizationApi) -> None:
         self._api = mock_api
 
@@ -38,10 +27,18 @@ class MockOrganizationApiAdapter:
         return await self._api.list_reports(organization_id)
 
     async def check_report_access(
-        self, organization_id: str, report_id: str
+        self,
+        organization_id: str,
+        report_id: str,
     ) -> ReportAccessDecision:
         return await self._api.check_report_access(organization_id, report_id)
 
+    async def update_contact_email(
+        self,
+        organization_id: str,
+        contact_email: str,
+    ) -> OrganizationProfile:
+        return await self._api.update_contact_email(organization_id, contact_email)
 
-# Backwards-compatible alias for the pre-expansion adapter name.
+
 MockOrganizationAdapter = MockOrganizationApiAdapter
