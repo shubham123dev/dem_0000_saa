@@ -63,6 +63,7 @@ class CapabilitiesResponse(BaseModel):
             "get_organization_audit_log",
         )
     )
+    write_tools: tuple[str, ...] = ()
     write_actions: tuple[CapabilityActionOut, ...] = ()
     approval_required: bool = True
     production_access: bool = False
