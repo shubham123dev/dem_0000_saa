@@ -7,8 +7,10 @@ from fastapi import Depends
 from app.agent.contracts import AgentModelGateway, AgentPlan, AgentToolDefinition
 from app.agent.errors import AgentModelUnavailableError
 from app.agent.orchestrator import ReadOnlyAgentOrchestrator
+from app.agent.providers.openai_responses import OpenAIResponsesAgentModelGateway
 from app.agent.tool_registry import ReadOnlyAgentToolRegistry
 from app.api.dependencies import OrganizationServiceDep
+from app.core.config import get_settings
 
 
 class UnavailableAgentModelGateway:
@@ -22,7 +24,18 @@ class UnavailableAgentModelGateway:
 
 
 def get_agent_model_gateway() -> AgentModelGateway:
-    return UnavailableAgentModelGateway()
+    settings = get_settings()
+    if settings.agent_model_provider != "openai" or not settings.agent_model_api_key:
+        return UnavailableAgentModelGateway()
+    return OpenAIResponsesAgentModelGateway(
+        api_key=settings.agent_model_api_key,
+        model=settings.agent_model_name,
+        endpoint=settings.agent_model_endpoint,
+        timeout_seconds=settings.agent_model_timeout_seconds,
+        maximum_attempts=settings.agent_model_maximum_attempts,
+        retry_delay_seconds=settings.agent_model_retry_delay_seconds,
+        maximum_output_tokens=settings.agent_model_maximum_output_tokens,
+    )
 
 
 def get_read_only_agent_tool_registry() -> ReadOnlyAgentToolRegistry:
