@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_HEAD = "0006_expand_operational_actions"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "agent_action_approvals",
     "agent_action_executions",
@@ -25,19 +25,18 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "seat_assignments",
     "users",
 }
-EXPECTED_HEAD = "0005_harden_agent_action_lifecycle"
 
 
 def build_alembic_environment(database_file_path: Path) -> dict[str, str]:
-    alembic_environment = os.environ.copy()
-    alembic_environment["WORKPLACE_DATABASE_URL"] = (
+    environment = os.environ.copy()
+    environment["WORKPLACE_DATABASE_URL"] = (
         f"sqlite+aiosqlite:///{database_file_path.as_posix()}"
     )
-    return alembic_environment
+    return environment
 
 
 def run_alembic(database_file_path: Path, revision: str) -> None:
-    completed_upgrade_process = subprocess.run(
+    completed = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=REPOSITORY_ROOT,
         env=build_alembic_environment(database_file_path),
@@ -45,164 +44,40 @@ def run_alembic(database_file_path: Path, revision: str) -> None:
         text=True,
         check=False,
     )
-    assert completed_upgrade_process.returncode == 0, (
-        completed_upgrade_process.stdout + completed_upgrade_process.stderr
-    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-def run_alembic_upgrade(database_file_path: Path) -> None:
-    run_alembic(database_file_path, "head")
-
-
-def read_table_names(database_connection: sqlite3.Connection) -> set[str]:
-    table_rows = database_connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table'"
-    ).fetchall()
+def read_table_names(connection: sqlite3.Connection) -> set[str]:
     return {
-        table_row[0]
-        for table_row in table_rows
-        if not table_row[0].startswith("sqlite_")
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+        if not row[0].startswith("sqlite_")
     }
 
 
-def read_column_names(
-    database_connection: sqlite3.Connection,
-    table_name: str,
-) -> set[str]:
+def read_column_names(connection: sqlite3.Connection, table_name: str) -> set[str]:
     return {
         row[1]
-        for row in database_connection.execute(
-            f"PRAGMA table_info({table_name})"
-        ).fetchall()
+        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
     }
 
 
-def create_legacy_database_schema(database_file_path: Path) -> None:
-    with sqlite3.connect(database_file_path) as database_connection:
-        database_connection.executescript(
-            """
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE organizations (
-                id TEXT PRIMARY KEY NOT NULL,
-                display_name TEXT NOT NULL,
-                legal_name TEXT,
-                contact_email TEXT,
-                environment TEXT NOT NULL,
-                status TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL
-            );
-
-            CREATE TABLE employees (
-                id TEXT PRIMARY KEY NOT NULL,
-                display_name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL
-            );
-
-            CREATE TABLE employee_organization_roles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id TEXT NOT NULL,
-                organization_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                CONSTRAINT fk_legacy_role_employee
-                    FOREIGN KEY(employee_id) REFERENCES employees(id),
-                CONSTRAINT fk_legacy_role_organization
-                    FOREIGN KEY(organization_id) REFERENCES organizations(id),
-                CONSTRAINT uq_employee_org_role
-                    UNIQUE(employee_id, organization_id, role)
-            );
-
-            CREATE TABLE role_permissions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                role TEXT NOT NULL,
-                permission TEXT NOT NULL,
-                CONSTRAINT uq_role_permission UNIQUE(role, permission)
-            );
-
-            CREATE TABLE audit_events (
-                id TEXT PRIMARY KEY NOT NULL,
-                actor_employee_id TEXT NOT NULL,
-                organization_id TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                operation TEXT NOT NULL,
-                outcome TEXT NOT NULL,
-                resource_type TEXT NOT NULL,
-                resource_id TEXT NOT NULL,
-                details_json JSON,
-                created_at DATETIME NOT NULL
-            );
-
-            CREATE TABLE alembic_version (
-                version_num VARCHAR(32) NOT NULL
-            );
-
-            INSERT INTO alembic_version(version_num)
-            VALUES ('0001_initial');
-
-            INSERT INTO organizations(
-                id, display_name, legal_name, contact_email, environment,
-                status, version, created_at, updated_at
-            ) VALUES (
-                'org_legacy_001', 'Legacy Organization',
-                'Legacy Organization Private Limited', 'legacy@example.test',
-                'sandbox', 'active', 1,
-                '2026-01-01 00:00:00', '2026-01-01 00:00:00'
-            );
-
-            INSERT INTO employees(
-                id, display_name, email, status, created_at, updated_at
-            ) VALUES (
-                'emp_legacy_001', 'Legacy Employee',
-                'legacy.employee@example.test', 'active',
-                '2026-01-01 00:00:00', '2026-01-01 00:00:00'
-            );
-
-            INSERT INTO employee_organization_roles(
-                employee_id, organization_id, role
-            ) VALUES
-                ('emp_legacy_001', 'org_legacy_001', 'sandbox_reader'),
-                ('emp_legacy_001', 'org_legacy_001', 'sandbox_admin');
-
-            INSERT INTO role_permissions(role, permission)
-            VALUES
-                ('sandbox_reader', 'organization.profile.read'),
-                ('sandbox_reader', 'chatbot.report.query'),
-                ('sandbox_admin', 'chatbot.report.summarize');
-
-            INSERT INTO audit_events(
-                id, actor_employee_id, organization_id, event_type,
-                operation, outcome, resource_type, resource_id,
-                details_json, created_at
-            ) VALUES (
-                'audit_legacy_001', 'emp_legacy_001', 'org_legacy_001',
-                'organization.profile.read', 'read', 'success',
-                'organization', 'org_legacy_001', '{}',
-                '2026-01-01 00:00:00'
-            );
-            """
-        )
-
-
-def assert_hardened_action_columns(database_connection: sqlite3.Connection) -> None:
-    proposal_columns = read_column_names(
-        database_connection,
-        "agent_action_proposals",
-    )
+def assert_head_and_operational_columns(connection: sqlite3.Connection) -> None:
+    revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()
+    assert revision == (EXPECTED_HEAD,)
+    assert "version" in read_column_names(connection, "organization_memberships")
+    assert "version" in read_column_names(connection, "organization_seat_pools")
+    assert "version" in read_column_names(connection, "organization_report_access")
+    proposal_columns = read_column_names(connection, "agent_action_proposals")
     assert {
         "observed_resource_version",
         "approval_policy_json",
         "cancelled_at",
         "stale_at",
     }.issubset(proposal_columns)
-    execution_columns = read_column_names(
-        database_connection,
-        "agent_action_executions",
-    )
+    execution_columns = read_column_names(connection, "agent_action_executions")
     assert {
         "attempt_count",
         "last_attempt_at",
@@ -213,81 +88,34 @@ def assert_hardened_action_columns(database_connection: sqlite3.Connection) -> N
 
 
 def test_fresh_database_upgrades_to_head_and_is_repeatable(tmp_path: Path) -> None:
-    database_file_path = tmp_path / "fresh_migration.db"
-    run_alembic_upgrade(database_file_path)
-    run_alembic_upgrade(database_file_path)
+    database_file_path = tmp_path / "fresh.db"
+    run_alembic(database_file_path, "head")
+    run_alembic(database_file_path, "head")
 
-    with sqlite3.connect(database_file_path) as database_connection:
-        assert read_table_names(database_connection) == EXPECTED_DATABASE_TABLE_NAMES
-        assert_hardened_action_columns(database_connection)
-        current_revision = database_connection.execute(
-            "SELECT version_num FROM alembic_version"
-        ).fetchone()
-        assert current_revision == (EXPECTED_HEAD,)
+    with sqlite3.connect(database_file_path) as connection:
+        assert read_table_names(connection) == EXPECTED_DATABASE_TABLE_NAMES
+        assert_head_and_operational_columns(connection)
 
 
-def test_legacy_database_upgrade_preserves_identity_membership_and_audit_data(
+def test_database_from_initial_revision_upgrades_to_operational_head(
     tmp_path: Path,
 ) -> None:
-    database_file_path = tmp_path / "legacy_migration.db"
-    create_legacy_database_schema(database_file_path)
-    run_alembic_upgrade(database_file_path)
-    run_alembic_upgrade(database_file_path)
+    database_file_path = tmp_path / "initial.db"
+    run_alembic(database_file_path, "0001_initial")
+    run_alembic(database_file_path, "head")
 
-    with sqlite3.connect(database_file_path) as database_connection:
-        assert read_table_names(database_connection) == EXPECTED_DATABASE_TABLE_NAMES
-        assert_hardened_action_columns(database_connection)
-        migrated_user = database_connection.execute(
-            "SELECT id, display_name, email, status FROM users WHERE id = ?",
-            ("emp_legacy_001",),
-        ).fetchone()
-        assert migrated_user == (
-            "emp_legacy_001",
-            "Legacy Employee",
-            "legacy.employee@example.test",
-            "active",
-        )
-        migrated_memberships = database_connection.execute(
-            "SELECT organization_id, user_id, role, membership_status, "
-            "joined_at, created_at, updated_at "
-            "FROM organization_memberships "
-            "WHERE organization_id = ? AND user_id = ?",
-            ("org_legacy_001", "emp_legacy_001"),
-        ).fetchall()
-        assert len(migrated_memberships) == 1
-        assert migrated_memberships[0][0:4] == (
-            "org_legacy_001",
-            "emp_legacy_001",
-            "sandbox_reader",
-            "active",
-        )
-        assert all(
-            timestamp_value is not None
-            for timestamp_value in migrated_memberships[0][4:7]
-        )
-        migrated_audit_actor = database_connection.execute(
-            "SELECT actor_user_id FROM audit_events WHERE id = ?",
-            ("audit_legacy_001",),
-        ).fetchone()
-        assert migrated_audit_actor == ("emp_legacy_001",)
-        remaining_permissions = {
-            permission_row[0]
-            for permission_row in database_connection.execute(
-                "SELECT permission FROM role_permissions"
-            ).fetchall()
-        }
-        assert remaining_permissions == {"organization.profile.read"}
-        current_revision = database_connection.execute(
-            "SELECT version_num FROM alembic_version"
-        ).fetchone()
-        assert current_revision == (EXPECTED_HEAD,)
+    with sqlite3.connect(database_file_path) as connection:
+        assert read_table_names(connection) == EXPECTED_DATABASE_TABLE_NAMES
+        assert_head_and_operational_columns(connection)
 
 
-def test_0004_action_rows_are_preserved_by_0005_upgrade(tmp_path: Path) -> None:
-    database_file_path = tmp_path / "action_upgrade.db"
-    run_alembic(database_file_path, "0004_add_agent_action_approvals")
-    with sqlite3.connect(database_file_path) as database_connection:
-        database_connection.execute(
+def test_0005_rows_are_preserved_by_0006_upgrade(tmp_path: Path) -> None:
+    database_file_path = tmp_path / "upgrade.db"
+    run_alembic(database_file_path, "0005_harden_agent_action_lifecycle")
+
+    with sqlite3.connect(database_file_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(
             "INSERT INTO organizations(id, display_name, environment, status, version, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
@@ -300,7 +128,7 @@ def test_0004_action_rows_are_preserved_by_0005_upgrade(tmp_path: Path) -> None:
                 "2026-01-01 00:00:00",
             ),
         )
-        database_connection.execute(
+        connection.execute(
             "INSERT INTO users(id, display_name, email, status, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (
@@ -312,76 +140,111 @@ def test_0004_action_rows_are_preserved_by_0005_upgrade(tmp_path: Path) -> None:
                 "2026-01-01 00:00:00",
             ),
         )
-        database_connection.execute(
-            "INSERT INTO agent_action_proposals(" 
-            "id, organization_id, requested_by_user_id, action_name, arguments_json, "
-            "changes_json, action_fingerprint, risk_level, resource_type, resource_id, "
-            "status, expires_at, created_at, updated_at" 
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        connection.execute(
+            "INSERT INTO organization_memberships(organization_id, user_id, role, membership_status, joined_at, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "org_upgrade_001",
+                "usr_upgrade_001",
+                "sandbox_admin",
+                "active",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO organization_seat_pools(id, organization_id, seat_type, total_seats, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "pool_upgrade_001",
+                "org_upgrade_001",
+                "standard",
+                2,
+                "active",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO reports(id, external_report_id, title, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "report_upgrade_001",
+                "EXT-001",
+                "Upgrade Report",
+                "active",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO organization_report_access(id, organization_id, report_id, access_level, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "access_upgrade_001",
+                "org_upgrade_001",
+                "report_upgrade_001",
+                "view",
+                "active",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO agent_action_proposals(id, organization_id, requested_by_user_id, action_name, arguments_json, changes_json, action_fingerprint, risk_level, resource_type, resource_id, status, observed_resource_version, approval_policy_json, expires_at, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "proposal_upgrade_001",
                 "org_upgrade_001",
                 "usr_upgrade_001",
                 "update_organization_contact_email",
                 '{"contact_email":"new@example.test"}',
-                '[{"field":"contact_email","before":"old@example.test","after":"new@example.test"}]',
+                '[{"field":"contact_email","before":null,"after":"new@example.test"}]',
                 "fingerprint",
                 "low",
                 "organization",
                 "org_upgrade_001",
                 "approved",
+                3,
+                '{"self_approval_allowed":true,"required_approver_permission":"organization.profile.update","minimum_approvals":1}',
                 "2026-12-01 00:00:00",
                 "2026-01-01 00:00:00",
                 "2026-01-01 00:00:00",
             ),
         )
-        database_connection.execute(
-            "INSERT INTO agent_action_executions(" 
-            "id, proposal_id, idempotency_key, outcome, started_at" 
-            ") VALUES (?, ?, ?, ?, ?)",
-            (
-                "execution_upgrade_001",
-                "proposal_upgrade_001",
-                "upgrade-idempotency-key",
-                "executing",
-                "2026-01-01 00:00:00",
-            ),
-        )
-        database_connection.commit()
+        connection.commit()
 
-    run_alembic_upgrade(database_file_path)
-    with sqlite3.connect(database_file_path) as database_connection:
-        proposal = database_connection.execute(
-            "SELECT id, status, observed_resource_version FROM agent_action_proposals"
+    run_alembic(database_file_path, "head")
+
+    with sqlite3.connect(database_file_path) as connection:
+        assert_head_and_operational_columns(connection)
+        membership = connection.execute(
+            "SELECT role, membership_status, version FROM organization_memberships"
         ).fetchone()
-        assert proposal == ("proposal_upgrade_001", "approved", 0)
-        execution = database_connection.execute(
-            "SELECT id, outcome, attempt_count, audit_pending FROM agent_action_executions"
+        assert membership == ("sandbox_admin", "active", 1)
+        seat_pool = connection.execute(
+            "SELECT total_seats, version FROM organization_seat_pools"
         ).fetchone()
-        assert execution == ("execution_upgrade_001", "executing", 1, 0)
-        assert_hardened_action_columns(database_connection)
+        assert seat_pool == (2, 1)
+        report_access = connection.execute(
+            "SELECT access_level, status, version FROM organization_report_access"
+        ).fetchone()
+        assert report_access == ("view", "active", 1)
+        proposal = connection.execute(
+            "SELECT id, status FROM agent_action_proposals"
+        ).fetchone()
+        assert proposal == ("proposal_upgrade_001", "approved")
 
-
-def test_legacy_upgrade_enforces_one_membership_per_user_and_organization(
-    tmp_path: Path,
-) -> None:
-    database_file_path = tmp_path / "legacy_membership_constraint.db"
-    create_legacy_database_schema(database_file_path)
-    run_alembic_upgrade(database_file_path)
-
-    with sqlite3.connect(database_file_path) as database_connection:
         with pytest.raises(sqlite3.IntegrityError):
-            database_connection.execute(
-                "INSERT INTO organization_memberships("
-                "organization_id, user_id, role, membership_status, "
-                "joined_at, created_at, updated_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?)",
+            connection.execute(
+                "INSERT INTO users(id, display_name, email, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
-                    "org_legacy_001",
-                    "emp_legacy_001",
-                    "sandbox_admin",
+                    "usr_duplicate_email",
+                    "Duplicate",
+                    "upgrade@example.test",
                     "active",
-                    "2026-01-01 00:00:00",
                     "2026-01-01 00:00:00",
                     "2026-01-01 00:00:00",
                 ),
