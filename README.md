@@ -32,8 +32,13 @@ Production organizations are blocked. Model output cannot provide organization s
 
 - `update_organization_contact_email`
 - `invite_organization_user`
+- `activate_organization_membership`
+- `update_organization_member_role`
+- `remove_organization_user`
 - `assign_organization_seat`
+- `revoke_organization_seat`
 - `grant_organization_report_access`
+- `revoke_organization_report_access`
 
 Every action follows the same backend-owned lifecycle:
 
@@ -49,6 +54,17 @@ dry-run proposal
 
 Natural-language requests may create proposals but never approve or execute them.
 
+## Operational invariants
+
+- Membership activation is allowed only from `invited` to `active`.
+- Membership role changes are version checked.
+- The final active organization administrator cannot be demoted or removed.
+- A member with an active seat must be unseated before membership removal.
+- Membership, seat and report-access history is preserved through status changes; rows are not deleted.
+- Seat assignment and revocation use versioned conditional updates.
+- Report grants and revocations use versioned conditional updates.
+- An approved proposal whose reviewed resource changes becomes `stale` rather than producing an internal error.
+
 ## Guardrails
 
 - Sandbox only; production access is denied.
@@ -58,8 +74,6 @@ Natural-language requests may create proposals but never approve or execute them
 - Permissions are loaded from backend role data.
 - Approval policy is owned by the action registry.
 - Concurrent approval and execution transitions use conditional database updates.
-- Seat assignment checks active membership and available capacity.
-- Report grants require an active report.
 - Successful mutations are not reversed when audit persistence fails.
 - Uncertain outcomes are reconciled by inspection without repeating an unapproved mutation.
 
@@ -86,7 +100,7 @@ alembic upgrade head
 python -m app.db.seed
 ```
 
-The current migration head is `0006_expand_operational_actions`. The deterministic seed is idempotent and does not call `create_all()`.
+The current migration head is `0007_complete_inverse_lifecycle`. The deterministic seed is idempotent and does not call `create_all()`.
 
 ## Run
 
@@ -122,7 +136,7 @@ All organization endpoints require `X-Mock-User-Id` except health, readiness and
 ## Validation
 
 ```bash
-python -m compileall -q app tests
+python -m compileall -q app tests alembic
 alembic upgrade head
 python -m app.db.seed
 pytest -q
