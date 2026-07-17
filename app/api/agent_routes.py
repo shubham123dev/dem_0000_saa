@@ -23,7 +23,7 @@ async def query_read_only_agent(
     response_service: ReadOnlyAgentResponseServiceDep,
 ) -> AgentQueryResponse:
     try:
-        completed_execution = await response_service.execute(
+        completion = await response_service.execute(
             user=user,
             organization_id=organization_id,
             user_request=request_body.query,
@@ -32,15 +32,17 @@ async def query_read_only_agent(
         raise AgentToolCallInvalidError() from exception
 
     return AgentQueryResponse(
+        mode=completion.mode,
         organization_id=organization_id,
-        answer=completed_execution.synthesis.answer,
-        evidence_ids=completed_execution.synthesis.evidence_ids,
-        answer_source=completed_execution.synthesis.answer_source,
+        answer=completion.answer,
+        evidence_ids=completion.evidence_ids,
+        answer_source=completion.answer_source,
+        action_proposal=completion.action_proposal,
         results=tuple(
             AgentToolResultOut(
                 tool_name=tool_result.tool_name,
                 data=jsonable_encoder(tool_result.data),
             )
-            for tool_result in completed_execution.results
+            for tool_result in completion.results
         ),
     )
