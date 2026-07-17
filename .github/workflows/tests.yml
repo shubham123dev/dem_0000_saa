@@ -1,6 +1,7 @@
 name: main-validation
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
