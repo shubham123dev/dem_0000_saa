@@ -1,4 +1,4 @@
-"""Organization repository: reads organization rows into domain models."""
+"""Organization repository: organization profile persistence."""
 
 from __future__ import annotations
 
@@ -17,6 +17,20 @@ class OrganizationRepository:
         row = await self._session.get(OrganizationORM, organization_id)
         if row is None:
             return None
+        return self._to_domain(row)
+
+    async def update_contact_email(
+        self,
+        organization_id: str,
+        contact_email: str,
+    ) -> OrganizationProfile | None:
+        row = await self._session.get(OrganizationORM, organization_id)
+        if row is None:
+            return None
+        row.contact_email = contact_email
+        row.version += 1
+        await self._session.commit()
+        await self._session.refresh(row)
         return self._to_domain(row)
 
     @staticmethod
