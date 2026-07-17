@@ -97,20 +97,8 @@ class OpenAIResponsesAgentModelGateway:
             }
             for definition in available_actions
         ]
-        tool_argument_names = sorted(
-            {
-                argument_name
-                for definition in available_tools
-                for argument_name in definition.required_argument_names
-            }
-        )
-        action_argument_names = sorted(
-            {
-                argument_name
-                for definition in available_actions
-                for argument_name in definition.required_argument_names
-            }
-        )
+        tool_argument_names = self._argument_names(available_tools)
+        action_argument_names = self._argument_names(available_actions)
         return {
             "model": self._model,
             "store": False,
@@ -124,11 +112,13 @@ class OpenAIResponsesAgentModelGateway:
                             "text": (
                                 "Choose exactly one intent. For read intent, return one to five "
                                 "allowlisted read tool calls and no action. For action_proposal "
-                                "intent, return exactly one allowlisted action proposal and no "
-                                "read calls. Set every argument not required by the selected item "
-                                "to null. Never include organization, user, role, permission, "
-                                "approval, proposal, execution, or idempotency state. An action "
-                                "proposal only requests a dry-run pending explicit backend approval."
+                                "intent, return exactly one allowlisted action proposal and no read "
+                                "calls. Set every union argument not required by the selected item "
+                                "to null. Never include organization_id, actor_user_id, permissions, "
+                                "approval decisions, proposal identifiers, execution commands, or "
+                                "idempotency keys. A target user_id or requested membership role may "
+                                "be included only when explicitly required by the selected action. "
+                                "An action proposal is a dry-run request pending explicit backend approval."
                             ),
                         }
                     ],
@@ -180,42 +170,21 @@ class OpenAIResponsesAgentModelGateway:
                                     "properties": {
                                         "tool_name": {
                                             "type": "string",
-                                            "enum": [
-                                                definition.name
-                                                for definition in available_tools
-                                            ],
+                                            "enum": [item.name for item in available_tools],
                                         },
-                                        "arguments": {
-                                            "type": "object",
-                                            "additionalProperties": False,
-                                            "required": tool_argument_names,
-                                            "properties": {
-                                                name: {
-                                                    "type": ["string", "null"]
-                                                }
-                                                for name in tool_argument_names
-                                            },
-                                        },
+                                        "arguments": self._nullable_argument_schema(
+                                            tool_argument_names
+                                        ),
                                     },
                                 },
                             },
                             "action_name": {
                                 "type": ["string", "null"],
-                                "enum": [
-                                    definition.name
-                                    for definition in available_actions
-                                ]
-                                + [None],
+                                "enum": [item.name for item in available_actions] + [None],
                             },
-                            "action_arguments": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "required": action_argument_names,
-                                "properties": {
-                                    name: {"type": ["string", "null"]}
-                                    for name in action_argument_names
-                                },
-                            },
+                            "action_arguments": self._nullable_argument_schema(
+                                action_argument_names
+                            ),
                         },
                     },
                 }
@@ -240,9 +209,9 @@ class OpenAIResponsesAgentModelGateway:
                         {
                             "type": "input_text",
                             "text": (
-                                "Answer only from the supplied authorized evidence. Do not "
-                                "request tools, invent facts, change scope, or cite unknown "
-                                "evidence identifiers. Cite at least one evidence identifier."
+                                "Answer only from the supplied authorized evidence. Do not request "
+                                "tools, invent facts, change scope, or cite unknown evidence identifiers. "
+                                "Cite at least one evidence identifier."
                             ),
                         }
                     ],
@@ -290,18 +259,15 @@ class OpenAIResponsesAgentModelGateway:
             },
         }
 
-    async def _post_with_retries(
-        self,
-        request_payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        owns_http_client = self._http_client is None
-        http_client = self._http_client or httpx.AsyncClient(
+    async def _post_with_retries(self, request_payload: dict[str, Any]) -> dict[str, Any]:
+        owns_client = self._http_client is None
+        client = self._http_client or httpx.AsyncClient(
             timeout=httpx.Timeout(self._timeout_seconds)
         )
         try:
             for attempt_number in range(1, self._maximum_attempts + 1):
                 try:
-                    response = await http_client.post(
+                    response = await client.post(
                         self._endpoint,
                         headers={
                             "Authorization": f"Bearer {self._api_key}",
@@ -314,7 +280,6 @@ class OpenAIResponsesAgentModelGateway:
                         raise AgentModelRequestFailedError() from exception
                     await asyncio.sleep(self._retry_delay_seconds)
                     continue
-
                 if response.status_code in _RETRYABLE_STATUS_CODES:
                     if attempt_number == self._maximum_attempts:
                         raise AgentModelRequestFailedError()
@@ -323,25 +288,143 @@ class OpenAIResponsesAgentModelGateway:
                 if response.is_error:
                     raise AgentModelRequestFailedError()
                 try:
-                    response_payload = response.json()
+                    payload = response.json()
                 except ValueError as exception:
                     raise AgentModelResponseInvalidError() from exception
-                if not isinstance(response_payload, dict):
+                if not isinstance(payload, dict):
                     raise AgentModelResponseInvalidError()
-                if response_payload.get("status") in {
+                if payload.get("status") in {
                     "failed",
                     "incomplete",
                     "cancelled",
                     "in_progress",
                 }:
                     raise AgentModelResponseInvalidError()
-                return response_payload
+                return payload
         finally:
-            if owns_http_client:
-                await http_client.aclose()
+            if owns_client:
+                await client.aclose()
         raise AgentModelRequestFailedError()
 
-    def _extract_output_text(self, response_payload: dict[str, Any]) -> str:
+    def _parse_plan(
+        self,
+        response_payload: dict[str, Any],
+        *,
+        available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
+    ) -> AgentPlan:
+        try:
+            payload = json.loads(self._extract_output_text(response_payload))
+            if not isinstance(payload, dict):
+                raise AgentModelResponseInvalidError()
+            intent = payload.get("intent")
+            raw_tool_calls = payload.get("tool_calls")
+            action_name = payload.get("action_name")
+            action_arguments = payload.get("action_arguments")
+            if not isinstance(raw_tool_calls, list) or not isinstance(action_arguments, dict):
+                raise AgentModelResponseInvalidError()
+
+            tool_definitions = {item.name: item for item in available_tools}
+            action_definitions = {item.name: item for item in available_actions}
+            all_tool_arguments = set(self._argument_names(available_tools))
+            all_action_arguments = set(self._argument_names(available_actions))
+
+            if intent == "read":
+                if action_name is not None or any(
+                    value is not None for value in action_arguments.values()
+                ):
+                    raise AgentModelResponseInvalidError()
+                tool_calls: list[AgentToolCall] = []
+                for raw_call in raw_tool_calls:
+                    if not isinstance(raw_call, dict):
+                        raise AgentModelResponseInvalidError()
+                    tool_name = raw_call.get("tool_name")
+                    raw_arguments = raw_call.get("arguments")
+                    if not isinstance(tool_name, str) or not isinstance(raw_arguments, dict):
+                        raise AgentModelResponseInvalidError()
+                    definition = tool_definitions.get(tool_name)
+                    if definition is None or set(raw_arguments) != all_tool_arguments:
+                        raise AgentModelResponseInvalidError()
+                    tool_calls.append(
+                        AgentToolCall(
+                            tool_name=tool_name,
+                            arguments=self._select_required_arguments(
+                                raw_arguments,
+                                set(definition.required_argument_names),
+                            ),
+                        )
+                    )
+                return AgentPlan(intent="read", tool_calls=tuple(tool_calls))
+
+            if intent == "action_proposal":
+                if raw_tool_calls or not isinstance(action_name, str):
+                    raise AgentModelResponseInvalidError()
+                definition = action_definitions.get(action_name)
+                if definition is None or set(action_arguments) != all_action_arguments:
+                    raise AgentModelResponseInvalidError()
+                return AgentPlan(
+                    intent="action_proposal",
+                    action_proposal=AgentActionProposalInput(
+                        action_name=action_name,
+                        arguments=self._select_required_arguments(
+                            action_arguments,
+                            set(definition.required_argument_names),
+                        ),
+                    ),
+                )
+            raise AgentModelResponseInvalidError()
+        except (json.JSONDecodeError, ValidationError, TypeError) as exception:
+            raise AgentModelResponseInvalidError() from exception
+
+    def _parse_answer(self, response_payload: dict[str, Any]) -> AgentAnswerDraft:
+        try:
+            payload = json.loads(self._extract_output_text(response_payload))
+            return AgentAnswerDraft.model_validate(payload)
+        except (json.JSONDecodeError, ValidationError) as exception:
+            raise AgentModelResponseInvalidError() from exception
+
+    @staticmethod
+    def _argument_names(definitions: tuple[Any, ...]) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    argument_name
+                    for definition in definitions
+                    for argument_name in definition.required_argument_names
+                }
+            )
+        )
+
+    @staticmethod
+    def _nullable_argument_schema(argument_names: tuple[str, ...]) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(argument_names),
+            "properties": {
+                name: {"type": ["string", "null"]} for name in argument_names
+            },
+        }
+
+    @staticmethod
+    def _select_required_arguments(
+        raw_arguments: dict[str, Any],
+        required_argument_names: set[str],
+    ) -> dict[str, str]:
+        selected: dict[str, str] = {}
+        for argument_name, argument_value in raw_arguments.items():
+            if argument_name in required_argument_names:
+                if not isinstance(argument_value, str) or not argument_value.strip():
+                    raise AgentModelResponseInvalidError()
+                selected[argument_name] = argument_value
+            elif argument_value is not None:
+                raise AgentModelResponseInvalidError()
+        if set(selected) != required_argument_names:
+            raise AgentModelResponseInvalidError()
+        return selected
+
+    @staticmethod
+    def _extract_output_text(response_payload: dict[str, Any]) -> str:
         output_items = response_payload.get("output")
         if not isinstance(output_items, list):
             raise AgentModelResponseInvalidError()
@@ -361,116 +444,3 @@ class OpenAIResponsesAgentModelGateway:
                     return output_text
                 raise AgentModelResponseInvalidError()
         raise AgentModelResponseInvalidError()
-
-    def _parse_plan(
-        self,
-        response_payload: dict[str, Any],
-        *,
-        available_tools: tuple[AgentToolDefinition, ...],
-        available_actions: tuple[AgentActionDefinition, ...],
-    ) -> AgentPlan:
-        try:
-            payload = json.loads(self._extract_output_text(response_payload))
-            if not isinstance(payload, dict):
-                raise AgentModelResponseInvalidError()
-            intent = payload.get("intent")
-            raw_tool_calls = payload.get("tool_calls")
-            action_name = payload.get("action_name")
-            action_arguments = payload.get("action_arguments")
-            if not isinstance(raw_tool_calls, list) or not isinstance(
-                action_arguments, dict
-            ):
-                raise AgentModelResponseInvalidError()
-
-            tool_definitions = {
-                definition.name: definition for definition in available_tools
-            }
-            action_definitions = {
-                definition.name: definition for definition in available_actions
-            }
-            all_tool_argument_names = {
-                name
-                for definition in available_tools
-                for name in definition.required_argument_names
-            }
-            all_action_argument_names = {
-                name
-                for definition in available_actions
-                for name in definition.required_argument_names
-            }
-
-            if intent == "read":
-                if action_name is not None or any(
-                    value is not None for value in action_arguments.values()
-                ):
-                    raise AgentModelResponseInvalidError()
-                tool_calls = []
-                for raw_call in raw_tool_calls:
-                    if not isinstance(raw_call, dict):
-                        raise AgentModelResponseInvalidError()
-                    tool_name = raw_call.get("tool_name")
-                    raw_arguments = raw_call.get("arguments")
-                    if not isinstance(tool_name, str) or not isinstance(
-                        raw_arguments, dict
-                    ):
-                        raise AgentModelResponseInvalidError()
-                    definition = tool_definitions.get(tool_name)
-                    if definition is None or set(raw_arguments) != all_tool_argument_names:
-                        raise AgentModelResponseInvalidError()
-                    arguments = self._select_required_arguments(
-                        raw_arguments,
-                        required_argument_names=set(
-                            definition.required_argument_names
-                        ),
-                    )
-                    tool_calls.append(
-                        AgentToolCall(tool_name=tool_name, arguments=arguments)
-                    )
-                return AgentPlan(intent="read", tool_calls=tuple(tool_calls))
-
-            if intent == "action_proposal":
-                if raw_tool_calls or not isinstance(action_name, str):
-                    raise AgentModelResponseInvalidError()
-                definition = action_definitions.get(action_name)
-                if (
-                    definition is None
-                    or set(action_arguments) != all_action_argument_names
-                ):
-                    raise AgentModelResponseInvalidError()
-                arguments = self._select_required_arguments(
-                    action_arguments,
-                    required_argument_names=set(definition.required_argument_names),
-                )
-                return AgentPlan(
-                    intent="action_proposal",
-                    action_proposal=AgentActionProposalInput(
-                        action_name=action_name,
-                        arguments=arguments,
-                    ),
-                )
-            raise AgentModelResponseInvalidError()
-        except (json.JSONDecodeError, ValidationError, TypeError) as exception:
-            raise AgentModelResponseInvalidError() from exception
-
-    @staticmethod
-    def _select_required_arguments(
-        raw_arguments: dict[str, Any],
-        *,
-        required_argument_names: set[str],
-    ) -> dict[str, str]:
-        selected_arguments: dict[str, str] = {}
-        for argument_name, argument_value in raw_arguments.items():
-            if argument_name in required_argument_names:
-                if not isinstance(argument_value, str) or not argument_value.strip():
-                    raise AgentModelResponseInvalidError()
-                selected_arguments[argument_name] = argument_value
-            elif argument_value is not None:
-                raise AgentModelResponseInvalidError()
-        return selected_arguments
-
-    def _parse_answer(self, response_payload: dict[str, Any]) -> AgentAnswerDraft:
-        try:
-            answer_payload = json.loads(self._extract_output_text(response_payload))
-            return AgentAnswerDraft.model_validate(answer_payload)
-        except (json.JSONDecodeError, ValidationError) as exception:
-            raise AgentModelResponseInvalidError() from exception
