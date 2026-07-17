@@ -55,13 +55,25 @@ class MockOrganizationApi:
             raise OrganizationNotFoundError()
         return organization_profile
 
+    async def update_contact_email_if_version(
+        self,
+        organization_id: str,
+        contact_email: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        await self._require_organization_profile(organization_id)
+        return await self._organization_repository.update_contact_email_if_version(
+            organization_id,
+            contact_email,
+            expected_version,
+        )
+
     async def list_users(self, organization_id: str) -> list[OrganizationMember]:
         await self._require_organization_profile(organization_id)
         active_seat_user_ids = (
             await self._seat_repository.get_active_seat_user_ids(organization_id)
         )
         organization_members: list[OrganizationMember] = []
-
         organization_membership_records = (
             await self._user_repository.list_memberships(organization_id)
         )
@@ -80,7 +92,6 @@ class MockOrganizationApi:
                     joined_at=membership_record.joined_at,
                 )
             )
-
         return organization_members
 
     async def get_seat_summary(self, organization_id: str) -> SeatSummary:
@@ -88,7 +99,6 @@ class MockOrganizationApi:
         seat_summary = await self._seat_repository.get_seat_summary(organization_id)
         if seat_summary is not None:
             return seat_summary
-
         return SeatSummary(
             organization_id=organization_id,
             seat_type=SeatType.STANDARD,
@@ -105,7 +115,6 @@ class MockOrganizationApi:
         )
         active_report_catalog = await self._report_repository.list_active_reports()
         organization_reports: list[ReportWithAccess] = []
-
         for active_report in active_report_catalog:
             current_report_access = current_access_by_report_id.get(active_report.id)
             organization_reports.append(
@@ -124,7 +133,6 @@ class MockOrganizationApi:
                     ),
                 )
             )
-
         return organization_reports
 
     async def check_report_access(
