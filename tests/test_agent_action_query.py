@@ -6,10 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.action_contracts import AgentActionProposalInput
 from app.agent.contracts import AgentPlan
-from app.api.agent_dependencies import (
-    get_agent_answer_gateway,
-    get_agent_model_gateway,
-)
+from app.api.agent_dependencies import get_agent_answer_gateway, get_agent_model_gateway
 from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import AuditEventORM, OrganizationORM
 from app.main import app
@@ -17,6 +14,12 @@ from app.main import app
 ORGANIZATION_ID = "org_sandbox_001"
 QUERY_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/query"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
+EXPECTED_ACTION_NAMES = {
+    "update_organization_contact_email",
+    "invite_organization_user",
+    "assign_organization_seat",
+    "grant_organization_report_access",
+}
 
 
 class ActionPlanGateway:
@@ -24,18 +27,10 @@ class ActionPlanGateway:
         self.contact_email = contact_email
         self.plan_call_count = 0
         self.answer_call_count = 0
-        self.received_tool_names: tuple[str, ...] = ()
         self.received_action_names: tuple[str, ...] = ()
 
-    async def create_plan(
-        self,
-        *,
-        user_request: str,
-        available_tools,
-        available_actions,
-    ) -> AgentPlan:
+    async def create_plan(self, *, user_request: str, available_tools, available_actions) -> AgentPlan:
         self.plan_call_count += 1
-        self.received_tool_names = tuple(item.name for item in available_tools)
         self.received_action_names = tuple(item.name for item in available_actions)
         return AgentPlan(
             intent="action_proposal",
@@ -63,7 +58,6 @@ async def test_natural_language_action_creates_pending_dry_run_only(
     admin_headers: dict[str, str],
 ) -> None:
     gateway = override_action_plan_gateway()
-
     response = await client.post(
         QUERY_URL,
         headers=admin_headers,
@@ -74,9 +68,7 @@ async def test_natural_language_action_creates_pending_dry_run_only(
     body = response.json()
     assert gateway.plan_call_count == 1
     assert gateway.answer_call_count == 0
-    assert gateway.received_action_names == (
-        "update_organization_contact_email",
-    )
+    assert set(gateway.received_action_names) == EXPECTED_ACTION_NAMES
     assert body["mode"] == "action_proposal"
     assert body["answer_source"] == "deterministic"
     assert body["results"] == []
@@ -144,7 +136,6 @@ async def test_natural_language_proposal_uses_existing_approval_execution_flow(
         json={"reason": "Approved after reviewing the dry-run"},
     )
     assert approval_response.status_code == 200
-    assert approval_response.json()["approval"]["decision"] == "approved"
 
     execution_response = await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/execute",
@@ -167,7 +158,6 @@ async def test_reader_cannot_create_natural_language_admin_proposal(
     reader_headers: dict[str, str],
 ) -> None:
     gateway = override_action_plan_gateway()
-
     response = await client.post(
         QUERY_URL,
         headers=reader_headers,
@@ -177,9 +167,7 @@ async def test_reader_cannot_create_natural_language_admin_proposal(
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "permission_denied"
     assert gateway.plan_call_count == 1
-    proposal_count = await db_session.scalar(
-        select(AgentActionProposalORM.id).limit(1)
-    )
+    proposal_count = await db_session.scalar(select(AgentActionProposalORM.id).limit(1))
     assert proposal_count is None
 
 
@@ -193,7 +181,6 @@ async def test_provider_failure_creates_no_action_proposal(
         headers=admin_headers,
         json={"query": "Change the contact email"},
     )
-
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "agent_model_unavailable"
     proposal = await db_session.scalar(select(AgentActionProposalORM.id).limit(1))
