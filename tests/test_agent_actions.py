@@ -104,7 +104,7 @@ async def test_rejected_action_cannot_execute(
     assert execution_response.json()["error"]["code"] == "agent_action_state_conflict"
 
 
-async def test_approved_action_executes_once_and_is_audited(
+async def test_approved_action_executes_idempotently_and_is_audited(
     client: AsyncClient,
     db_session: AsyncSession,
     admin_headers: dict[str, str],
@@ -145,16 +145,27 @@ async def test_approved_action_executes_once_and_is_audited(
         headers=admin_headers,
         json={"idempotency_key": "contact-email-change-001"},
     )
-    assert repeated_response.status_code == 409
-    assert repeated_response.json()["error"]["code"] == "agent_action_state_conflict"
+    assert repeated_response.status_code == 200
+    assert repeated_response.json()["execution"] == execution
+
+    conflicting_response = await client.post(
+        f"{ACTION_BASE_URL}/{proposal_id}/execute",
+        headers=admin_headers,
+        json={"idempotency_key": "contact-email-change-002"},
+    )
+    assert conflicting_response.status_code == 409
+    assert conflicting_response.json()["error"]["code"] == "agent_action_state_conflict"
 
     audit_result = await db_session.execute(
-        select(AuditEventORM.event_type).where(
-            AuditEventORM.organization_id == ORGANIZATION_ID,
-            AuditEventORM.details_json["proposal_id"].as_string() == proposal_id,
+        select(AuditEventORM).where(
+            AuditEventORM.organization_id == ORGANIZATION_ID
         )
     )
-    event_types = set(audit_result.scalars().all())
+    event_types = {
+        event.event_type
+        for event in audit_result.scalars().all()
+        if event.details_json and event.details_json.get("proposal_id") == proposal_id
+    }
     assert {
         "agent_action_proposed",
         "agent_action_approved",
