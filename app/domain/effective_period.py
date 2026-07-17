@@ -24,4 +24,8 @@ def is_reference_time_within_effective_period(
             return False
 
     if effective_period_end is not None:
-        normalized_effective_period_end = convert_datetime_to_utc(effective
+        normalized_effective_period_end = convert_datetime_to_utc(effective_period_end)
+        if normalized_reference_time_utc >= normalized_effective_period_end:
+            return False
+
+    return True
