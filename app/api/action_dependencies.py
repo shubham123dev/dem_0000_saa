@@ -32,8 +32,8 @@ from app.repositories.hardened_agent_action_repository import (
 )
 from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
-from app.services.hardened_agent_action_service import HardenedAgentActionService
 from app.services.operational_resource_service import OperationalResourceService
+from app.services.release_ready_agent_action_service import ReleaseReadyAgentActionService
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
@@ -70,8 +70,8 @@ def get_agent_action_service(
     action_repository: Annotated[AgentActionRepository, Depends(get_agent_action_repository)],
     action_registry: Annotated[AgentActionRegistry, Depends(get_agent_action_registry)],
     action_handlers: Annotated[dict[str, AgentActionHandler], Depends(get_agent_action_handlers)],
-) -> HardenedAgentActionService:
-    return HardenedAgentActionService(
+) -> ReleaseReadyAgentActionService:
+    return ReleaseReadyAgentActionService(
         organization_gateway=MockOrganizationApiAdapter(api),
         permission_service=PermissionService(user_repository),
         action_repository=action_repository,
@@ -83,7 +83,7 @@ def get_agent_action_service(
 
 def get_agent_action_reconciliation_service(
     action_service: Annotated[
-        HardenedAgentActionService,
+        ReleaseReadyAgentActionService,
         Depends(get_agent_action_service),
     ],
 ) -> AgentActionReconciliationService:
@@ -91,7 +91,7 @@ def get_agent_action_reconciliation_service(
 
 
 AgentActionServiceDep = Annotated[
-    HardenedAgentActionService,
+    ReleaseReadyAgentActionService,
     Depends(get_agent_action_service),
 ]
 AgentActionReconciliationServiceDep = Annotated[
