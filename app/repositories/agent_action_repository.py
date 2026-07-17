@@ -14,6 +14,7 @@ from app.agent.action_contracts import (
     AgentActionProposal,
     AgentApprovalPolicy,
 )
+from app.agent.action_state import require_transition
 from app.db.action_models import (
     AgentActionApprovalORM,
     AgentActionExecutionORM,
@@ -129,6 +130,7 @@ class AgentActionRepository:
         decision: str,
         decision_reason: str | None,
     ) -> AgentActionApproval:
+        require_transition("pending_approval", decision)
         now = _utcnow()
         proposal_update = (
             update(AgentActionProposalORM)
@@ -167,6 +169,8 @@ class AgentActionRepository:
         current_statuses: tuple[str, ...],
         target_status: str,
     ) -> bool:
+        for current_status in current_statuses:
+            require_transition(current_status, target_status)
         now = _utcnow()
         values: dict = {"status": target_status, "updated_at": now}
         if target_status == "cancelled":
@@ -194,6 +198,7 @@ class AgentActionRepository:
         proposal_id: str,
         idempotency_key: str,
     ) -> AgentActionExecutionResult:
+        require_transition("approved", "executing")
         now = _utcnow()
         proposal_update = (
             update(AgentActionProposalORM)
@@ -251,12 +256,19 @@ class AgentActionRepository:
         reconciliation_status: str | None = None,
         audit_pending: bool = False,
     ) -> AgentActionExecutionResult:
+        current_statuses = (
+            ("executing", "reconciliation_required")
+            if outcome in {"succeeded", "failed"}
+            else ("executing",)
+        )
+        for current_status in current_statuses:
+            require_transition(current_status, outcome)
         now = _utcnow()
         execution_update = (
             update(AgentActionExecutionORM)
             .where(
                 AgentActionExecutionORM.proposal_id == proposal_id,
-                AgentActionExecutionORM.outcome.in_(("executing", "reconciliation_required")),
+                AgentActionExecutionORM.outcome.in_(current_statuses),
             )
             .values(
                 outcome=outcome,
@@ -277,12 +289,78 @@ class AgentActionRepository:
             update(AgentActionProposalORM)
             .where(
                 AgentActionProposalORM.id == proposal_id,
-                AgentActionProposalORM.status.in_(("executing", "reconciliation_required")),
+                AgentActionProposalORM.status.in_(current_statuses),
             )
             .values(status=outcome, updated_at=now)
         )
         proposal_result = await self._session.execute(proposal_update)
         if proposal_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
+        await self._session.commit()
+        execution = await self.get_execution(proposal_id)
+        if execution is None:
+            raise AgentActionTransitionConflictError()
+        return execution
+
+    async def mark_stale_execution(self, proposal_id: str) -> AgentActionExecutionResult:
+        require_transition("executing", "stale")
+        now = _utcnow()
+        execution_update = (
+            update(AgentActionExecutionORM)
+            .where(
+                AgentActionExecutionORM.proposal_id == proposal_id,
+                AgentActionExecutionORM.outcome == "executing",
+            )
+            .values(
+                outcome="failed",
+                error_code="agent_action_stale",
+                reconciliation_status="not_required",
+                completed_at=now,
+                last_attempt_at=now,
+            )
+        )
+        execution_result = await self._session.execute(execution_update)
+        proposal_update = (
+            update(AgentActionProposalORM)
+            .where(
+                AgentActionProposalORM.id == proposal_id,
+                AgentActionProposalORM.status == "executing",
+            )
+            .values(status="stale", stale_at=now, updated_at=now)
+        )
+        proposal_result = await self._session.execute(proposal_update)
+        if execution_result.rowcount != 1 or proposal_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
+        await self._session.commit()
+        execution = await self.get_execution(proposal_id)
+        if execution is None:
+            raise AgentActionTransitionConflictError()
+        return execution
+
+    async def keep_reconciliation_required(
+        self,
+        *,
+        proposal_id: str,
+        audit_pending: bool,
+    ) -> AgentActionExecutionResult:
+        now = _utcnow()
+        statement = (
+            update(AgentActionExecutionORM)
+            .where(
+                AgentActionExecutionORM.proposal_id == proposal_id,
+                AgentActionExecutionORM.outcome == "reconciliation_required",
+            )
+            .values(
+                error_code="action_outcome_unknown",
+                reconciliation_status="required",
+                audit_pending=audit_pending,
+                last_attempt_at=now,
+            )
+        )
+        result = await self._session.execute(statement)
+        if result.rowcount != 1:
             await self._session.rollback()
             raise AgentActionTransitionConflictError()
         await self._session.commit()
