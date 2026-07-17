@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.action_contracts import AgentActionChange, AgentApprovalPolicy
 from app.agent.action_registry import build_action_fingerprint
 from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import OrganizationORM
@@ -11,52 +14,63 @@ ORGANIZATION_ID = "org_sandbox_001"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
 
 
-def test_action_fingerprint_changes_with_immutable_scope() -> None:
-    baseline = build_action_fingerprint(
-        organization_id="org_001",
-        requested_by_user_id="usr_001",
-        action_name="update_organization_contact_email",
-        arguments={"contact_email": "one@example.test"},
-        resource_type="organization",
-        resource_id="org_001",
-    )
+def build_fingerprint(**overrides) -> str:
+    values = {
+        "organization_id": "org_001",
+        "requested_by_user_id": "usr_001",
+        "action_name": "update_organization_contact_email",
+        "arguments": {"contact_email": "one@example.test"},
+        "changes": (
+            AgentActionChange(
+                field="contact_email",
+                before="old@example.test",
+                after="one@example.test",
+            ),
+        ),
+        "observed_resource_version": 1,
+        "approval_policy": AgentApprovalPolicy(
+            self_approval_allowed=True,
+            required_approver_permission="organization.profile.update",
+            minimum_approvals=1,
+        ),
+        "resource_type": "organization",
+        "resource_id": "org_001",
+        "expires_at": datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc),
+    }
+    values.update(overrides)
+    return build_action_fingerprint(**values)
+
+
+def test_action_fingerprint_changes_with_reviewed_scope_and_state() -> None:
+    baseline = build_fingerprint()
     variants = {
-        build_action_fingerprint(
-            organization_id="org_002",
-            requested_by_user_id="usr_001",
-            action_name="update_organization_contact_email",
-            arguments={"contact_email": "one@example.test"},
-            resource_type="organization",
-            resource_id="org_001",
+        build_fingerprint(organization_id="org_002"),
+        build_fingerprint(requested_by_user_id="usr_002"),
+        build_fingerprint(arguments={"contact_email": "two@example.test"}),
+        build_fingerprint(
+            changes=(
+                AgentActionChange(
+                    field="contact_email",
+                    before="different@example.test",
+                    after="one@example.test",
+                ),
+            )
         ),
-        build_action_fingerprint(
-            organization_id="org_001",
-            requested_by_user_id="usr_002",
-            action_name="update_organization_contact_email",
-            arguments={"contact_email": "one@example.test"},
-            resource_type="organization",
-            resource_id="org_001",
+        build_fingerprint(observed_resource_version=2),
+        build_fingerprint(
+            approval_policy=AgentApprovalPolicy(
+                self_approval_allowed=False,
+                required_approver_permission="organization.profile.update",
+                minimum_approvals=1,
+            )
         ),
-        build_action_fingerprint(
-            organization_id="org_001",
-            requested_by_user_id="usr_001",
-            action_name="update_organization_contact_email",
-            arguments={"contact_email": "two@example.test"},
-            resource_type="organization",
-            resource_id="org_001",
-        ),
-        build_action_fingerprint(
-            organization_id="org_001",
-            requested_by_user_id="usr_001",
-            action_name="update_organization_contact_email",
-            arguments={"contact_email": "one@example.test"},
-            resource_type="organization",
-            resource_id="org_002",
+        build_fingerprint(resource_id="org_002"),
+        build_fingerprint(
+            expires_at=datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc)
         ),
     }
-
     assert baseline not in variants
-    assert len(variants) == 4
+    assert len(variants) == 8
 
 
 async def test_modified_approved_proposal_cannot_execute(
@@ -90,7 +104,6 @@ async def test_modified_approved_proposal_cannot_execute(
         headers=admin_headers,
         json={"idempotency_key": "tampered-execution-001"},
     )
-
     assert execution_response.status_code == 409
     assert execution_response.json()["error"]["code"] == "agent_action_state_conflict"
     organization = await db_session.get(OrganizationORM, ORGANIZATION_ID)
