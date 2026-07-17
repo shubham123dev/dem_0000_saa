@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 import os
 
-# Must be set before app.main creates the module-level FastAPI application.
 os.environ.setdefault("WORKPLACE_ENABLE_RAW_MOCK_API", "true")
 
 import pytest
@@ -22,7 +21,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.db import orm_models  # noqa: F401
+from app.db import action_models, orm_models  # noqa: F401
 from app.db.base import Base
 from app.db.seed import seed
 from app.db.session import get_session
