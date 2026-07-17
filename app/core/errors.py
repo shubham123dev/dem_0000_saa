@@ -12,7 +12,6 @@ Every error response has the shape::
 
 Responses never leak stack traces, database paths, SQL, or secrets.
 """
-
 from __future__ import annotations
 
 import logging
@@ -25,9 +24,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("app.errors")
-
 REQUEST_ID_HEADER = "X-Request-Id"
-
 ERROR_CODES = frozenset(
     {
         "unauthenticated",
@@ -39,6 +36,8 @@ ERROR_CODES = frozenset(
         "permission_denied",
         "production_access_blocked",
         "agent_model_unavailable",
+        "agent_model_request_failed",
+        "agent_model_response_invalid",
         "agent_tool_call_invalid",
         "internal_error",
     }
@@ -124,9 +123,7 @@ def _error_body(code: str, message: str, request_id: str) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, "request_id": request_id}}
 
 
-def _json_error(
-    request: Request, status_code: int, code: str, message: str
-) -> JSONResponse:
+def _json_error(request: Request, status_code: int, code: str, message: str) -> JSONResponse:
     request_id = _request_id(request)
     return JSONResponse(
         status_code=status_code,
@@ -136,17 +133,10 @@ def _json_error(
 
 
 async def _app_error_handler(request: Request, exception: AppError) -> JSONResponse:
-    return _json_error(
-        request,
-        exception.status_code,
-        exception.code,
-        exception.message,
-    )
+    return _json_error(request, exception.status_code, exception.code, exception.message)
 
 
-async def _http_exception_handler(
-    request: Request, exception: StarletteHTTPException
-) -> JSONResponse:
+async def _http_exception_handler(request: Request, exception: StarletteHTTPException) -> JSONResponse:
     if exception.status_code == status.HTTP_401_UNAUTHORIZED:
         error_code = "unauthenticated"
     elif exception.status_code == status.HTTP_403_FORBIDDEN:
@@ -155,18 +145,11 @@ async def _http_exception_handler(
         error_code = "organization_not_found"
     else:
         error_code = "internal_error"
-
-    error_message = (
-        exception.detail
-        if isinstance(exception.detail, str)
-        else "Request could not be processed."
-    )
+    error_message = exception.detail if isinstance(exception.detail, str) else "Request could not be processed."
     return _json_error(request, exception.status_code, error_code, error_message)
 
 
-async def _validation_exception_handler(
-    request: Request, exception: RequestValidationError
-) -> JSONResponse:
+async def _validation_exception_handler(request: Request, exception: RequestValidationError) -> JSONResponse:
     return _json_error(
         request,
         status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -175,9 +158,7 @@ async def _validation_exception_handler(
     )
 
 
-async def _unhandled_exception_handler(
-    request: Request, exception: Exception
-) -> JSONResponse:
+async def _unhandled_exception_handler(request: Request, exception: Exception) -> JSONResponse:
     logger.exception("Unhandled exception during request", exc_info=exception)
     return _json_error(
         request,
@@ -190,8 +171,5 @@ async def _unhandled_exception_handler(
 def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(AppError, _app_error_handler)
     application.add_exception_handler(StarletteHTTPException, _http_exception_handler)
-    application.add_exception_handler(
-        RequestValidationError,
-        _validation_exception_handler,
-    )
+    application.add_exception_handler(RequestValidationError, _validation_exception_handler)
     application.add_exception_handler(Exception, _unhandled_exception_handler)
