@@ -12,7 +12,7 @@ X-Mock-User-Id
 → sandbox and organization-status guard
 → one structured planner call
 → read execution or immutable action proposal
-→ explicit approval
+→ policy-controlled approval threshold
 → version-checked execution
 → verification, audit and reconciliation
 ```
@@ -45,14 +45,33 @@ Every action follows the same backend-owned lifecycle:
 ```text
 dry-run proposal
 → immutable reviewed change set
-→ explicit approval or rejection
+→ distinct approver decisions
+→ approval threshold reached
 → fingerprint and permission revalidation
 → optimistic resource-version check
 → single-use idempotent execution
 → success, failure, stale or reconciliation-required outcome
 ```
 
+Low- and medium-risk actions require one approval. High-risk role changes and member removals require two distinct approvers and disallow requester self-approval. A rejection closes the proposal immediately. All approved decisions are consumed atomically when execution starts.
+
 Natural-language requests may create proposals but never approve or execute them.
+
+## Rollback proposals
+
+A successful reversible action can generate a new rollback proposal:
+
+```text
+successful source action
+→ inspect stored before/after result
+→ build existing inverse action
+→ persist rollback lineage
+→ normal permission and dry-run validation
+→ normal approval threshold
+→ normal version-checked execution
+```
+
+Rollback never executes automatically. Unsupported or incomplete inverse operations return `agent_action_rollback_unavailable` rather than guessing prior state.
 
 ## Operational invariants
 
@@ -64,6 +83,8 @@ Natural-language requests may create proposals but never approve or execute them
 - Seat assignment and revocation use versioned conditional updates.
 - Report grants and revocations use versioned conditional updates.
 - An approved proposal whose reviewed resource changes becomes `stale` rather than producing an internal error.
+- One approver can record only one decision per proposal.
+- Rollback lineage is immutable and links source and rollback proposals.
 
 ## Guardrails
 
@@ -100,7 +121,7 @@ alembic upgrade head
 python -m app.db.seed
 ```
 
-The current migration head is `0007_complete_inverse_lifecycle`. The deterministic seed is idempotent and does not call `create_all()`.
+The current migration head is `0008_add_multi_approval_and_rollbacks`. The deterministic seed is idempotent and does not call `create_all()`.
 
 ## Run
 
@@ -125,10 +146,11 @@ WORKPLACE_ENABLE_RAW_MOCK_API=true
 | POST | `/workplace/organizations/{organization_id}/agent/actions/propose` | Explicit dry-run proposal |
 | GET | `/workplace/organizations/{organization_id}/agent/actions` | List proposals |
 | GET | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}` | Read a proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Explicit approval |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Explicit rejection |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Record one approver decision |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Reject and close proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel` | Cancel pending/approved proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Single-use execution |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal` | Create a separately approved inverse proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Single-use threshold-gated execution |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile` | Inspect uncertain outcome |
 
 All organization endpoints require `X-Mock-User-Id` except health, readiness and capabilities.
