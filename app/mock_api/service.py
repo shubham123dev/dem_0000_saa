@@ -41,6 +41,20 @@ class MockOrganizationApi:
     async def get_organization(self, organization_id: str) -> OrganizationProfile:
         return await self._require_organization_profile(organization_id)
 
+    async def update_contact_email(
+        self,
+        organization_id: str,
+        contact_email: str,
+    ) -> OrganizationProfile:
+        await self._require_organization_profile(organization_id)
+        organization_profile = await self._organization_repository.update_contact_email(
+            organization_id,
+            contact_email,
+        )
+        if organization_profile is None:
+            raise OrganizationNotFoundError()
+        return organization_profile
+
     async def list_users(self, organization_id: str) -> list[OrganizationMember]:
         await self._require_organization_profile(organization_id)
         active_seat_user_ids = (
