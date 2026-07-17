@@ -336,18 +336,7 @@ class AgentActionService:
         try:
             handler_result = await handler.execute(proposal=proposal)
         except StaleActionResourceError as exception:
-            await self._action_repository.complete_execution(
-                proposal_id=proposal.id,
-                outcome="failed",
-                result=None,
-                error_code="agent_action_stale",
-                reconciliation_status="not_required",
-            )
-            await self._action_repository.transition_status(
-                proposal_id=proposal.id,
-                current_statuses=("failed",),
-                target_status="stale",
-            )
+            await self._action_repository.mark_stale_execution(proposal.id)
             raise AgentActionStaleError() from exception
         except Exception as exception:
             await self._action_repository.complete_execution(
@@ -404,12 +393,8 @@ class AgentActionService:
             execution=execution,
         )
         if handler_result is None:
-            return await self._action_repository.complete_execution(
+            return await self._action_repository.keep_reconciliation_required(
                 proposal_id=proposal.id,
-                outcome="reconciliation_required",
-                result=None,
-                error_code="action_outcome_unknown",
-                reconciliation_status="required",
                 audit_pending=execution.audit_pending,
             )
         reconciled = await self._action_repository.complete_execution(
