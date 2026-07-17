@@ -112,6 +112,7 @@ async def test_only_explicit_workplace_post_routes_exist() -> None:
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal",
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute",
         "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile",
+        "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/audit-replay",
     }
     workplace_post_paths: set[str] = set()
 
@@ -163,7 +164,7 @@ async def test_seed_is_idempotent(
         "assignments": 3,
         "reports": 5,
         "access": 3,
-        "role_permissions": 18,
+        "role_permissions": 22,
     }
 
 
