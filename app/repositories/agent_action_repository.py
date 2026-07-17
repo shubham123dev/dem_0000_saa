@@ -148,7 +148,7 @@ class AgentActionRepository:
             id=uuid.uuid4().hex,
             proposal_id=proposal_id,
             idempotency_key=idempotency_key,
-            outcome="failed",
+            outcome="executing",
             started_at=now,
         )
         self._session.add(execution_row)
