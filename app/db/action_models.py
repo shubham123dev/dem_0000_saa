@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -41,7 +41,19 @@ class AgentActionProposalORM(Base):
 
 class AgentActionApprovalORM(Base):
     __tablename__ = "agent_action_approvals"
-    __table_args__ = (UniqueConstraint("proposal_id", name="uq_agent_action_approval_proposal"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "proposal_id",
+            "decided_by_user_id",
+            name="uq_agent_action_approval_proposal_approver",
+        ),
+        Index(
+            "ix_agent_action_approval_progress",
+            "proposal_id",
+            "decision",
+            "consumed_at",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     proposal_id: Mapped[str] = mapped_column(String, ForeignKey("agent_action_proposals.id"), nullable=False, index=True)
@@ -72,3 +84,40 @@ class AgentActionExecutionORM(Base):
     audit_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentActionRollbackORM(Base):
+    __tablename__ = "agent_action_rollbacks"
+    __table_args__ = (
+        UniqueConstraint(
+            "rollback_proposal_id",
+            name="uq_agent_action_rollback_proposal",
+        ),
+        Index(
+            "ix_agent_action_rollback_source",
+            "source_proposal_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    source_proposal_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("agent_action_proposals.id"),
+        nullable=False,
+    )
+    rollback_proposal_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("agent_action_proposals.id"),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
+    )
