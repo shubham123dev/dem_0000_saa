@@ -12,6 +12,17 @@ from app.db.orm_models import (
 
 ORGANIZATION_ID = "org_sandbox_001"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
+EXPECTED_ACTIONS = {
+    "update_organization_contact_email",
+    "invite_organization_user",
+    "activate_organization_membership",
+    "update_organization_member_role",
+    "remove_organization_user",
+    "assign_organization_seat",
+    "revoke_organization_seat",
+    "grant_organization_report_access",
+    "revoke_organization_report_access",
+}
 
 
 async def propose(
@@ -52,12 +63,7 @@ async def test_capabilities_advertise_registry_backed_actions(client: AsyncClien
     response = await client.get("/workplace/capabilities")
     assert response.status_code == 200
     actions = {item["name"]: item for item in response.json()["write_actions"]}
-    assert set(actions) == {
-        "update_organization_contact_email",
-        "invite_organization_user",
-        "assign_organization_seat",
-        "grant_organization_report_access",
-    }
+    assert set(actions) == EXPECTED_ACTIONS
     assert all(item["requires_approval"] for item in actions.values())
     assert all(item["supports_dry_run"] for item in actions.values())
 
