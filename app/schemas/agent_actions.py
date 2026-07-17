@@ -10,6 +10,19 @@ from app.agent.action_contracts import (
     AgentActionProposal,
 )
 
+AgentActionStatusFilter = Literal[
+    "pending_approval",
+    "approved",
+    "rejected",
+    "expired",
+    "cancelled",
+    "stale",
+    "executing",
+    "succeeded",
+    "failed",
+    "reconciliation_required",
+]
+
 
 class AgentActionProposalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -45,6 +58,12 @@ class AgentActionProposalResponse(BaseModel):
     proposal: AgentActionProposal
     requires_approval: bool = True
     dry_run: bool = True
+
+
+class AgentActionProposalListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    proposals: tuple[AgentActionProposal, ...]
 
 
 class AgentActionApprovalResponse(BaseModel):
