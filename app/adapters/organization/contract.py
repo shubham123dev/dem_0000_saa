@@ -39,6 +39,14 @@ class OrganizationApiGateway(Protocol):
     ) -> OrganizationProfile:
         ...
 
+    async def update_contact_email_if_version(
+        self,
+        organization_id: str,
+        contact_email: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        ...
+
 
 OrganizationGateway = OrganizationApiGateway
 OrganizationAdapter = OrganizationApiGateway
