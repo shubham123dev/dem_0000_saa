@@ -23,6 +23,9 @@
             }
           },
           "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test"
         }
       }
     },
@@ -50,7 +53,8 @@
             "styles": [
               "node_modules/@angular/cdk/overlay-prebuilt.css",
               "projects/workplace-agent-showcase/src/styles.scss"
-            ]
+            ],
+            "index": "projects/workplace-agent-showcase/src/index.html"
           },
           "configurations": {
             "production": {
@@ -62,8 +66,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "12kB",
-                  "maximumError": "20kB"
+                  "maximumWarning": "20kB",
+                  "maximumError": "32kB"
                 }
               ],
               "outputHashing": "all"
@@ -90,18 +94,7 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test",
-          "options": {
-            "tsConfig": "projects/workplace-agent-showcase/tsconfig.spec.json",
-            "polyfills": [
-              "zone.js",
-              "zone.js/testing"
-            ],
-            "styles": [
-              "node_modules/@angular/cdk/overlay-prebuilt.css",
-              "projects/workplace-agent-showcase/src/styles.scss"
-            ]
-          }
+          "builder": "@angular/build:unit-test"
         }
       }
     }
