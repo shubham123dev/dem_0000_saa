@@ -73,6 +73,13 @@ def test_action_fingerprint_changes_with_reviewed_scope_and_state() -> None:
     assert len(variants) == 8
 
 
+def test_action_fingerprint_treats_naive_sqlite_datetime_as_utc() -> None:
+    aware = datetime(2026, 7, 17, 12, 0, 0, 123456, tzinfo=timezone.utc)
+    naive = aware.replace(tzinfo=None)
+
+    assert build_fingerprint(expires_at=aware) == build_fingerprint(expires_at=naive)
+
+
 async def test_modified_approved_proposal_cannot_execute(
     client: AsyncClient,
     db_session: AsyncSession,
