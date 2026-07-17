@@ -18,11 +18,23 @@ class FixedAgentModelGateway:
         self.agent_plan = agent_plan
         self.received_user_request: str | None = None
         self.received_tool_names: tuple[str, ...] = ()
+        self.received_action_names: tuple[str, ...] = ()
+        self.plan_call_count = 0
 
-    async def create_plan(self, *, user_request: str, available_tools):
+    async def create_plan(
+        self,
+        *,
+        user_request: str,
+        available_tools,
+        available_actions,
+    ):
+        self.plan_call_count += 1
         self.received_user_request = user_request
         self.received_tool_names = tuple(
             tool_definition.name for tool_definition in available_tools
+        )
+        self.received_action_names = tuple(
+            action_definition.name for action_definition in available_actions
         )
         return self.agent_plan
 
@@ -50,6 +62,7 @@ async def test_agent_query_returns_grounded_profile_result(
     )
 
     assert response.status_code == 200
+    assert model_gateway.plan_call_count == 1
     assert model_gateway.received_user_request == "Show the organization profile"
     assert set(model_gateway.received_tool_names) == {
         "get_organization_profile",
@@ -59,7 +72,12 @@ async def test_agent_query_returns_grounded_profile_result(
         "check_organization_report_access",
         "get_organization_audit_log",
     }
+    assert model_gateway.received_action_names == (
+        "update_organization_contact_email",
+    )
     response_body = response.json()
+    assert response_body["mode"] == "read"
+    assert response_body["action_proposal"] is None
     assert response_body["organization_id"] == "org_sandbox_001"
     assert response_body["results"] == [
         {
