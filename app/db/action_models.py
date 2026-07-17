@@ -14,6 +14,23 @@ def _utcnow() -> datetime:
 
 class AgentActionProposalORM(Base):
     __tablename__ = "agent_action_proposals"
+    __table_args__ = (
+        Index("ix_agent_action_proposal_org_created", "organization_id", "created_at", "id"),
+        Index(
+            "ix_agent_action_proposal_requester_created",
+            "organization_id",
+            "requested_by_user_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_agent_action_proposal_status_created",
+            "organization_id",
+            "status",
+            "created_at",
+            "id",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     organization_id: Mapped[str] = mapped_column(
@@ -69,6 +86,12 @@ class AgentActionExecutionORM(Base):
     __table_args__ = (
         UniqueConstraint("proposal_id", name="uq_agent_action_execution_proposal"),
         UniqueConstraint("idempotency_key", name="uq_agent_action_execution_key"),
+        Index(
+            "ix_agent_action_execution_audit_replay",
+            "audit_pending",
+            "audit_replay_attempts",
+            "last_attempt_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -82,6 +105,9 @@ class AgentActionExecutionORM(Base):
     provider_operation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     reconciliation_status: Mapped[str | None] = mapped_column(String, nullable=True)
     audit_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    audit_replay_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    audit_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    audit_last_error: Mapped[str | None] = mapped_column(String(200), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
