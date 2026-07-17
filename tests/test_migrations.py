@@ -9,7 +9,7 @@ import sys
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0006_expand_operational_actions"
+EXPECTED_HEAD = "0007_complete_inverse_lifecycle"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "agent_action_approvals",
     "agent_action_executions",
@@ -64,27 +64,45 @@ def read_column_names(connection: sqlite3.Connection, table_name: str) -> set[st
     }
 
 
+def read_index_names(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    return {
+        row[1]
+        for row in connection.execute(f"PRAGMA index_list({table_name})").fetchall()
+    }
+
+
 def assert_head_and_operational_columns(connection: sqlite3.Connection) -> None:
     revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()
     assert revision == (EXPECTED_HEAD,)
     assert "version" in read_column_names(connection, "organization_memberships")
     assert "version" in read_column_names(connection, "organization_seat_pools")
     assert "version" in read_column_names(connection, "organization_report_access")
-    proposal_columns = read_column_names(connection, "agent_action_proposals")
+    assert {
+        "version",
+        "revoked_by_user_id",
+    }.issubset(read_column_names(connection, "seat_assignments"))
+    assert "ix_membership_lifecycle_lookup" in read_index_names(
+        connection, "organization_memberships"
+    )
+    assert "ix_seat_lifecycle_lookup" in read_index_names(
+        connection, "seat_assignments"
+    )
+    assert "ix_report_access_lifecycle_lookup" in read_index_names(
+        connection, "organization_report_access"
+    )
     assert {
         "observed_resource_version",
         "approval_policy_json",
         "cancelled_at",
         "stale_at",
-    }.issubset(proposal_columns)
-    execution_columns = read_column_names(connection, "agent_action_executions")
+    }.issubset(read_column_names(connection, "agent_action_proposals"))
     assert {
         "attempt_count",
         "last_attempt_at",
         "provider_operation_id",
         "reconciliation_status",
         "audit_pending",
-    }.issubset(execution_columns)
+    }.issubset(read_column_names(connection, "agent_action_executions"))
 
 
 def test_fresh_database_upgrades_to_head_and_is_repeatable(tmp_path: Path) -> None:
@@ -109,7 +127,7 @@ def test_database_from_initial_revision_upgrades_to_operational_head(
         assert_head_and_operational_columns(connection)
 
 
-def test_0005_rows_are_preserved_by_0006_upgrade(tmp_path: Path) -> None:
+def test_0005_rows_are_preserved_through_0007_upgrade(tmp_path: Path) -> None:
     database_file_path = tmp_path / "upgrade.db"
     run_alembic(database_file_path, "0005_harden_agent_action_lifecycle")
 
@@ -167,6 +185,21 @@ def test_0005_rows_are_preserved_by_0006_upgrade(tmp_path: Path) -> None:
             ),
         )
         connection.execute(
+            "INSERT INTO seat_assignments(id, organization_id, seat_pool_id, user_id, status, assigned_at, assigned_by_user_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "seat_upgrade_001",
+                "org_upgrade_001",
+                "pool_upgrade_001",
+                "usr_upgrade_001",
+                "active",
+                "2026-01-01 00:00:00",
+                "usr_upgrade_001",
+                "2026-01-01 00:00:00",
+                "2026-01-01 00:00:00",
+            ),
+        )
+        connection.execute(
             "INSERT INTO reports(id, external_report_id, title, status, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (
@@ -219,22 +252,21 @@ def test_0005_rows_are_preserved_by_0006_upgrade(tmp_path: Path) -> None:
 
     with sqlite3.connect(database_file_path) as connection:
         assert_head_and_operational_columns(connection)
-        membership = connection.execute(
+        assert connection.execute(
             "SELECT role, membership_status, version FROM organization_memberships"
-        ).fetchone()
-        assert membership == ("sandbox_admin", "active", 1)
-        seat_pool = connection.execute(
+        ).fetchone() == ("sandbox_admin", "active", 1)
+        assert connection.execute(
             "SELECT total_seats, version FROM organization_seat_pools"
-        ).fetchone()
-        assert seat_pool == (2, 1)
-        report_access = connection.execute(
+        ).fetchone() == (2, 1)
+        assert connection.execute(
+            "SELECT status, version, revoked_by_user_id FROM seat_assignments"
+        ).fetchone() == ("active", 1, None)
+        assert connection.execute(
             "SELECT access_level, status, version FROM organization_report_access"
-        ).fetchone()
-        assert report_access == ("view", "active", 1)
-        proposal = connection.execute(
+        ).fetchone() == ("view", "active", 1)
+        assert connection.execute(
             "SELECT id, status FROM agent_action_proposals"
-        ).fetchone()
-        assert proposal == ("proposal_upgrade_001", "approved")
+        ).fetchone() == ("proposal_upgrade_001", "approved")
 
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
