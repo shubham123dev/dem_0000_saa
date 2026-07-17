@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 
+from app.agent.action_registry import AgentActionRegistry
 from app.agent.contracts import AgentToolDefinition
 from app.agent.errors import AgentModelRequestFailedError, AgentModelResponseInvalidError
 from app.agent.providers.openai_responses import OpenAIResponsesAgentModelGateway
@@ -25,6 +26,7 @@ def build_gateway(transport: httpx.AsyncBaseTransport, *, maximum_attempts: int 
 
 def response_payload(plan: dict) -> dict:
     return {
+        "status": "completed",
         "output": [
             {
                 "type": "message",
@@ -35,11 +37,24 @@ def response_payload(plan: dict) -> dict:
                     }
                 ],
             }
-        ]
+        ],
     }
 
 
-async def test_provider_builds_safe_structured_request_and_parses_plan() -> None:
+def read_plan(tool_name: str, report_id: str | None = None) -> dict:
+    return {
+        "intent": "read",
+        "tool_calls": [{"tool_name": tool_name, "report_id": report_id}],
+        "action_name": None,
+        "contact_email": None,
+    }
+
+
+def available_actions():
+    return AgentActionRegistry().list_definitions()
+
+
+async def test_provider_builds_safe_structured_request_and_parses_read_plan() -> None:
     captured_request = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -47,16 +62,7 @@ async def test_provider_builds_safe_structured_request_and_parses_plan() -> None
         assert request.headers["authorization"] == "Bearer test-key"
         return httpx.Response(
             200,
-            json=response_payload(
-                {
-                    "tool_calls": [
-                        {
-                            "tool_name": "get_organization_profile",
-                            "arguments": {"report_id": None},
-                        }
-                    ]
-                }
-            ),
+            json=response_payload(read_plan("get_organization_profile")),
         )
 
     gateway = build_gateway(httpx.MockTransport(handler))
@@ -68,13 +74,18 @@ async def test_provider_builds_safe_structured_request_and_parses_plan() -> None
                 description="Read the profile.",
             ),
         ),
+        available_actions=available_actions(),
     )
 
+    assert plan.intent == "read"
     assert plan.tool_calls[0].tool_name == "get_organization_profile"
     assert plan.tool_calls[0].arguments == {}
     assert captured_request["store"] is False
     assert captured_request["text"]["format"]["strict"] is True
-    assert "org_sandbox_001" not in json.dumps(captured_request)
+    request_text = json.dumps(captured_request)
+    assert "update_organization_contact_email" in request_text
+    assert "organization.profile.update" not in request_text
+    assert "org_sandbox_001" not in request_text
     await gateway._http_client.aclose()
 
 
@@ -84,14 +95,10 @@ async def test_provider_preserves_required_report_argument() -> None:
             lambda request: httpx.Response(
                 200,
                 json=response_payload(
-                    {
-                        "tool_calls": [
-                            {
-                                "tool_name": "check_organization_report_access",
-                                "arguments": {"report_id": "rpt_market_001"},
-                            }
-                        ]
-                    }
+                    read_plan(
+                        "check_organization_report_access",
+                        "rpt_market_001",
+                    )
                 ),
             )
         )
@@ -106,9 +113,88 @@ async def test_provider_preserves_required_report_argument() -> None:
                 required_argument_names=("report_id",),
             ),
         ),
+        available_actions=available_actions(),
     )
 
     assert plan.tool_calls[0].arguments == {"report_id": "rpt_market_001"}
+    await gateway._http_client.aclose()
+
+
+async def test_provider_parses_action_proposal_without_execution_state() -> None:
+    captured_request = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_request.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json=response_payload(
+                {
+                    "intent": "action_proposal",
+                    "tool_calls": [],
+                    "action_name": "update_organization_contact_email",
+                    "contact_email": "new.operations@example.test",
+                }
+            ),
+        )
+
+    gateway = build_gateway(httpx.MockTransport(handler))
+    plan = await gateway.create_plan(
+        user_request="Change the contact email",
+        available_tools=(
+            AgentToolDefinition(
+                name="get_organization_profile",
+                description="Read the profile.",
+            ),
+        ),
+        available_actions=available_actions(),
+    )
+
+    assert plan.intent == "action_proposal"
+    assert plan.tool_calls == ()
+    assert plan.action_proposal.action_name == "update_organization_contact_email"
+    assert plan.action_proposal.arguments == {
+        "contact_email": "new.operations@example.test"
+    }
+    schema_text = json.dumps(captured_request["text"]["format"]["schema"])
+    assert "approved" not in schema_text
+    assert "idempotency_key" not in schema_text
+    assert "proposal_id" not in schema_text
+    await gateway._http_client.aclose()
+
+
+async def test_provider_rejects_mixed_or_incomplete_action_plan() -> None:
+    gateway = build_gateway(
+        httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json=response_payload(
+                    {
+                        "intent": "action_proposal",
+                        "tool_calls": [
+                            {
+                                "tool_name": "get_organization_profile",
+                                "report_id": None,
+                            }
+                        ],
+                        "action_name": "update_organization_contact_email",
+                        "contact_email": "new.operations@example.test",
+                    }
+                ),
+            )
+        )
+    )
+
+    with pytest.raises(AgentModelResponseInvalidError):
+        await gateway.create_plan(
+            user_request="Read and change",
+            available_tools=(
+                AgentToolDefinition(
+                    name="get_organization_profile",
+                    description="Read profile.",
+                ),
+            ),
+            available_actions=available_actions(),
+        )
     await gateway._http_client.aclose()
 
 
@@ -122,16 +208,7 @@ async def test_provider_retries_retryable_status_then_succeeds() -> None:
             return httpx.Response(503, json={"error": "temporary"})
         return httpx.Response(
             200,
-            json=response_payload(
-                {
-                    "tool_calls": [
-                        {
-                            "tool_name": "list_organization_reports",
-                            "arguments": {"report_id": None},
-                        }
-                    ]
-                }
-            ),
+            json=response_payload(read_plan("list_organization_reports")),
         )
 
     gateway = build_gateway(httpx.MockTransport(handler))
@@ -143,6 +220,7 @@ async def test_provider_retries_retryable_status_then_succeeds() -> None:
                 description="List reports.",
             ),
         ),
+        available_actions=available_actions(),
     )
 
     assert call_count == 2
@@ -169,6 +247,7 @@ async def test_provider_stops_after_bounded_retry_attempts() -> None:
                     description="Read profile.",
                 ),
             ),
+            available_actions=available_actions(),
         )
 
     assert call_count == 3
@@ -194,43 +273,45 @@ async def test_provider_does_not_retry_non_retryable_failure() -> None:
                     description="Read profile.",
                 ),
             ),
+            available_actions=available_actions(),
         )
 
     assert call_count == 1
     await gateway._http_client.aclose()
 
 
-async def test_provider_rejects_malformed_structured_output() -> None:
-    gateway = build_gateway(
-        httpx.MockTransport(
-            lambda request: httpx.Response(
-                200,
-                json={
-                    "output": [
-                        {
-                            "type": "message",
-                            "content": [
-                                {"type": "output_text", "text": "not-json"}
-                            ],
-                        }
-                    ]
-                },
+async def test_provider_rejects_malformed_or_incomplete_response() -> None:
+    for response_json in (
+        {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "not-json"}],
+                }
+            ]
+        },
+        {"status": "incomplete", "output": []},
+    ):
+        gateway = build_gateway(
+            httpx.MockTransport(
+                lambda request, payload=response_json: httpx.Response(
+                    200,
+                    json=payload,
+                )
             )
         )
-    )
-
-    with pytest.raises(AgentModelResponseInvalidError):
-        await gateway.create_plan(
-            user_request="Show profile",
-            available_tools=(
-                AgentToolDefinition(
-                    name="get_organization_profile",
-                    description="Read profile.",
+        with pytest.raises(AgentModelResponseInvalidError):
+            await gateway.create_plan(
+                user_request="Show profile",
+                available_tools=(
+                    AgentToolDefinition(
+                        name="get_organization_profile",
+                        description="Read profile.",
+                    ),
                 ),
-            ),
-        )
-
-    await gateway._http_client.aclose()
+                available_actions=available_actions(),
+            )
+        await gateway._http_client.aclose()
 
 
 async def test_provider_retries_timeout_and_reports_failure() -> None:
@@ -252,6 +333,7 @@ async def test_provider_retries_timeout_and_reports_failure() -> None:
                     description="Read profile.",
                 ),
             ),
+            available_actions=available_actions(),
         )
 
     assert call_count == 2
