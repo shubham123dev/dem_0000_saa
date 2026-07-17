@@ -31,6 +31,7 @@ async def ready(session: SessionDep) -> dict[str, str]:
 async def capabilities() -> CapabilitiesResponse:
     definitions = AgentActionRegistry().list_definitions()
     return CapabilitiesResponse(
+        write_tools=tuple(definition.name for definition in definitions),
         write_actions=tuple(
             CapabilityActionOut(
                 name=definition.name,
@@ -40,5 +41,5 @@ async def capabilities() -> CapabilitiesResponse:
                 supports_dry_run=definition.supports_dry_run,
             )
             for definition in definitions
-        )
+        ),
     )
