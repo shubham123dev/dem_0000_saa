@@ -1,17 +1,4 @@
-"""Consistent error contract and exception handling.
-
-Every error response has the shape::
-
-    {
-      "error": {
-        "code": "permission_denied",
-        "message": "...",
-        "request_id": "<generated request id>"
-      }
-    }
-
-Responses never leak stack traces, database paths, SQL, or secrets.
-"""
+"""Consistent error contract and exception handling."""
 from __future__ import annotations
 
 import logging
@@ -39,6 +26,10 @@ ERROR_CODES = frozenset(
         "agent_model_request_failed",
         "agent_model_response_invalid",
         "agent_tool_call_invalid",
+        "agent_action_invalid",
+        "agent_action_proposal_not_found",
+        "agent_action_state_conflict",
+        "agent_action_expired",
         "internal_error",
     }
 )
