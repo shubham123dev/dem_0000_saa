@@ -190,3 +190,8 @@ pytest -q
 ```
 
 The GitHub Actions workflow runs on `main`, pull requests and manual `workflow_dispatch`, across Python 3.11 and 3.12. Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
+
+
+.\.venv\Scripts\uvicorn.exe app.main:app --reload
+
+
