@@ -49,6 +49,8 @@ class CapabilityActionOut(BaseModel):
     risk_level: str
     requires_approval: bool
     supports_dry_run: bool
+    minimum_approvals: int
+    self_approval_allowed: bool
 
 
 class CapabilitiesResponse(BaseModel):
