@@ -47,6 +47,13 @@ class OrganizationMembershipORM(Base):
     __tablename__ = "organization_memberships"
     __table_args__ = (
         UniqueConstraint("organization_id", "user_id", name="uq_org_membership_user"),
+        Index(
+            "ix_membership_lifecycle_lookup",
+            "organization_id",
+            "user_id",
+            "membership_status",
+            "version",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -91,6 +98,13 @@ class SeatAssignmentORM(Base):
             unique=True,
             sqlite_where=text("status = 'active'"),
         ),
+        Index(
+            "ix_seat_lifecycle_lookup",
+            "organization_id",
+            "user_id",
+            "status",
+            "version",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -98,9 +112,11 @@ class SeatAssignmentORM(Base):
     seat_pool_id: Mapped[str] = mapped_column(String, ForeignKey("organization_seat_pools.id"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     assigned_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    revoked_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
@@ -121,6 +137,13 @@ class OrganizationReportAccessORM(Base):
     __tablename__ = "organization_report_access"
     __table_args__ = (
         UniqueConstraint("organization_id", "report_id", name="uq_org_report_access"),
+        Index(
+            "ix_report_access_lifecycle_lookup",
+            "organization_id",
+            "report_id",
+            "status",
+            "version",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
