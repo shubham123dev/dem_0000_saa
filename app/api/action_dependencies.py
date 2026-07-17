@@ -7,10 +7,15 @@ from fastapi import Depends
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.agent.action_contracts import AgentActionHandler
 from app.agent.action_handlers import (
+    ActivateOrganizationMembershipHandler,
     AssignOrganizationSeatHandler,
     GrantOrganizationReportAccessHandler,
     InviteOrganizationUserHandler,
+    RemoveOrganizationUserHandler,
+    RevokeOrganizationReportAccessHandler,
+    RevokeOrganizationSeatHandler,
     UpdateOrganizationContactEmailHandler,
+    UpdateOrganizationMemberRoleHandler,
 )
 from app.agent.action_registry import AgentActionRegistry
 from app.api.dependencies import (
@@ -41,20 +46,17 @@ def get_agent_action_handlers(
     session: SessionDep,
 ) -> dict[str, AgentActionHandler]:
     organization_gateway = MockOrganizationApiAdapter(api)
-    operational_resources = OperationalResourceService(session)
+    resources = OperationalResourceService(session)
     return {
-        "update_organization_contact_email": UpdateOrganizationContactEmailHandler(
-            organization_gateway
-        ),
-        "invite_organization_user": InviteOrganizationUserHandler(
-            operational_resources
-        ),
-        "assign_organization_seat": AssignOrganizationSeatHandler(
-            operational_resources
-        ),
-        "grant_organization_report_access": GrantOrganizationReportAccessHandler(
-            operational_resources
-        ),
+        "update_organization_contact_email": UpdateOrganizationContactEmailHandler(organization_gateway),
+        "invite_organization_user": InviteOrganizationUserHandler(resources),
+        "activate_organization_membership": ActivateOrganizationMembershipHandler(resources),
+        "update_organization_member_role": UpdateOrganizationMemberRoleHandler(resources),
+        "remove_organization_user": RemoveOrganizationUserHandler(resources),
+        "assign_organization_seat": AssignOrganizationSeatHandler(resources),
+        "revoke_organization_seat": RevokeOrganizationSeatHandler(resources),
+        "grant_organization_report_access": GrantOrganizationReportAccessHandler(resources),
+        "revoke_organization_report_access": RevokeOrganizationReportAccessHandler(resources),
     }
 
 
@@ -62,15 +64,9 @@ def get_agent_action_service(
     api: MockOrganizationApiDep,
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repository: Annotated[AuditRepository, Depends(get_audit_repository)],
-    action_repository: Annotated[
-        AgentActionRepository,
-        Depends(get_agent_action_repository),
-    ],
+    action_repository: Annotated[AgentActionRepository, Depends(get_agent_action_repository)],
     action_registry: Annotated[AgentActionRegistry, Depends(get_agent_action_registry)],
-    action_handlers: Annotated[
-        dict[str, AgentActionHandler],
-        Depends(get_agent_action_handlers),
-    ],
+    action_handlers: Annotated[dict[str, AgentActionHandler], Depends(get_agent_action_handlers)],
 ) -> AgentActionService:
     return AgentActionService(
         organization_gateway=MockOrganizationApiAdapter(api),
@@ -88,10 +84,7 @@ def get_agent_action_reconciliation_service(
     return AgentActionReconciliationService(action_service)
 
 
-AgentActionServiceDep = Annotated[
-    AgentActionService,
-    Depends(get_agent_action_service),
-]
+AgentActionServiceDep = Annotated[AgentActionService, Depends(get_agent_action_service)]
 AgentActionReconciliationServiceDep = Annotated[
     AgentActionReconciliationService,
     Depends(get_agent_action_reconciliation_service),
