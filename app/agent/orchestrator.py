@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from app.agent.action_registry import AgentActionRegistry
 from app.agent.contracts import (
     AgentExecutionResult,
     AgentModelGateway,
+    AgentPlan,
     AgentToolCall,
     AgentToolResult,
 )
-from app.agent.tool_registry import ReadOnlyAgentToolRegistry
+from app.agent.tool_registry import InvalidAgentToolCallError, ReadOnlyAgentToolRegistry
 from app.domain.models import User
 from app.services.organization_service import OrganizationService
 
@@ -17,11 +19,20 @@ class ReadOnlyAgentOrchestrator:
         *,
         model_gateway: AgentModelGateway,
         tool_registry: ReadOnlyAgentToolRegistry,
+        action_registry: AgentActionRegistry,
         organization_service: OrganizationService,
     ) -> None:
         self._model_gateway = model_gateway
         self._tool_registry = tool_registry
+        self._action_registry = action_registry
         self._organization_service = organization_service
+
+    async def create_plan(self, *, user_request: str) -> AgentPlan:
+        return await self._model_gateway.create_plan(
+            user_request=user_request,
+            available_tools=self._tool_registry.list_tool_definitions(),
+            available_actions=self._action_registry.list_definitions(),
+        )
 
     async def execute(
         self,
@@ -30,10 +41,22 @@ class ReadOnlyAgentOrchestrator:
         organization_id: str,
         user_request: str,
     ) -> AgentExecutionResult:
-        agent_plan = await self._model_gateway.create_plan(
-            user_request=user_request,
-            available_tools=self._tool_registry.list_tool_definitions(),
+        agent_plan = await self.create_plan(user_request=user_request)
+        return await self.execute_read_plan(
+            user=user,
+            organization_id=organization_id,
+            agent_plan=agent_plan,
         )
+
+    async def execute_read_plan(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        agent_plan: AgentPlan,
+    ) -> AgentExecutionResult:
+        if agent_plan.intent != "read":
+            raise InvalidAgentToolCallError("Read execution requires a read plan")
         tool_results = []
         for proposed_tool_call in agent_plan.tool_calls:
             validated_tool_call = self._tool_registry.validate_tool_call(
@@ -88,12 +111,14 @@ class ReadOnlyAgentOrchestrator:
                 )
             )
             result_data = report_access_decision
-        else:
+        elif tool_call.tool_name == "get_organization_audit_log":
             audit_events, _ = await self._organization_service.list_audit_events(
                 user=user,
                 organization_id=organization_id,
             )
             result_data = audit_events
+        else:
+            raise InvalidAgentToolCallError("Unknown read-only tool")
 
         return AgentToolResult(
             tool_name=tool_call.tool_name,
