@@ -82,6 +82,17 @@ class AgentActionRepository:
         row = result.scalar_one_or_none()
         return self._approval_to_domain(row) if row is not None else None
 
+    async def get_execution(
+        self,
+        proposal_id: str,
+    ) -> AgentActionExecutionResult | None:
+        statement = select(AgentActionExecutionORM).where(
+            AgentActionExecutionORM.proposal_id == proposal_id
+        )
+        result = await self._session.execute(statement)
+        row = result.scalar_one_or_none()
+        return self._execution_to_domain(row) if row is not None else None
+
     async def decide(
         self,
         *,
@@ -178,7 +189,9 @@ class AgentActionRepository:
             requested_by_user_id=row.requested_by_user_id,
             action_name=row.action_name,
             arguments=dict(row.arguments_json),
-            changes=tuple(AgentActionChange.model_validate(item) for item in row.changes_json),
+            changes=tuple(
+                AgentActionChange.model_validate(item) for item in row.changes_json
+            ),
             action_fingerprint=row.action_fingerprint,
             risk_level=row.risk_level,
             resource_type=row.resource_type,
