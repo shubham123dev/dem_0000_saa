@@ -33,6 +33,9 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             organization_id=organization_id,
             required_permission=definition.required_permission,
         )
+        # Authorization must precede limit evaluation to avoid leaking queue state.
+        # The parent lifecycle intentionally rechecks permission immediately before
+        # preparation and persistence so a concurrent permission revocation wins.
         return await super().propose(
             user=user,
             organization_id=organization_id,
