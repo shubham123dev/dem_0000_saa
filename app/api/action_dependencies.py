@@ -27,6 +27,9 @@ from app.api.dependencies import (
 from app.permissions.permission_service import PermissionService
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.multi_approval_agent_action_repository import (
+    MultiApprovalAgentActionRepository,
+)
 from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
 from app.services.agent_action_service import AgentActionService
@@ -35,7 +38,7 @@ from app.services.stale_safe_agent_action_service import StaleSafeAgentActionSer
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
-    return AgentActionRepository(session)
+    return MultiApprovalAgentActionRepository(session)
 
 
 def get_agent_action_registry() -> AgentActionRegistry:
