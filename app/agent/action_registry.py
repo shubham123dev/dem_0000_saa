@@ -32,25 +32,65 @@ class AgentActionRegistry:
                 ),
                 self._definition(
                     name="invite_organization_user",
-                    description="Propose inviting a user to the organization with a backend-supported role.",
+                    description="Propose inviting a user with a backend-supported role.",
                     arguments=("email", "display_name", "role"),
                     permission=Permission.ORGANIZATION_USERS_INVITE,
                     resource_type="organization_membership",
                     risk_level="medium",
                 ),
                 self._definition(
+                    name="activate_organization_membership",
+                    description="Propose activating an invited organization membership.",
+                    arguments=("user_id",),
+                    permission=Permission.ORGANIZATION_USERS_UPDATE,
+                    resource_type="organization_membership",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="update_organization_member_role",
+                    description="Propose changing an active organization member role.",
+                    arguments=("user_id", "role"),
+                    permission=Permission.ORGANIZATION_USERS_UPDATE,
+                    resource_type="organization_membership",
+                    risk_level="high",
+                ),
+                self._definition(
+                    name="remove_organization_user",
+                    description="Propose removing a user membership after seat and last-admin checks.",
+                    arguments=("user_id",),
+                    permission=Permission.ORGANIZATION_USERS_REMOVE,
+                    resource_type="organization_membership",
+                    risk_level="high",
+                ),
+                self._definition(
                     name="assign_organization_seat",
-                    description="Propose assigning an available standard seat to an active organization member.",
+                    description="Propose assigning an available standard seat to an active member.",
                     arguments=("user_id", "seat_type"),
                     permission=Permission.ORGANIZATION_SEATS_ASSIGN,
                     resource_type="seat_assignment",
                     risk_level="medium",
                 ),
                 self._definition(
+                    name="revoke_organization_seat",
+                    description="Propose revoking an active standard seat assignment.",
+                    arguments=("user_id", "seat_type"),
+                    permission=Permission.ORGANIZATION_SEATS_REVOKE,
+                    resource_type="seat_assignment",
+                    risk_level="medium",
+                ),
+                self._definition(
                     name="grant_organization_report_access",
-                    description="Propose granting or upgrading organization access to an active report.",
+                    description="Propose granting or upgrading organization report access.",
                     arguments=("report_id", "access_level"),
                     permission=Permission.ORGANIZATION_REPORTS_GRANT,
+                    resource_type="organization_report_access",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="revoke_organization_report_access",
+                    description="Propose revoking active organization report access.",
+                    arguments=("report_id",),
+                    permission=Permission.ORGANIZATION_REPORTS_REVOKE,
                     resource_type="organization_report_access",
                     risk_level="medium",
                 ),
@@ -88,13 +128,13 @@ class AgentActionRegistry:
         return tuple(self._definitions.values())
 
     def get_definition(self, action_name: str) -> AgentActionDefinition:
-        action_definition = self._definitions.get(action_name)
-        if action_definition is None:
+        definition = self._definitions.get(action_name)
+        if definition is None:
             raise InvalidAgentActionProposalError("Unknown agent action")
-        return action_definition
+        return definition
 
     def validate(self, proposal_input: AgentActionProposalInput) -> AgentActionDefinition:
-        forbidden_argument_names = {
+        forbidden = {
             "organization_id",
             "actor_user_id",
             "permission",
@@ -105,14 +145,14 @@ class AgentActionRegistry:
             "idempotency_key",
             "execute",
         }
-        if set(proposal_input.arguments) & forbidden_argument_names:
+        if set(proposal_input.arguments) & forbidden:
             raise InvalidAgentActionProposalError(
                 "Identity, authorization, approval, and execution arguments are forbidden"
             )
-        action_definition = self.get_definition(proposal_input.action_name)
-        if set(proposal_input.arguments) != set(action_definition.required_argument_names):
+        definition = self.get_definition(proposal_input.action_name)
+        if set(proposal_input.arguments) != set(definition.required_argument_names):
             raise InvalidAgentActionProposalError("Agent action arguments are invalid")
-        return action_definition
+        return definition
 
 
 def build_action_fingerprint(
@@ -128,7 +168,7 @@ def build_action_fingerprint(
     resource_id: str,
     expires_at: datetime,
 ) -> str:
-    fingerprint_payload = {
+    payload = {
         "organization_id": organization_id,
         "requested_by_user_id": requested_by_user_id,
         "action_name": action_name,
@@ -141,9 +181,5 @@ def build_action_fingerprint(
         "expires_at": expires_at.isoformat(),
         "version": 2,
     }
-    canonical_payload = json.dumps(
-        fingerprint_payload,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
