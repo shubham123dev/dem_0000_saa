@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import OrganizationORM
 
 ORGANIZATION_ID = "org_sandbox_001"
@@ -56,6 +58,37 @@ async def test_cancelled_proposal_is_listed_and_cannot_execute(
     )
     assert execute_response.status_code == 409
     assert execute_response.json()["error"]["code"] == "agent_action_cancelled"
+
+
+async def test_expired_proposal_cannot_be_approved(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    admin_headers: dict[str, str],
+) -> None:
+    proposal_response = await propose(
+        client,
+        admin_headers,
+        "expired@example.test",
+    )
+    proposal_id = proposal_response.json()["proposal"]["id"]
+    proposal_row = await db_session.get(AgentActionProposalORM, proposal_id)
+    assert proposal_row is not None
+    proposal_row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await db_session.commit()
+
+    approval_response = await client.post(
+        f"{ACTION_BASE_URL}/{proposal_id}/approve",
+        headers=admin_headers,
+        json={"reason": "Too late"},
+    )
+    assert approval_response.status_code == 409
+    assert approval_response.json()["error"]["code"] == "agent_action_expired"
+
+    proposal_response = await client.get(
+        f"{ACTION_BASE_URL}/{proposal_id}",
+        headers=admin_headers,
+    )
+    assert proposal_response.json()["proposal"]["status"] == "expired"
 
 
 async def test_resource_change_marks_approved_proposal_stale(
