@@ -37,6 +37,7 @@ _ALLOWED_TRANSITIONS: dict[AgentActionStatus, frozenset[AgentActionStatus]] = {
         {
             AgentActionStatus.SUCCEEDED,
             AgentActionStatus.FAILED,
+            AgentActionStatus.STALE,
             AgentActionStatus.RECONCILIATION_REQUIRED,
         }
     ),
