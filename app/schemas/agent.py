@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.agent.action_contracts import AgentActionProposal
+from app.agent.action_contracts import AgentActionChange
 
 
 class AgentQueryRequest(BaseModel):
@@ -28,6 +29,25 @@ class AgentToolResultOut(BaseModel):
     data: Any
 
 
+class AgentActionProposalSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    action_name: str
+    risk_level: Literal["low", "medium", "high"]
+    status: Literal[
+        "pending_approval",
+        "approved",
+        "rejected",
+        "expired",
+        "executing",
+        "succeeded",
+        "failed",
+    ]
+    changes: tuple[AgentActionChange, ...]
+    expires_at: datetime
+
+
 class AgentQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -37,7 +57,7 @@ class AgentQueryResponse(BaseModel):
     evidence_ids: tuple[str, ...] = ()
     answer_source: Literal["model", "deterministic"]
     results: tuple[AgentToolResultOut, ...] = ()
-    action_proposal: AgentActionProposal | None = None
+    action_proposal: AgentActionProposalSummary | None = None
 
     @model_validator(mode="after")
     def validate_mode_payload(self) -> AgentQueryResponse:
