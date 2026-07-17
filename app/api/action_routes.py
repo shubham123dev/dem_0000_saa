@@ -13,6 +13,7 @@ from app.schemas.agent_actions import (
     AgentActionDecisionRequest,
     AgentActionExecutionRequest,
     AgentActionExecutionResponse,
+    AgentActionName,
     AgentActionProposalListResponse,
     AgentActionProposalRequest,
     AgentActionProposalResponse,
@@ -55,13 +56,24 @@ async def list_agent_action_proposals(
     user: UserDep,
     action_service: AgentActionServiceDep,
     status: AgentActionStatusFilter | None = Query(default=None),
+    action_name: AgentActionName | None = Query(default=None),
+    requested_by: str | None = Query(default=None, min_length=1, max_length=200),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    cursor: str | None = Query(default=None, min_length=1, max_length=200),
 ) -> AgentActionProposalListResponse:
-    proposals = await action_service.list_proposals(
+    proposals, next_cursor = await action_service.list_proposals_page(
         user=user,
         organization_id=organization_id,
         status=status,
+        action_name=action_name,
+        requested_by_user_id=requested_by,
+        limit=limit,
+        cursor=cursor,
     )
-    return AgentActionProposalListResponse(proposals=proposals)
+    return AgentActionProposalListResponse(
+        proposals=proposals,
+        next_cursor=next_cursor,
+    )
 
 
 @router.get(
@@ -195,6 +207,24 @@ async def reconcile_agent_action(
     reconciliation_service: AgentActionReconciliationServiceDep,
 ) -> AgentActionExecutionResponse:
     execution = await reconciliation_service.reconcile(
+        user=user,
+        organization_id=organization_id,
+        proposal_id=proposal_id,
+    )
+    return AgentActionExecutionResponse(execution=execution)
+
+
+@router.post(
+    "/{organization_id}/agent/actions/{proposal_id}/audit-replay",
+    response_model=AgentActionExecutionResponse,
+)
+async def replay_agent_action_audit(
+    organization_id: str,
+    proposal_id: str,
+    user: UserDep,
+    action_service: AgentActionServiceDep,
+) -> AgentActionExecutionResponse:
+    execution = await action_service.replay_audit(
         user=user,
         organization_id=organization_id,
         proposal_id=proposal_id,
