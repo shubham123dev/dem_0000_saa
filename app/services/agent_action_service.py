@@ -180,6 +180,13 @@ class AgentActionService:
             organization_id=organization_id,
             proposal_id=proposal_id,
         )
+        existing_execution = await self._action_repository.get_execution(proposal.id)
+        if existing_execution is not None:
+            if existing_execution.idempotency_key == idempotency_key:
+                return existing_execution
+            raise AgentActionStateConflictError(
+                "Action proposal was already executed with another idempotency key."
+            )
         if _as_aware(proposal.expires_at) <= _utcnow():
             await self._action_repository.mark_expired(proposal.id)
             raise AgentActionExpiredError()
@@ -239,7 +246,7 @@ class AgentActionService:
                 details=execution_result.result,
             )
             return execution_result
-        except Exception as exception:
+        except Exception:
             await self._action_repository.complete_execution(
                 proposal_id=proposal.id,
                 outcome="failed",
@@ -253,7 +260,7 @@ class AgentActionService:
                 outcome="failure",
                 details={"error_code": "action_execution_failed"},
             )
-            raise exception
+            raise
 
     async def _authorize(
         self,
