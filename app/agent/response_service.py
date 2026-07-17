@@ -30,20 +30,24 @@ class ReadOnlyAgentResponseService:
         user: User,
         organization_id: str,
         user_request: str,
+        request_id: str | None = None,
     ) -> AgentQueryCompletion:
         agent_plan = await self._orchestrator.create_plan(user_request=user_request)
         if agent_plan.intent == "action_proposal":
+            provenance = {
+                "proposal_source": "agent_query",
+                "planner": "configured_model",
+                "request_hash": hashlib.sha256(
+                    user_request.encode("utf-8")
+                ).hexdigest(),
+            }
+            if request_id:
+                provenance["request_id"] = request_id
             proposal = await self._action_service.propose(
                 user=user,
                 organization_id=organization_id,
                 proposal_input=agent_plan.action_proposal,
-                provenance={
-                    "proposal_source": "agent_query",
-                    "planner": "configured_model",
-                    "request_hash": hashlib.sha256(
-                        user_request.encode("utf-8")
-                    ).hexdigest(),
-                },
+                provenance=provenance,
             )
             return AgentQueryCompletion(
                 mode="action_proposal",
