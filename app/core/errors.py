@@ -33,6 +33,7 @@ ERROR_CODES = frozenset(
         "unauthenticated",
         "user_disabled",
         "organization_not_found",
+        "organization_suspended",
         "report_not_found",
         "organization_access_denied",
         "permission_denied",
@@ -72,6 +73,12 @@ class OrganizationNotFoundError(AppError):
     code = "organization_not_found"
     status_code = status.HTTP_404_NOT_FOUND
     message = "Organization not found."
+
+
+class OrganizationSuspendedError(AppError):
+    code = "organization_suspended"
+    status_code = status.HTTP_403_FORBIDDEN
+    message = "Organization access is suspended."
 
 
 class ReportNotFoundError(AppError):
