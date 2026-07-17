@@ -17,8 +17,13 @@ ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
 EXPECTED_ACTION_NAMES = {
     "update_organization_contact_email",
     "invite_organization_user",
+    "activate_organization_membership",
+    "update_organization_member_role",
+    "remove_organization_user",
     "assign_organization_seat",
+    "revoke_organization_seat",
     "grant_organization_report_access",
+    "revoke_organization_report_access",
 }
 
 
