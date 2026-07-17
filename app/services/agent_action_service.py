@@ -1,31 +1,42 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from app.adapters.organization.contract import OrganizationApiGateway
 from app.agent.action_contracts import (
     AgentActionApproval,
-    AgentActionChange,
     AgentActionExecutionResult,
+    AgentActionHandler,
     AgentActionProposal,
     AgentActionProposalInput,
 )
 from app.agent.action_errors import (
+    AgentActionAlreadyDecidedError,
+    AgentActionCancelledError,
+    AgentActionExecutionInProgressError,
     AgentActionExpiredError,
+    AgentActionIdempotencyConflictError,
     AgentActionInvalidError,
     AgentActionProposalNotFoundError,
+    AgentActionReconciliationRequiredError,
+    AgentActionStaleError,
     AgentActionStateConflictError,
 )
+from app.agent.action_handlers import StaleActionResourceError
 from app.agent.action_registry import (
     AgentActionRegistry,
     InvalidAgentActionProposalError,
     build_action_fingerprint,
 )
 from app.core.errors import OrganizationSuspendedError, ProductionAccessBlockedError
-from app.domain.enums import Environment, OrganizationStatus
+from app.domain.enums import Environment, OrganizationStatus, Permission
 from app.domain.models import User
 from app.permissions.permission_service import PermissionService
-from app.repositories.agent_action_repository import AgentActionRepository
+from app.repositories.agent_action_repository import (
+    AgentActionRepository,
+    AgentActionTransitionConflictError,
+)
 from app.repositories.audit_repository import AuditRepository
 
 
@@ -39,19 +50,6 @@ def _as_aware(value: datetime) -> datetime:
     return value
 
 
-def _normalize_contact_email(value: str) -> str:
-    normalized_value = value.strip().lower()
-    local_part, separator, domain_part = normalized_value.partition("@")
-    if (
-        not separator
-        or not local_part
-        or "." not in domain_part
-        or len(normalized_value) > 320
-    ):
-        raise AgentActionInvalidError("Contact email is invalid.")
-    return normalized_value
-
-
 class AgentActionService:
     def __init__(
         self,
@@ -61,12 +59,14 @@ class AgentActionService:
         action_repository: AgentActionRepository,
         audit_repository: AuditRepository,
         action_registry: AgentActionRegistry,
+        action_handlers: dict[str, AgentActionHandler],
     ) -> None:
         self._organization_gateway = organization_gateway
         self._permission_service = permission_service
         self._action_repository = action_repository
         self._audit_repository = audit_repository
         self._action_registry = action_registry
+        self._action_handlers = action_handlers
 
     async def propose(
         self,
@@ -74,60 +74,84 @@ class AgentActionService:
         user: User,
         organization_id: str,
         proposal_input: AgentActionProposalInput,
-        provenance: dict[str, str] | None = None,
+        provenance: dict[str, Any] | None = None,
     ) -> AgentActionProposal:
         try:
             action_definition = self._action_registry.validate(proposal_input)
         except InvalidAgentActionProposalError as exception:
             raise AgentActionInvalidError() from exception
-
-        organization_profile = await self._authorize(
+        await self._authorize(
             user=user,
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
         )
-        contact_email = _normalize_contact_email(
-            proposal_input.arguments["contact_email"]
-        )
-        normalized_arguments = {"contact_email": contact_email}
-        changes = (
-            AgentActionChange(
-                field="contact_email",
-                before=organization_profile.contact_email,
-                after=contact_email,
-            ),
-        )
-        action_fingerprint = build_action_fingerprint(
+        handler = self._require_handler(action_definition.name)
+        try:
+            preparation = await handler.prepare(
+                organization_id=organization_id,
+                arguments=proposal_input.arguments,
+            )
+        except (KeyError, ValueError) as exception:
+            raise AgentActionInvalidError(str(exception)) from exception
+        expires_at = _utcnow() + timedelta(minutes=15)
+        fingerprint = build_action_fingerprint(
             organization_id=organization_id,
             requested_by_user_id=user.id,
             action_name=action_definition.name,
-            arguments=normalized_arguments,
-            resource_type=action_definition.resource_type,
-            resource_id=organization_id,
+            arguments=preparation.normalized_arguments,
+            changes=preparation.changes,
+            observed_resource_version=preparation.observed_resource_version,
+            approval_policy=action_definition.approval_policy,
+            resource_type=preparation.resource_type,
+            resource_id=preparation.resource_id,
+            expires_at=expires_at,
         )
         proposal = await self._action_repository.create_proposal(
             organization_id=organization_id,
             requested_by_user_id=user.id,
             action_name=action_definition.name,
-            arguments=normalized_arguments,
-            changes=changes,
-            action_fingerprint=action_fingerprint,
+            arguments=preparation.normalized_arguments,
+            changes=preparation.changes,
+            action_fingerprint=fingerprint,
             risk_level=action_definition.risk_level,
-            resource_type=action_definition.resource_type,
-            resource_id=organization_id,
-            expires_at=_utcnow() + timedelta(minutes=15),
+            resource_type=preparation.resource_type,
+            resource_id=preparation.resource_id,
+            observed_resource_version=preparation.observed_resource_version,
+            approval_policy=action_definition.approval_policy,
+            expires_at=expires_at,
         )
-        audit_details = {"risk_level": proposal.risk_level}
+        details = {"risk_level": proposal.risk_level}
         if provenance:
-            audit_details.update(provenance)
+            details.update(provenance)
         await self._append_audit(
             user=user,
             proposal=proposal,
             event_type="agent_action_proposed",
             outcome="success",
-            details=audit_details,
+            details=details,
         )
         return proposal
+
+    async def list_proposals(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        status: str | None = None,
+    ) -> tuple[AgentActionProposal, ...]:
+        await self._authorize(
+            user=user,
+            organization_id=organization_id,
+            required_permission=Permission.ORGANIZATION_PROFILE_UPDATE.value,
+        )
+        proposals = await self._action_repository.list_proposals(
+            organization_id=organization_id,
+            status=status,
+        )
+        refreshed: list[AgentActionProposal] = []
+        for proposal in proposals:
+            refreshed.append(await self._expire_if_needed(proposal))
+        return tuple(refreshed)
 
     async def get_proposal(
         self,
@@ -146,7 +170,7 @@ class AgentActionService:
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
         )
-        return proposal
+        return await self._expire_if_needed(proposal)
 
     async def decide(
         self,
@@ -162,17 +186,31 @@ class AgentActionService:
             organization_id=organization_id,
             proposal_id=proposal_id,
         )
-        if proposal.status != "pending_approval":
-            raise AgentActionStateConflictError()
-        if _as_aware(proposal.expires_at) <= _utcnow():
-            await self._action_repository.mark_expired(proposal.id)
-            raise AgentActionExpiredError()
-        approval = await self._action_repository.decide(
-            proposal_id=proposal.id,
-            decided_by_user_id=user.id,
-            decision=decision,
-            decision_reason=reason,
+        await self._authorize(
+            user=user,
+            organization_id=organization_id,
+            required_permission=proposal.approval_policy.required_approver_permission,
         )
+        if (
+            not proposal.approval_policy.self_approval_allowed
+            and proposal.requested_by_user_id == user.id
+        ):
+            raise AgentActionStateConflictError("Self-approval is not allowed.")
+        if proposal.status == "expired":
+            raise AgentActionExpiredError()
+        if proposal.status == "cancelled":
+            raise AgentActionCancelledError()
+        if proposal.status != "pending_approval":
+            raise AgentActionAlreadyDecidedError()
+        try:
+            approval = await self._action_repository.decide(
+                proposal_id=proposal.id,
+                decided_by_user_id=user.id,
+                decision=decision,
+                decision_reason=reason,
+            )
+        except AgentActionTransitionConflictError as exception:
+            raise AgentActionAlreadyDecidedError() from exception
         await self._append_audit(
             user=user,
             proposal=proposal,
@@ -185,6 +223,41 @@ class AgentActionService:
             details={"reason": reason},
         )
         return approval
+
+    async def cancel(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        proposal_id: str,
+        reason: str | None,
+    ) -> AgentActionProposal:
+        proposal = await self.get_proposal(
+            user=user,
+            organization_id=organization_id,
+            proposal_id=proposal_id,
+        )
+        if proposal.status not in {"pending_approval", "approved"}:
+            raise AgentActionStateConflictError()
+        changed = await self._action_repository.transition_status(
+            proposal_id=proposal.id,
+            current_statuses=(proposal.status,),
+            target_status="cancelled",
+        )
+        if not changed:
+            raise AgentActionStateConflictError()
+        cancelled = await self._require_proposal(
+            organization_id=organization_id,
+            proposal_id=proposal_id,
+        )
+        await self._append_audit(
+            user=user,
+            proposal=cancelled,
+            event_type="agent_action_cancelled",
+            outcome="success",
+            details={"reason": reason},
+        )
+        return cancelled
 
     async def execute(
         self,
@@ -201,41 +274,59 @@ class AgentActionService:
         )
         existing_execution = await self._action_repository.get_execution(proposal.id)
         if existing_execution is not None:
-            if existing_execution.idempotency_key == idempotency_key:
-                return existing_execution
-            raise AgentActionStateConflictError(
-                "Action proposal was already executed with another idempotency key."
-            )
-        if _as_aware(proposal.expires_at) <= _utcnow():
-            await self._action_repository.mark_expired(proposal.id)
+            if existing_execution.idempotency_key != idempotency_key:
+                raise AgentActionIdempotencyConflictError()
+            if existing_execution.outcome == "executing":
+                raise AgentActionExecutionInProgressError()
+            if existing_execution.outcome == "reconciliation_required":
+                raise AgentActionReconciliationRequiredError()
+            return existing_execution
+        if proposal.status == "expired":
             raise AgentActionExpiredError()
+        if proposal.status == "cancelled":
+            raise AgentActionCancelledError()
+        if proposal.status == "stale":
+            raise AgentActionStaleError()
         if proposal.status != "approved":
-            raise AgentActionStateConflictError()
-        expected_fingerprint = build_action_fingerprint(
-            organization_id=proposal.organization_id,
-            requested_by_user_id=proposal.requested_by_user_id,
-            action_name=proposal.action_name,
-            arguments=proposal.arguments,
-            resource_type=proposal.resource_type,
-            resource_id=proposal.resource_id,
-        )
-        if expected_fingerprint != proposal.action_fingerprint:
-            raise AgentActionStateConflictError("Action proposal fingerprint is invalid.")
+            raise AgentActionStateConflictError("Explicit approval is required.")
+        self._validate_fingerprint(proposal)
         approval = await self._action_repository.get_approval(proposal.id)
         if approval is None or approval.decision != "approved":
             raise AgentActionStateConflictError("Explicit approval is required.")
         if approval.consumed_at is not None:
             raise AgentActionStateConflictError("Action approval has already been consumed.")
-
+        handler = self._require_handler(proposal.action_name)
+        current_preparation = await handler.prepare(
+            organization_id=organization_id,
+            arguments=proposal.arguments,
+        )
+        if (
+            current_preparation.observed_resource_version
+            != proposal.observed_resource_version
+            or current_preparation.changes != proposal.changes
+        ):
+            await self._action_repository.transition_status(
+                proposal_id=proposal.id,
+                current_statuses=("approved",),
+                target_status="stale",
+            )
+            raise AgentActionStaleError()
         try:
             await self._action_repository.start_execution(
                 proposal_id=proposal.id,
                 idempotency_key=idempotency_key,
             )
-        except (PermissionError, RuntimeError) as exception:
+        except AgentActionTransitionConflictError as exception:
+            concurrent_execution = await self._action_repository.get_execution(proposal.id)
+            if (
+                concurrent_execution is not None
+                and concurrent_execution.idempotency_key == idempotency_key
+            ):
+                if concurrent_execution.outcome == "executing":
+                    raise AgentActionExecutionInProgressError() from exception
+                return concurrent_execution
             raise AgentActionStateConflictError() from exception
-
-        await self._append_audit(
+        await self._append_execution_audit_safely(
             user=user,
             proposal=proposal,
             event_type="agent_action_execution_started",
@@ -243,44 +334,136 @@ class AgentActionService:
             details={"idempotency_key": idempotency_key},
         )
         try:
-            updated_profile = await self._organization_gateway.update_contact_email(
-                organization_id,
-                proposal.arguments["contact_email"],
-            )
-            execution_result = await self._action_repository.complete_execution(
-                proposal_id=proposal.id,
-                outcome="succeeded",
-                result={
-                    "organization_id": updated_profile.id,
-                    "contact_email": updated_profile.contact_email,
-                    "version": updated_profile.version,
-                },
-                error_code=None,
-            )
-        except Exception:
+            handler_result = await handler.execute(proposal=proposal)
+        except StaleActionResourceError as exception:
             await self._action_repository.complete_execution(
                 proposal_id=proposal.id,
                 outcome="failed",
                 result=None,
-                error_code="action_execution_failed",
+                error_code="agent_action_stale",
+                reconciliation_status="not_required",
             )
-            await self._append_audit(
+            await self._action_repository.transition_status(
+                proposal_id=proposal.id,
+                current_statuses=("failed",),
+                target_status="stale",
+            )
+            raise AgentActionStaleError() from exception
+        except Exception as exception:
+            await self._action_repository.complete_execution(
+                proposal_id=proposal.id,
+                outcome="reconciliation_required",
+                result=None,
+                error_code="action_outcome_unknown",
+                reconciliation_status="required",
+            )
+            await self._append_execution_audit_safely(
                 user=user,
                 proposal=proposal,
-                event_type="agent_action_failed",
+                event_type="agent_action_reconciliation_required",
                 outcome="failure",
-                details={"error_code": "action_execution_failed"},
+                details={"error_code": "action_outcome_unknown"},
             )
-            raise
-
-        await self._append_audit(
+            raise AgentActionReconciliationRequiredError() from exception
+        execution_result = await self._action_repository.complete_execution(
+            proposal_id=proposal.id,
+            outcome="succeeded",
+            result=handler_result.model_dump(mode="json"),
+            error_code=None,
+            provider_operation_id=handler_result.external_operation_id,
+            reconciliation_status="not_required",
+        )
+        await self._append_execution_audit_safely(
             user=user,
             proposal=proposal,
             event_type="agent_action_succeeded",
             outcome="success",
             details=execution_result.result,
         )
-        return execution_result
+        return await self._require_execution(proposal.id)
+
+    async def reconcile(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        proposal_id: str,
+    ) -> AgentActionExecutionResult:
+        proposal = await self.get_proposal(
+            user=user,
+            organization_id=organization_id,
+            proposal_id=proposal_id,
+        )
+        execution = await self._require_execution(proposal.id)
+        if execution.outcome not in {"executing", "reconciliation_required"}:
+            return execution
+        await self._action_repository.increment_reconciliation_attempt(proposal.id)
+        handler = self._require_handler(proposal.action_name)
+        handler_result = await handler.reconcile(
+            proposal=proposal,
+            execution=execution,
+        )
+        if handler_result is None:
+            return await self._action_repository.complete_execution(
+                proposal_id=proposal.id,
+                outcome="reconciliation_required",
+                result=None,
+                error_code="action_outcome_unknown",
+                reconciliation_status="required",
+                audit_pending=execution.audit_pending,
+            )
+        reconciled = await self._action_repository.complete_execution(
+            proposal_id=proposal.id,
+            outcome="succeeded",
+            result=handler_result.model_dump(mode="json"),
+            error_code=None,
+            provider_operation_id=handler_result.external_operation_id,
+            reconciliation_status="resolved",
+            audit_pending=execution.audit_pending,
+        )
+        await self._append_execution_audit_safely(
+            user=user,
+            proposal=proposal,
+            event_type="agent_action_succeeded",
+            outcome="success",
+            details=reconciled.result,
+        )
+        return await self._require_execution(proposal.id)
+
+    async def _expire_if_needed(
+        self,
+        proposal: AgentActionProposal,
+    ) -> AgentActionProposal:
+        if (
+            proposal.status in {"pending_approval", "approved"}
+            and _as_aware(proposal.expires_at) <= _utcnow()
+        ):
+            await self._action_repository.transition_status(
+                proposal_id=proposal.id,
+                current_statuses=(proposal.status,),
+                target_status="expired",
+            )
+            return await self._require_proposal(
+                organization_id=proposal.organization_id,
+                proposal_id=proposal.id,
+            )
+        return proposal
+
+    def _validate_fingerprint(self, proposal: AgentActionProposal) -> None:
+        expected_fingerprint = build_action_fingerprint(
+            organization_id=proposal.organization_id,
+            requested_by_user_id=proposal.requested_by_user_id,
+            action_name=proposal.action_name,
+            arguments=proposal.arguments,
+            changes=proposal.changes,
+            observed_resource_version=proposal.observed_resource_version,
+            approval_policy=proposal.approval_policy,
+            resource_type=proposal.resource_type,
+            resource_id=proposal.resource_id,
+            expires_at=proposal.expires_at,
+        )
+        if expected_fingerprint != proposal.action_fingerprint:
+            raise AgentActionStateConflictError("Action proposal fingerprint is invalid.")
 
     async def _authorize(
         self,
@@ -288,7 +471,7 @@ class AgentActionService:
         user: User,
         organization_id: str,
         required_permission: str,
-    ):
+    ) -> None:
         organization_profile = await self._organization_gateway.get_profile(
             organization_id
         )
@@ -301,7 +484,12 @@ class AgentActionService:
             organization_id=organization_id,
             required_permission=required_permission,
         )
-        return organization_profile
+
+    def _require_handler(self, action_name: str) -> AgentActionHandler:
+        handler = self._action_handlers.get(action_name)
+        if handler is None:
+            raise AgentActionInvalidError("No action handler is registered.")
+        return handler
 
     async def _require_proposal(
         self,
@@ -316,6 +504,35 @@ class AgentActionService:
         if proposal is None:
             raise AgentActionProposalNotFoundError()
         return proposal
+
+    async def _require_execution(
+        self,
+        proposal_id: str,
+    ) -> AgentActionExecutionResult:
+        execution = await self._action_repository.get_execution(proposal_id)
+        if execution is None:
+            raise AgentActionStateConflictError("Action execution was not found.")
+        return execution
+
+    async def _append_execution_audit_safely(
+        self,
+        *,
+        user: User,
+        proposal: AgentActionProposal,
+        event_type: str,
+        outcome: str,
+        details: dict | None,
+    ) -> None:
+        try:
+            await self._append_audit(
+                user=user,
+                proposal=proposal,
+                event_type=event_type,
+                outcome=outcome,
+                details=details,
+            )
+        except Exception:
+            await self._action_repository.mark_audit_pending(proposal.id, True)
 
     async def _append_audit(
         self,
