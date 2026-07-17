@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.action_contracts import (
@@ -11,6 +12,7 @@ from app.agent.action_contracts import (
     AgentActionChange,
     AgentActionExecutionResult,
     AgentActionProposal,
+    AgentApprovalPolicy,
 )
 from app.db.action_models import (
     AgentActionApprovalORM,
@@ -21,6 +23,10 @@ from app.db.action_models import (
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class AgentActionTransitionConflictError(RuntimeError):
+    pass
 
 
 class AgentActionRepository:
@@ -39,6 +45,8 @@ class AgentActionRepository:
         risk_level: str,
         resource_type: str,
         resource_id: str,
+        observed_resource_version: int,
+        approval_policy: AgentApprovalPolicy,
         expires_at: datetime,
     ) -> AgentActionProposal:
         row = AgentActionProposalORM(
@@ -53,6 +61,8 @@ class AgentActionRepository:
             resource_type=resource_type,
             resource_id=resource_id,
             status="pending_approval",
+            observed_resource_version=observed_resource_version,
+            approval_policy_json=approval_policy.model_dump(mode="json"),
             expires_at=expires_at,
         )
         self._session.add(row)
@@ -73,6 +83,24 @@ class AgentActionRepository:
         result = await self._session.execute(statement)
         row = result.scalar_one_or_none()
         return self._proposal_to_domain(row) if row is not None else None
+
+    async def list_proposals(
+        self,
+        *,
+        organization_id: str,
+        status: str | None = None,
+    ) -> tuple[AgentActionProposal, ...]:
+        statement = select(AgentActionProposalORM).where(
+            AgentActionProposalORM.organization_id == organization_id
+        )
+        if status is not None:
+            statement = statement.where(AgentActionProposalORM.status == status)
+        statement = statement.order_by(
+            AgentActionProposalORM.created_at.desc(),
+            AgentActionProposalORM.id.desc(),
+        )
+        result = await self._session.execute(statement)
+        return tuple(self._proposal_to_domain(row) for row in result.scalars().all())
 
     async def get_approval(self, proposal_id: str) -> AgentActionApproval | None:
         statement = select(AgentActionApprovalORM).where(
@@ -101,27 +129,64 @@ class AgentActionRepository:
         decision: str,
         decision_reason: str | None,
     ) -> AgentActionApproval:
-        proposal_row = await self._session.get(AgentActionProposalORM, proposal_id)
-        if proposal_row is None:
-            raise LookupError("Action proposal not found")
+        now = _utcnow()
+        proposal_update = (
+            update(AgentActionProposalORM)
+            .where(
+                AgentActionProposalORM.id == proposal_id,
+                AgentActionProposalORM.status == "pending_approval",
+                AgentActionProposalORM.expires_at > now,
+            )
+            .values(status=decision, updated_at=now)
+        )
+        result = await self._session.execute(proposal_update)
+        if result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
         approval_row = AgentActionApprovalORM(
             id=uuid.uuid4().hex,
             proposal_id=proposal_id,
             decision=decision,
             decided_by_user_id=decided_by_user_id,
             decision_reason=decision_reason,
+            decided_at=now,
         )
-        proposal_row.status = decision
         self._session.add(approval_row)
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError as exception:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError() from exception
         await self._session.refresh(approval_row)
         return self._approval_to_domain(approval_row)
 
-    async def mark_expired(self, proposal_id: str) -> None:
-        proposal_row = await self._session.get(AgentActionProposalORM, proposal_id)
-        if proposal_row is not None and proposal_row.status == "pending_approval":
-            proposal_row.status = "expired"
-            await self._session.commit()
+    async def transition_status(
+        self,
+        *,
+        proposal_id: str,
+        current_statuses: tuple[str, ...],
+        target_status: str,
+    ) -> bool:
+        now = _utcnow()
+        values: dict = {"status": target_status, "updated_at": now}
+        if target_status == "cancelled":
+            values["cancelled_at"] = now
+        if target_status == "stale":
+            values["stale_at"] = now
+        statement = (
+            update(AgentActionProposalORM)
+            .where(
+                AgentActionProposalORM.id == proposal_id,
+                AgentActionProposalORM.status.in_(current_statuses),
+            )
+            .values(**values)
+        )
+        result = await self._session.execute(statement)
+        if result.rowcount != 1:
+            await self._session.rollback()
+            return False
+        await self._session.commit()
+        return True
 
     async def start_execution(
         self,
@@ -129,30 +194,49 @@ class AgentActionRepository:
         proposal_id: str,
         idempotency_key: str,
     ) -> AgentActionExecutionResult:
-        proposal_row = await self._session.get(AgentActionProposalORM, proposal_id)
-        if proposal_row is None:
-            raise LookupError("Action proposal not found")
-        approval_statement = select(AgentActionApprovalORM).where(
-            AgentActionApprovalORM.proposal_id == proposal_id
-        )
-        approval_result = await self._session.execute(approval_statement)
-        approval_row = approval_result.scalar_one_or_none()
-        if approval_row is None or approval_row.decision != "approved":
-            raise PermissionError("Approved action approval is required")
-        if approval_row.consumed_at is not None:
-            raise RuntimeError("Action approval was already consumed")
         now = _utcnow()
-        approval_row.consumed_at = now
-        proposal_row.status = "executing"
+        proposal_update = (
+            update(AgentActionProposalORM)
+            .where(
+                AgentActionProposalORM.id == proposal_id,
+                AgentActionProposalORM.status == "approved",
+                AgentActionProposalORM.expires_at > now,
+            )
+            .values(status="executing", updated_at=now)
+        )
+        proposal_result = await self._session.execute(proposal_update)
+        if proposal_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
+        approval_update = (
+            update(AgentActionApprovalORM)
+            .where(
+                AgentActionApprovalORM.proposal_id == proposal_id,
+                AgentActionApprovalORM.decision == "approved",
+                AgentActionApprovalORM.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        approval_result = await self._session.execute(approval_update)
+        if approval_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
         execution_row = AgentActionExecutionORM(
             id=uuid.uuid4().hex,
             proposal_id=proposal_id,
             idempotency_key=idempotency_key,
             outcome="executing",
+            attempt_count=1,
+            last_attempt_at=now,
+            reconciliation_status="not_required",
             started_at=now,
         )
         self._session.add(execution_row)
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError as exception:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError() from exception
         await self._session.refresh(execution_row)
         return self._execution_to_domain(execution_row)
 
@@ -163,26 +247,84 @@ class AgentActionRepository:
         outcome: str,
         result: dict | None,
         error_code: str | None,
+        provider_operation_id: str | None = None,
+        reconciliation_status: str | None = None,
+        audit_pending: bool = False,
     ) -> AgentActionExecutionResult:
-        statement = select(AgentActionExecutionORM).where(
-            AgentActionExecutionORM.proposal_id == proposal_id
+        now = _utcnow()
+        execution_update = (
+            update(AgentActionExecutionORM)
+            .where(
+                AgentActionExecutionORM.proposal_id == proposal_id,
+                AgentActionExecutionORM.outcome.in_(("executing", "reconciliation_required")),
+            )
+            .values(
+                outcome=outcome,
+                result_json=result,
+                error_code=error_code,
+                provider_operation_id=provider_operation_id,
+                reconciliation_status=reconciliation_status,
+                audit_pending=audit_pending,
+                completed_at=now if outcome in {"succeeded", "failed"} else None,
+                last_attempt_at=now,
+            )
         )
-        execution_result = await self._session.execute(statement)
-        execution_row = execution_result.scalar_one()
-        proposal_row = await self._session.get(AgentActionProposalORM, proposal_id)
-        completed_at = _utcnow()
-        execution_row.outcome = outcome
-        execution_row.result_json = result
-        execution_row.error_code = error_code
-        execution_row.completed_at = completed_at
-        if proposal_row is not None:
-            proposal_row.status = "succeeded" if outcome == "succeeded" else "failed"
+        execution_result = await self._session.execute(execution_update)
+        if execution_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
+        proposal_update = (
+            update(AgentActionProposalORM)
+            .where(
+                AgentActionProposalORM.id == proposal_id,
+                AgentActionProposalORM.status.in_(("executing", "reconciliation_required")),
+            )
+            .values(status=outcome, updated_at=now)
+        )
+        proposal_result = await self._session.execute(proposal_update)
+        if proposal_result.rowcount != 1:
+            await self._session.rollback()
+            raise AgentActionTransitionConflictError()
         await self._session.commit()
-        await self._session.refresh(execution_row)
-        return self._execution_to_domain(execution_row)
+        execution = await self.get_execution(proposal_id)
+        if execution is None:
+            raise AgentActionTransitionConflictError()
+        return execution
+
+    async def mark_audit_pending(self, proposal_id: str, pending: bool) -> None:
+        statement = (
+            update(AgentActionExecutionORM)
+            .where(AgentActionExecutionORM.proposal_id == proposal_id)
+            .values(audit_pending=pending)
+        )
+        await self._session.execute(statement)
+        await self._session.commit()
+
+    async def increment_reconciliation_attempt(self, proposal_id: str) -> None:
+        execution = await self.get_execution(proposal_id)
+        if execution is None:
+            raise AgentActionTransitionConflictError()
+        statement = (
+            update(AgentActionExecutionORM)
+            .where(AgentActionExecutionORM.proposal_id == proposal_id)
+            .values(
+                attempt_count=execution.attempt_count + 1,
+                last_attempt_at=_utcnow(),
+                reconciliation_status="checking",
+            )
+        )
+        await self._session.execute(statement)
+        await self._session.commit()
 
     @staticmethod
     def _proposal_to_domain(row: AgentActionProposalORM) -> AgentActionProposal:
+        policy_payload = dict(row.approval_policy_json or {})
+        if not policy_payload:
+            policy_payload = {
+                "self_approval_allowed": True,
+                "required_approver_permission": "organization.profile.update",
+                "minimum_approvals": 1,
+            }
         return AgentActionProposal(
             id=row.id,
             organization_id=row.organization_id,
@@ -197,7 +339,11 @@ class AgentActionRepository:
             resource_type=row.resource_type,
             resource_id=row.resource_id,
             status=row.status,
+            observed_resource_version=row.observed_resource_version,
+            approval_policy=AgentApprovalPolicy.model_validate(policy_payload),
             expires_at=row.expires_at,
+            cancelled_at=row.cancelled_at,
+            stale_at=row.stale_at,
             created_at=row.created_at,
         )
 
@@ -220,6 +366,11 @@ class AgentActionRepository:
             outcome=row.outcome,
             result=row.result_json,
             error_code=row.error_code,
+            attempt_count=row.attempt_count,
+            last_attempt_at=row.last_attempt_at,
+            provider_operation_id=row.provider_operation_id,
+            reconciliation_status=row.reconciliation_status,
+            audit_pending=row.audit_pending,
             started_at=row.started_at,
             completed_at=row.completed_at,
         )
