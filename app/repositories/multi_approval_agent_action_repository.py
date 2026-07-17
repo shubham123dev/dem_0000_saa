@@ -23,6 +23,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class MultiApprovalAgentActionRepository(AgentActionRepository):
     async def list_approvals(self, proposal_id: str) -> tuple[AgentActionApproval, ...]:
         rows = (
@@ -59,7 +65,7 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
         if (
             proposal is None
             or proposal.status != "pending_approval"
-            or proposal.expires_at <= now
+            or _as_aware(proposal.expires_at) <= now
         ):
             await self._session.rollback()
             raise AgentActionTransitionConflictError()
@@ -114,7 +120,7 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
         if (
             proposal is None
             or proposal.status != "approved"
-            or proposal.expires_at <= now
+            or _as_aware(proposal.expires_at) <= now
         ):
             await self._session.rollback()
             raise AgentActionTransitionConflictError()
