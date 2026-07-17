@@ -64,6 +64,26 @@ def downgrade() -> None:
     )
     op.drop_table("agent_action_rollbacks")
 
+    # Revision 0007 permits only one decision per proposal. Retain the earliest
+    # immutable decision deterministically before restoring that legacy shape.
+    op.execute(
+        sa.text(
+            "DELETE FROM agent_action_approvals "
+            "WHERE id NOT IN ("
+            "SELECT retained.id FROM ("
+            "SELECT a.id "
+            "FROM agent_action_approvals AS a "
+            "WHERE NOT EXISTS ("
+            "SELECT 1 FROM agent_action_approvals AS earlier "
+            "WHERE earlier.proposal_id = a.proposal_id "
+            "AND (earlier.decided_at < a.decided_at "
+            "OR (earlier.decided_at = a.decided_at AND earlier.id < a.id))"
+            ")"
+            ") AS retained"
+            ")"
+        )
+    )
+
     with op.batch_alter_table("agent_action_approvals") as batch_op:
         batch_op.drop_index("ix_agent_action_approval_progress")
         batch_op.drop_constraint(
