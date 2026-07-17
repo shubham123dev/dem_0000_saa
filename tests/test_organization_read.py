@@ -157,8 +157,8 @@ async def test_seed_is_idempotent(
     assert first == second
     assert first == {
         "orgs": 1,
-        "users": 6,
-        "memberships": 5,
+        "users": 8,
+        "memberships": 7,
         "pools": 1,
         "assignments": 3,
         "reports": 5,
