@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,6 +24,19 @@ class AgentPlan(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     tool_calls: tuple[AgentToolCall, ...] = Field(min_length=1, max_length=5)
+
+
+class AgentToolResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    tool_name: str
+    data: Any
+
+
+class AgentExecutionResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    results: tuple[AgentToolResult, ...]
 
 
 class AgentModelGateway(Protocol):
