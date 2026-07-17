@@ -31,6 +31,7 @@ from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
 from app.services.agent_action_service import AgentActionService
 from app.services.operational_resource_service import OperationalResourceService
+from app.services.stale_safe_agent_action_service import StaleSafeAgentActionService
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
@@ -68,7 +69,7 @@ def get_agent_action_service(
     action_registry: Annotated[AgentActionRegistry, Depends(get_agent_action_registry)],
     action_handlers: Annotated[dict[str, AgentActionHandler], Depends(get_agent_action_handlers)],
 ) -> AgentActionService:
-    return AgentActionService(
+    return StaleSafeAgentActionService(
         organization_gateway=MockOrganizationApiAdapter(api),
         permission_service=PermissionService(user_repository),
         action_repository=action_repository,
