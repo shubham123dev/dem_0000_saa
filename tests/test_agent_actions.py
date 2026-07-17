@@ -31,11 +31,16 @@ async def test_proposal_is_dry_run_and_does_not_mutate(
     admin_headers: dict[str, str],
 ) -> None:
     response = await _propose(client, admin_headers)
-
     assert response.status_code == 200
     proposal = response.json()["proposal"]
     assert proposal["status"] == "pending_approval"
     assert proposal["risk_level"] == "low"
+    assert proposal["observed_resource_version"] == 1
+    assert proposal["approval_policy"] == {
+        "self_approval_allowed": True,
+        "required_approver_permission": "organization.profile.update",
+        "minimum_approvals": 1,
+    }
     assert proposal["changes"] == [
         {
             "field": "contact_email",
@@ -58,7 +63,6 @@ async def test_reader_cannot_propose_action(
     reader_headers: dict[str, str],
 ) -> None:
     response = await _propose(client, reader_headers)
-
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "permission_denied"
 
@@ -69,13 +73,11 @@ async def test_execution_requires_explicit_approval(
 ) -> None:
     proposal_response = await _propose(client, admin_headers)
     proposal_id = proposal_response.json()["proposal"]["id"]
-
     execution_response = await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/execute",
         headers=admin_headers,
         json={"idempotency_key": "execution-without-approval"},
     )
-
     assert execution_response.status_code == 409
     assert execution_response.json()["error"]["code"] == "agent_action_state_conflict"
 
@@ -86,7 +88,6 @@ async def test_rejected_action_cannot_execute(
 ) -> None:
     proposal_response = await _propose(client, admin_headers)
     proposal_id = proposal_response.json()["proposal"]["id"]
-
     rejection_response = await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/reject",
         headers=admin_headers,
@@ -94,7 +95,6 @@ async def test_rejected_action_cannot_execute(
     )
     assert rejection_response.status_code == 200
     assert rejection_response.json()["approval"]["decision"] == "rejected"
-
     execution_response = await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/execute",
         headers=admin_headers,
@@ -111,7 +111,6 @@ async def test_approved_action_executes_idempotently_and_is_audited(
 ) -> None:
     proposal_response = await _propose(client, admin_headers)
     proposal_id = proposal_response.json()["proposal"]["id"]
-
     approval_response = await client.post(
         f"{ACTION_BASE_URL}/{proposal_id}/approve",
         headers=admin_headers,
@@ -129,10 +128,15 @@ async def test_approved_action_executes_idempotently_and_is_audited(
     execution = execution_response.json()["execution"]
     assert execution["outcome"] == "succeeded"
     assert execution["result"] == {
-        "organization_id": ORGANIZATION_ID,
-        "contact_email": "new.operations@example.test",
-        "version": 2,
+        "resource_type": "organization",
+        "resource_id": ORGANIZATION_ID,
+        "before": {"contact_email": "operations@example.test", "version": 1},
+        "after": {"contact_email": "new.operations@example.test", "version": 2},
+        "external_operation_id": None,
     }
+    assert execution["attempt_count"] == 1
+    assert execution["reconciliation_status"] == "not_required"
+    assert execution["audit_pending"] is False
 
     organization = await db_session.get(OrganizationORM, ORGANIZATION_ID)
     assert organization is not None
@@ -154,7 +158,7 @@ async def test_approved_action_executes_idempotently_and_is_audited(
         json={"idempotency_key": "contact-email-change-002"},
     )
     assert conflicting_response.status_code == 409
-    assert conflicting_response.json()["error"]["code"] == "agent_action_state_conflict"
+    assert conflicting_response.json()["error"]["code"] == "agent_action_idempotency_conflict"
 
     audit_result = await db_session.execute(
         select(AuditEventORM).where(
@@ -188,6 +192,5 @@ async def test_action_request_rejects_identity_and_unknown_fields(
             "approved": True,
         },
     )
-
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "Request validation failed."
