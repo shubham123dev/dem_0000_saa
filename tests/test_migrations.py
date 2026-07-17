@@ -9,11 +9,12 @@ import sys
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0007_complete_inverse_lifecycle"
+EXPECTED_HEAD = "0008_add_multi_approval_and_rollbacks"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "agent_action_approvals",
     "agent_action_executions",
     "agent_action_proposals",
+    "agent_action_rollbacks",
     "alembic_version",
     "audit_events",
     "organization_memberships",
@@ -77,10 +78,9 @@ def assert_head_and_operational_columns(connection: sqlite3.Connection) -> None:
     assert "version" in read_column_names(connection, "organization_memberships")
     assert "version" in read_column_names(connection, "organization_seat_pools")
     assert "version" in read_column_names(connection, "organization_report_access")
-    assert {
-        "version",
-        "revoked_by_user_id",
-    }.issubset(read_column_names(connection, "seat_assignments"))
+    assert {"version", "revoked_by_user_id"}.issubset(
+        read_column_names(connection, "seat_assignments")
+    )
     assert "ix_membership_lifecycle_lookup" in read_index_names(
         connection, "organization_memberships"
     )
@@ -90,6 +90,18 @@ def assert_head_and_operational_columns(connection: sqlite3.Connection) -> None:
     assert "ix_report_access_lifecycle_lookup" in read_index_names(
         connection, "organization_report_access"
     )
+    assert "ix_agent_action_approval_progress" in read_index_names(
+        connection, "agent_action_approvals"
+    )
+    assert "ix_agent_action_rollback_source" in read_index_names(
+        connection, "agent_action_rollbacks"
+    )
+    assert {
+        "source_proposal_id",
+        "rollback_proposal_id",
+        "created_by_user_id",
+        "created_at",
+    }.issubset(read_column_names(connection, "agent_action_rollbacks"))
     assert {
         "observed_resource_version",
         "approval_policy_json",
@@ -109,7 +121,6 @@ def test_fresh_database_upgrades_to_head_and_is_repeatable(tmp_path: Path) -> No
     database_file_path = tmp_path / "fresh.db"
     run_alembic(database_file_path, "head")
     run_alembic(database_file_path, "head")
-
     with sqlite3.connect(database_file_path) as connection:
         assert read_table_names(connection) == EXPECTED_DATABASE_TABLE_NAMES
         assert_head_and_operational_columns(connection)
@@ -121,13 +132,14 @@ def test_database_from_initial_revision_upgrades_to_operational_head(
     database_file_path = tmp_path / "initial.db"
     run_alembic(database_file_path, "0001_initial")
     run_alembic(database_file_path, "head")
-
     with sqlite3.connect(database_file_path) as connection:
         assert read_table_names(connection) == EXPECTED_DATABASE_TABLE_NAMES
         assert_head_and_operational_columns(connection)
 
 
-def test_0005_rows_are_preserved_through_0007_upgrade(tmp_path: Path) -> None:
+def test_0005_rows_and_approval_are_preserved_through_0008_upgrade(
+    tmp_path: Path,
+) -> None:
     database_file_path = tmp_path / "upgrade.db"
     run_alembic(database_file_path, "0005_harden_agent_action_lifecycle")
 
@@ -146,18 +158,22 @@ def test_0005_rows_are_preserved_through_0007_upgrade(tmp_path: Path) -> None:
                 "2026-01-01 00:00:00",
             ),
         )
-        connection.execute(
-            "INSERT INTO users(id, display_name, email, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                "usr_upgrade_001",
-                "Upgrade User",
-                "upgrade@example.test",
-                "active",
-                "2026-01-01 00:00:00",
-                "2026-01-01 00:00:00",
-            ),
-        )
+        for user_id, email in (
+            ("usr_upgrade_001", "upgrade@example.test"),
+            ("usr_upgrade_002", "upgrade2@example.test"),
+        ):
+            connection.execute(
+                "INSERT INTO users(id, display_name, email, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    user_id,
+                    user_id,
+                    email,
+                    "active",
+                    "2026-01-01 00:00:00",
+                    "2026-01-01 00:00:00",
+                ),
+            )
         connection.execute(
             "INSERT INTO organization_memberships(organization_id, user_id, role, membership_status, joined_at, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -246,11 +262,23 @@ def test_0005_rows_are_preserved_through_0007_upgrade(tmp_path: Path) -> None:
                 "2026-01-01 00:00:00",
             ),
         )
+        connection.execute(
+            "INSERT INTO agent_action_approvals(id, proposal_id, decision, decided_by_user_id, decided_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "approval_upgrade_001",
+                "proposal_upgrade_001",
+                "approved",
+                "usr_upgrade_001",
+                "2026-01-01 00:00:00",
+            ),
+        )
         connection.commit()
 
     run_alembic(database_file_path, "head")
 
     with sqlite3.connect(database_file_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
         assert_head_and_operational_columns(connection)
         assert connection.execute(
             "SELECT role, membership_status, version FROM organization_memberships"
@@ -267,6 +295,33 @@ def test_0005_rows_are_preserved_through_0007_upgrade(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT id, status FROM agent_action_proposals"
         ).fetchone() == ("proposal_upgrade_001", "approved")
+        assert connection.execute(
+            "SELECT id, decided_by_user_id FROM agent_action_approvals"
+        ).fetchone() == ("approval_upgrade_001", "usr_upgrade_001")
+
+        connection.execute(
+            "INSERT INTO agent_action_approvals(id, proposal_id, decision, decided_by_user_id, decided_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "approval_upgrade_002",
+                "proposal_upgrade_001",
+                "approved",
+                "usr_upgrade_002",
+                "2026-01-02 00:00:00",
+            ),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO agent_action_approvals(id, proposal_id, decision, decided_by_user_id, decided_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    "approval_duplicate",
+                    "proposal_upgrade_001",
+                    "approved",
+                    "usr_upgrade_001",
+                    "2026-01-03 00:00:00",
+                ),
+            )
 
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
