@@ -1,20 +1,19 @@
 """Alembic migration environment.
 
 Uses a synchronous SQLite engine (Alembic runs migrations synchronously). The
-target metadata is ``app.db.base.Base.metadata``; importing ``orm_models``
-registers all tables on that metadata.
+target metadata is ``app.db.base.Base.metadata``; importing ORM modules registers
+all tables on that metadata.
 """
 
 from __future__ import annotations
 
 from logging.config import fileConfig
-
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db import orm_models  # noqa: F401  (registers tables on Base.metadata)
+from app.db import action_models, orm_models  # noqa: F401
 
 config = context.config
 
@@ -23,15 +22,11 @@ if config.config_file_name is not None:
 
 
 def _sync_database_url() -> str:
-    """Return a synchronous SQLite URL derived from application settings."""
-
     url = get_settings().database_url
     return url.replace("+aiosqlite", "")
 
 
-# Prefer the application-configured database, falling back to alembic.ini.
 config.set_main_option("sqlalchemy.url", _sync_database_url())
-
 target_metadata = Base.metadata
 
 
