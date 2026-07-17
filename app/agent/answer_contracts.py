@@ -21,4 +21,18 @@ class AgentAnswerDraft(BaseModel):
 
 
 class AgentSynthesisResult(BaseModel):
-    model_config = ConfigDict
+    model_config = ConfigDict(frozen=True)
+
+    answer: str
+    evidence_ids: tuple[str, ...]
+    answer_source: Literal["model", "deterministic"]
+
+
+class AgentAnswerGateway(Protocol):
+    async def create_answer(
+        self,
+        *,
+        user_request: str,
+        evidence: tuple[AgentEvidenceItem, ...],
+    ) -> AgentAnswerDraft:
+        ...
