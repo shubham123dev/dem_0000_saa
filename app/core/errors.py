@@ -36,6 +36,7 @@ ERROR_CODES = frozenset(
         "agent_action_execution_in_progress",
         "agent_action_reconciliation_required",
         "agent_action_idempotency_conflict",
+        "agent_action_rollback_unavailable",
         "internal_error",
     }
 )
