@@ -21,6 +21,12 @@ class AgentActionStateConflictError(AppError):
     message = "Agent action is not in a valid state for this operation."
 
 
+class AgentActionLimitExceededError(AppError):
+    code = "agent_action_limit_exceeded"
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    message = "The action lifecycle limit has been reached."
+
+
 class AgentActionExpiredError(AppError):
     code = "agent_action_expired"
     status_code = status.HTTP_409_CONFLICT
