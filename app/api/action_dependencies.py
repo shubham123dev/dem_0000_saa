@@ -18,6 +18,9 @@ from app.permissions.permission_service import PermissionService
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.audit_repository import AuditRepository
 from app.repositories.user_repository import UserRepository
+from app.services.agent_action_reconciliation_service import (
+    AgentActionReconciliationService,
+)
 from app.services.agent_action_service import AgentActionService
 
 
@@ -64,7 +67,17 @@ def get_agent_action_service(
     )
 
 
+def get_agent_action_reconciliation_service(
+    action_service: Annotated[AgentActionService, Depends(get_agent_action_service)],
+) -> AgentActionReconciliationService:
+    return AgentActionReconciliationService(action_service)
+
+
 AgentActionServiceDep = Annotated[
     AgentActionService,
     Depends(get_agent_action_service),
+]
+AgentActionReconciliationServiceDep = Annotated[
+    AgentActionReconciliationService,
+    Depends(get_agent_action_reconciliation_service),
 ]
