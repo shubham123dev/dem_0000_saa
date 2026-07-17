@@ -78,7 +78,8 @@ class OpenAIResponsesAgentModelGateway:
                                 "Create a read-only tool plan. Use only tools from the "
                                 "provided catalog. Never invent tools or arguments. Never "
                                 "include organization_id, user_id, roles, permissions, or "
-                                "authorization decisions. Return between one and five calls."
+                                "authorization decisions. Return between one and five calls. "
+                                "Set report_id to null for tools that do not require it."
                             ),
                         }
                     ],
@@ -121,7 +122,13 @@ class OpenAIResponsesAgentModelGateway:
                                         "tool_name": {"type": "string"},
                                         "arguments": {
                                             "type": "object",
-                                            "additionalProperties": {"type": "string"},
+                                            "additionalProperties": False,
+                                            "required": ["report_id"],
+                                            "properties": {
+                                                "report_id": {
+                                                    "type": ["string", "null"]
+                                                }
+                                            },
                                         },
                                     },
                                 },
@@ -201,6 +208,17 @@ class OpenAIResponsesAgentModelGateway:
                     raise AgentModelResponseInvalidError()
                 try:
                     plan_payload = json.loads(output_text)
+                    tool_calls = plan_payload.get("tool_calls")
+                    if not isinstance(tool_calls, list):
+                        raise AgentModelResponseInvalidError()
+                    for tool_call in tool_calls:
+                        if not isinstance(tool_call, dict):
+                            raise AgentModelResponseInvalidError()
+                        arguments = tool_call.get("arguments")
+                        if not isinstance(arguments, dict):
+                            raise AgentModelResponseInvalidError()
+                        if arguments.get("report_id") is None:
+                            arguments.pop("report_id", None)
                     return AgentPlan.model_validate(plan_payload)
                 except (json.JSONDecodeError, ValidationError) as exception:
                     raise AgentModelResponseInvalidError() from exception
