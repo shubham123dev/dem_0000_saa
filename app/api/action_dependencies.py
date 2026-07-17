@@ -32,7 +32,6 @@ from app.repositories.multi_approval_agent_action_repository import (
 )
 from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
-from app.services.agent_action_service import AgentActionService
 from app.services.operational_resource_service import OperationalResourceService
 from app.services.stale_safe_agent_action_service import StaleSafeAgentActionService
 
@@ -71,7 +70,7 @@ def get_agent_action_service(
     action_repository: Annotated[AgentActionRepository, Depends(get_agent_action_repository)],
     action_registry: Annotated[AgentActionRegistry, Depends(get_agent_action_registry)],
     action_handlers: Annotated[dict[str, AgentActionHandler], Depends(get_agent_action_handlers)],
-) -> AgentActionService:
+) -> StaleSafeAgentActionService:
     return StaleSafeAgentActionService(
         organization_gateway=MockOrganizationApiAdapter(api),
         permission_service=PermissionService(user_repository),
@@ -83,12 +82,18 @@ def get_agent_action_service(
 
 
 def get_agent_action_reconciliation_service(
-    action_service: Annotated[AgentActionService, Depends(get_agent_action_service)],
+    action_service: Annotated[
+        StaleSafeAgentActionService,
+        Depends(get_agent_action_service),
+    ],
 ) -> AgentActionReconciliationService:
     return AgentActionReconciliationService(action_service)
 
 
-AgentActionServiceDep = Annotated[AgentActionService, Depends(get_agent_action_service)]
+AgentActionServiceDep = Annotated[
+    StaleSafeAgentActionService,
+    Depends(get_agent_action_service),
+]
 AgentActionReconciliationServiceDep = Annotated[
     AgentActionReconciliationService,
     Depends(get_agent_action_reconciliation_service),
