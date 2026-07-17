@@ -22,7 +22,6 @@ class AgentQueryRequest(BaseModel):
 class AgentToolResultOut(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    evidence_id: str
     tool_name: str
     data: Any
 
