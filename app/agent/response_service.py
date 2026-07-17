@@ -8,6 +8,7 @@ from app.agent.orchestrator import ReadOnlyAgentOrchestrator
 from app.agent.synthesis import AgentAnswerSynthesisService
 from app.domain.models import User
 from app.services.agent_action_service import AgentActionService
+from app.services.agent_preflight_service import AgentAuthorizationPreflightService
 
 
 class ReadOnlyAgentResponseService:
@@ -18,11 +19,13 @@ class ReadOnlyAgentResponseService:
         evidence_compiler: AgentEvidenceCompiler,
         synthesis_service: AgentAnswerSynthesisService,
         action_service: AgentActionService,
+        preflight_service: AgentAuthorizationPreflightService,
     ) -> None:
         self._orchestrator = orchestrator
         self._evidence_compiler = evidence_compiler
         self._synthesis_service = synthesis_service
         self._action_service = action_service
+        self._preflight_service = preflight_service
 
     async def execute(
         self,
@@ -32,6 +35,10 @@ class ReadOnlyAgentResponseService:
         user_request: str,
         request_id: str | None = None,
     ) -> AgentQueryCompletion:
+        await self._preflight_service.authorize(
+            user=user,
+            organization_id=organization_id,
+        )
         agent_plan = await self._orchestrator.create_plan(user_request=user_request)
         if agent_plan.intent == "action_proposal":
             provenance = {
