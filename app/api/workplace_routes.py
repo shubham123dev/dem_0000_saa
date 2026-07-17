@@ -1,11 +1,4 @@
-"""Workplace-Agent tool routes (read-only, permission-enforced).
-
-These are the enforced Workplace-Agent tools. Unlike the raw ``/mock-api/v1``
-surface, every endpoint here resolves the org, blocks production, and authorizes
-the user (active membership + required permission) before returning data.
-
-Step 0 exposes only GET endpoints. No POST/PATCH/PUT/DELETE routes exist.
-"""
+"""Permission-enforced Workplace Agent read routes."""
 
 from __future__ import annotations
 
@@ -17,6 +10,7 @@ from app.schemas.audit import AuditEventOut, AuditLogResponse
 from app.schemas.organization import (
     OrganizationAccessOut,
     OrganizationOut,
+    OrganizationOverviewResponse,
     OrganizationProfileResponse,
 )
 from app.schemas.report import (
@@ -28,6 +22,30 @@ from app.schemas.seat import OrganizationSeatsResponse, SeatSummaryOut
 from app.schemas.user import OrganizationMemberOut, OrganizationUsersResponse
 
 router = APIRouter(prefix="/workplace/organizations", tags=["workplace"])
+
+
+@router.get(
+    "/{organization_id}/overview",
+    response_model=OrganizationOverviewResponse,
+)
+async def get_organization_overview(
+    organization_id: str,
+    user: UserDep,
+    service: OrganizationServiceDep,
+) -> OrganizationOverviewResponse:
+    """Tool: ``get_organization_overview``."""
+
+    overview, access = await service.read_overview(
+        user=user,
+        organization_id=organization_id,
+    )
+    return OrganizationOverviewResponse.from_domain(
+        overview,
+        access=OrganizationAccessOut(
+            user_id=access.user_id,
+            permission=Permission.ORGANIZATION_PROFILE_READ.value,
+        ),
+    )
 
 
 @router.get("/{organization_id}/profile", response_model=OrganizationProfileResponse)

@@ -187,7 +187,7 @@ async def test_audit_replay_clears_pending_without_repeating_mutation(
     assert replay_event.details_json["proposal_id"] == proposal_id
 
 
-async def test_detailed_readiness_reports_checks_without_secrets(
+async def test_detailed_readiness_reports_latest_schema_without_secrets(
     client: AsyncClient,
 ) -> None:
     response = await client.get("/ready/details")
@@ -197,7 +197,7 @@ async def test_detailed_readiness_reports_checks_without_secrets(
     assert body["checks"]["database_connected"] is True
     assert body["checks"]["registry_handler_parity"] is True
     assert body["checks"]["action_management_permissions_seeded"] is True
-    assert body["migration"]["expected"] == "0009_operational_hardening"
+    assert body["migration"]["expected"] == "0010_add_organization_overview"
     assert body["actions"] == {"registered": 9, "handlers": 9}
     assert body["limits"]["maximum_page_size"] >= 1
     response_text = response.text.lower()

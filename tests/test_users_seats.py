@@ -10,30 +10,33 @@ from app.db.orm_models import OrganizationSeatPoolORM, SeatAssignmentORM
 USERS_URL = "/workplace/organizations/org_sandbox_001/users"
 SEATS_URL = "/workplace/organizations/org_sandbox_001/seats"
 
+EXPECTED_MEMBER_IDS = {
+    "usr_admin_001",
+    "usr_approval_admin_001",
+    "usr_approval_admin_002",
+    "usr_member_001",
+    "usr_member_002",
+    "usr_member_003",
+    "usr_invited_001",
+}
+
 
 async def test_list_users_returns_all_memberships(
     client: AsyncClient,
     admin_headers: dict[str, str],
 ) -> None:
     response = await client.get(USERS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     response_body = response.json()
     assert response_body["access"]["permission"] == "organization.users.read"
 
     organization_members = response_body["members"]
-    assert len(organization_members) == 5
+    assert len(organization_members) == 7
     organization_member_by_user_id = {
         organization_member["user_id"]: organization_member
         for organization_member in organization_members
     }
-    assert set(organization_member_by_user_id) == {
-        "usr_admin_001",
-        "usr_member_001",
-        "usr_member_002",
-        "usr_member_003",
-        "usr_invited_001",
-    }
+    assert set(organization_member_by_user_id) == EXPECTED_MEMBER_IDS
 
 
 async def test_users_and_seats_are_distinct(
@@ -47,6 +50,14 @@ async def test_users_and_seats_are_distinct(
     }
 
     assert organization_member_by_user_id["usr_admin_001"]["has_active_seat"] is True
+    assert (
+        organization_member_by_user_id["usr_approval_admin_001"]["has_active_seat"]
+        is False
+    )
+    assert (
+        organization_member_by_user_id["usr_approval_admin_002"]["has_active_seat"]
+        is False
+    )
     assert organization_member_by_user_id["usr_member_001"]["has_active_seat"] is True
     assert organization_member_by_user_id["usr_member_002"]["has_active_seat"] is True
     assert organization_member_by_user_id["usr_member_003"]["has_active_seat"] is False
@@ -54,7 +65,10 @@ async def test_users_and_seats_are_distinct(
         organization_member_by_user_id["usr_invited_001"]["membership_status"]
         == "invited"
     )
-    assert organization_member_by_user_id["usr_invited_001"]["has_active_seat"] is False
+    assert (
+        organization_member_by_user_id["usr_invited_001"]["has_active_seat"]
+        is False
+    )
 
 
 async def test_seat_summary_is_computed(
@@ -62,7 +76,6 @@ async def test_seat_summary_is_computed(
     admin_headers: dict[str, str],
 ) -> None:
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["seat_type"] == "standard"
@@ -90,7 +103,6 @@ async def test_suspended_seat_pool_returns_zero_entitlement(
     await db_session.commit()
 
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["total_seats"] == 0
@@ -113,7 +125,6 @@ async def test_expired_seat_pool_returns_zero_entitlement(
     await db_session.commit()
 
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["total_seats"] == 0
@@ -135,7 +146,6 @@ async def test_future_seat_pool_returns_zero_entitlement(
     await db_session.commit()
 
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["total_seats"] == 0
@@ -157,7 +167,6 @@ async def test_available_seats_never_becomes_negative(
     await db_session.commit()
 
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["total_seats"] == 1
@@ -184,7 +193,6 @@ async def test_invited_membership_seat_assignment_is_not_counted(
     await db_session.commit()
 
     response = await client.get(SEATS_URL, headers=admin_headers)
-
     assert response.status_code == 200
     seat_summary = response.json()["seats"]
     assert seat_summary["active_assignments"] == 3
@@ -195,7 +203,10 @@ async def test_invited_membership_seat_assignment_is_not_counted(
         organization_member["user_id"]: organization_member
         for organization_member in users_response.json()["members"]
     }
-    assert organization_member_by_user_id["usr_invited_001"]["has_active_seat"] is False
+    assert (
+        organization_member_by_user_id["usr_invited_001"]["has_active_seat"]
+        is False
+    )
 
 
 async def test_members_can_exceed_seated_users(

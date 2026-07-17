@@ -1,4 +1,4 @@
-"""Organization service for the Step 0 read-only workplace tools."""
+"""Organization service for permission-enforced workplace read tools."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from app.domain.enums import Environment, OrganizationStatus, Permission
 from app.domain.models import (
     AuditEvent,
     OrganizationMember,
+    OrganizationOverview,
     OrganizationProfile,
     ReportAccessDecision,
     ReportWithAccess,
@@ -54,6 +55,47 @@ class OrganizationService:
             required_permission=required_permission,
         )
         return organization_profile, access_context
+
+    async def read_overview(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+    ) -> tuple[OrganizationOverview, AccessContext]:
+        """Read the complete overview card contract for the Nucleus dashboard.
+
+        The profile/environment guard is intentionally resolved before the detailed
+        overview call. A future external adapter therefore cannot return detailed
+        production data before the Workplace boundary has blocked the request.
+        """
+
+        required_permission = Permission.ORGANIZATION_PROFILE_READ.value
+        _, access_context = await self._resolve_organization_and_authorize_user(
+            user=user,
+            organization_id=organization_id,
+            required_permission=required_permission,
+        )
+        overview = await self._organization_gateway.get_overview(organization_id)
+        await self._audit_repository.append(
+            actor_user_id=user.id,
+            organization_id=organization_id,
+            event_type="organization.overview.read",
+            operation="read",
+            outcome="success",
+            resource_type="organization_overview",
+            resource_id=organization_id,
+            details={
+                "permission": required_permission,
+                "tool": "get_organization_overview",
+                "licensed_modules": overview.metrics.licensed_modules,
+                "available_areas": overview.metrics.available_areas,
+                "organization_logins": overview.metrics.organization_logins,
+                "workspace_health_percent": (
+                    overview.metrics.workspace_health_percent
+                ),
+            },
+        )
+        return overview, access_context
 
     async def read_profile(
         self,

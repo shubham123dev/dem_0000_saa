@@ -214,9 +214,11 @@ async def test_provider_schema_excludes_execution_and_authorization_state() -> N
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured_request.update(json.loads(request.content))
+        plan = read_plan("get_organization_profile")
+        plan["tool_calls"][0]["arguments"] = {}
         return httpx.Response(
             200,
-            json=response_payload(read_plan("get_organization_profile")),
+            json=response_payload(plan),
         )
 
     gateway = build_gateway(httpx.MockTransport(handler))

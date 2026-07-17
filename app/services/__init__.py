@@ -1,1 +1,1 @@
-"""Service layer: orchestrates the Step 0 read flow."""
+"""Service layer for permission-enforced reads and controlled action lifecycles."""

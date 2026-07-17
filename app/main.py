@@ -6,6 +6,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 
+from app import __version__
 from app.api import action_routes, agent_routes, health_routes, workplace_routes
 from app.core.config import get_settings
 from app.core.errors import REQUEST_ID_HEADER, register_exception_handlers
@@ -17,10 +18,11 @@ def create_app() -> FastAPI:
 
     application = FastAPI(
         title=settings.app_name,
-        version="0.0.1",
+        version=__version__,
         description=(
-            "DBMR Workplace Agent sandbox foundation with read-only tools and "
-            "explicit approval-gated sandbox actions. Production access is blocked."
+            "DBMR Workplace Agent sandbox with stable organization reads, "
+            "grounded chat planning and explicit approval-gated actions. "
+            "Production organization access is blocked."
         ),
     )
 

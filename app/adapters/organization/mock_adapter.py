@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.domain.models import (
     OrganizationMember,
+    OrganizationOverview,
     OrganizationProfile,
     ReportAccessDecision,
     ReportWithAccess,
@@ -16,6 +17,9 @@ class MockOrganizationApiAdapter:
 
     async def get_profile(self, organization_id: str) -> OrganizationProfile:
         return await self._api.get_organization(organization_id)
+
+    async def get_overview(self, organization_id: str) -> OrganizationOverview:
+        return await self._api.get_overview(organization_id)
 
     async def list_members(self, organization_id: str) -> list[OrganizationMember]:
         return await self._api.list_users(organization_id)

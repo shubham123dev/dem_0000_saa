@@ -1,4 +1,5 @@
 """Health, readiness, and capability routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -15,7 +16,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0009_operational_hardening"
+EXPECTED_MIGRATION_HEAD = "0010_add_organization_overview"
 
 
 @router.get("/health")

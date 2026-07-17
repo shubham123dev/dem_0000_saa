@@ -1,0 +1,42 @@
+# File manifest
+
+Complete replacement/new files relative to repository root:
+
+- `APPLY_AND_VALIDATE.md`
+- `README.md`
+- `SOURCE_STATE_AUDIT.md`
+- `alembic/versions/0010_add_organization_overview.py`
+- `app/__init__.py`
+- `app/adapters/organization/__init__.py`
+- `app/adapters/organization/contract.py`
+- `app/adapters/organization/mock_adapter.py`
+- `app/agent/orchestrator.py`
+- `app/agent/tool_registry.py`
+- `app/api/health_routes.py`
+- `app/api/workplace_routes.py`
+- `app/db/orm_models.py`
+- `app/db/seed.py`
+- `app/domain/enums.py`
+- `app/domain/models.py`
+- `app/main.py`
+- `app/mock_api/routes.py`
+- `app/mock_api/service.py`
+- `app/repositories/organization_overview_repository.py`
+- `app/schemas/organization.py`
+- `app/services/__init__.py`
+- `app/services/organization_service.py`
+- `docs/AGENT_TOOL_CONTRACTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/ORGANIZATION_API_CONTRACTS.md`
+- `docs/SECURITY_MODEL.md`
+- `docs/WORKPLACE_REQUIREMENTS.md`
+- `pyproject.toml`
+- `tests/test_agent_api.py`
+- `tests/test_agent_orchestrator.py`
+- `tests/test_health.py`
+- `tests/test_migrations.py`
+- `tests/test_mock_api.py`
+- `tests/test_operational_hardening.py`
+- `tests/test_organization_overview.py`
+- `tests/test_organization_read.py`
+- `tests/test_users_seats.py`

@@ -6,7 +6,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.contracts import AgentPlan, AgentToolCall
-from app.api.agent_dependencies import get_agent_model_gateway
+from app.api.agent_dependencies import (
+    UnavailableAgentModelGateway,
+    get_agent_model_gateway,
+)
 from app.db.orm_models import OrganizationORM
 from app.main import app
 
@@ -21,6 +24,15 @@ EXPECTED_ACTION_NAMES = {
     "revoke_organization_seat",
     "grant_organization_report_access",
     "revoke_organization_report_access",
+}
+EXPECTED_TOOL_NAMES = {
+    "get_organization_overview",
+    "get_organization_profile",
+    "list_organization_users",
+    "get_organization_seat_summary",
+    "list_organization_reports",
+    "check_organization_report_access",
+    "get_organization_audit_log",
 }
 
 
@@ -46,45 +58,43 @@ def override_agent_model(agent_plan: AgentPlan) -> FixedAgentModelGateway:
     return gateway
 
 
-async def test_agent_query_returns_grounded_profile_result(
+async def test_agent_query_returns_grounded_overview_result(
     client: AsyncClient,
     admin_headers: dict[str, str],
 ) -> None:
     gateway = override_agent_model(
-        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_overview"),))
     )
     response = await client.post(
         AGENT_QUERY_URL,
         headers=admin_headers,
-        json={"query": "Show the organization profile"},
+        json={"query": "Show the organization overview"},
     )
 
     assert response.status_code == 200
     assert gateway.plan_call_count == 1
-    assert set(gateway.received_tool_names) == {
-        "get_organization_profile",
-        "list_organization_users",
-        "get_organization_seat_summary",
-        "list_organization_reports",
-        "check_organization_report_access",
-        "get_organization_audit_log",
-    }
+    assert set(gateway.received_tool_names) == EXPECTED_TOOL_NAMES
     assert set(gateway.received_action_names) == EXPECTED_ACTION_NAMES
     body = response.json()
     assert body["mode"] == "read"
     assert body["action_proposal"] is None
     assert body["organization_id"] == "org_sandbox_001"
-    assert body["results"][0]["tool_name"] == "get_organization_profile"
-    assert body["results"][0]["data"]["id"] == "org_sandbox_001"
+    assert body["results"][0]["tool_name"] == "get_organization_overview"
+    overview = body["results"][0]["data"]
+    assert overview["organization"]["id"] == "org_sandbox_001"
+    assert overview["organization_type"] == "organization"
+    assert overview["renewal_date"] == "2026-11-26"
+    assert overview["workspace_status"] == "healthy"
+    assert overview["metrics"]["workspace_health_percent"] == 98
 
 
 async def test_agent_query_requires_authentication(client: AsyncClient) -> None:
     override_agent_model(
-        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_overview"),))
     )
     response = await client.post(
         AGENT_QUERY_URL,
-        json={"query": "Show the organization profile"},
+        json={"query": "Show the organization overview"},
     )
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthenticated"
@@ -111,7 +121,7 @@ async def test_agent_query_uses_backend_organization_scope(
     )
     await db_session.commit()
     override_agent_model(
-        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),))
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_overview"),))
     )
     response = await client.post(
         "/workplace/organizations/org_sandbox_unavailable/agent/query",
@@ -146,7 +156,7 @@ async def test_agent_query_rejects_model_supplied_identity(
         AgentPlan(
             tool_calls=(
                 AgentToolCall(
-                    tool_name="get_organization_profile",
+                    tool_name="get_organization_overview",
                     arguments={"organization_id": "org_other_001"},
                 ),
             )
@@ -165,10 +175,13 @@ async def test_agent_query_returns_unavailable_without_configured_model(
     client: AsyncClient,
     admin_headers: dict[str, str],
 ) -> None:
+    app.dependency_overrides[get_agent_model_gateway] = (
+        lambda: UnavailableAgentModelGateway()
+    )
     response = await client.post(
         AGENT_QUERY_URL,
         headers=admin_headers,
-        json={"query": "Show the organization profile"},
+        json={"query": "Show the organization overview"},
     )
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "agent_model_unavailable"
@@ -182,7 +195,7 @@ async def test_agent_query_rejects_invalid_request_bodies(
         {"query": ""},
         {"query": "   "},
         {"query": "x" * 4001},
-        {"query": "Show profile", "organization_id": "org_other_001"},
+        {"query": "Show overview", "organization_id": "org_other_001"},
     ):
         response = await client.post(
             AGENT_QUERY_URL,

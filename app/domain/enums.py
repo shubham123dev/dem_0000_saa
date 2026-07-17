@@ -22,6 +22,13 @@ class OrganizationStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
+class WorkspaceHealthStatus(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+
+
 class UserStatus(str, Enum):
     ACTIVE = "active"
     DISABLED = "disabled"

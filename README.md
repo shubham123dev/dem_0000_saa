@@ -1,6 +1,6 @@
 # DBMR Workplace Agent — Sandbox Backend
 
-This repository is a separate backend for the DBMR Workplace Agent. The existing SARA/chatbot codebase remains unchanged and is not integrated here.
+This repository is a standalone sandbox backend for the DBMR Workplace Agent. It exposes permission-enforced organization reads and approval-gated administrative actions while keeping the existing SARA/chatbot repository unchanged.
 
 ## Runtime model
 
@@ -12,22 +12,25 @@ X-Mock-User-Id
 → backend-owned action-management permission
 → sandbox and organization-status guard
 → one structured planner call
-→ read execution or immutable action proposal
+→ authorized read execution or immutable action proposal
 → policy-controlled approval threshold
 → version-checked execution
-→ verification, audit and reconciliation
+→ verification, audit, reconciliation and optional rollback proposal
 ```
 
 Production organizations are blocked. Model output cannot provide organization scope, actor identity, permissions, approval state, proposal IDs, execution commands or idempotency keys.
 
 ## Read capabilities
 
+- `get_organization_overview`
 - `get_organization_profile`
 - `list_organization_users`
 - `get_organization_seat_summary`
 - `list_organization_reports`
 - `check_organization_report_access`
 - `get_organization_audit_log`
+
+The overview contract is the stable backend surface for the Nucleus Overview page. It contains organization identity, renewal date, workspace status, licensed modules, available areas, organization login count and workspace health. The frontend and chat consume the same contract.
 
 ## Approval-gated actions
 
@@ -54,97 +57,81 @@ dry-run proposal
 → success, failure, stale or reconciliation-required outcome
 ```
 
-Low- and medium-risk actions require one approval. High-risk role changes and member removals require two distinct approvers and disallow requester self-approval. A rejection closes the proposal immediately. All approved decisions are consumed atomically when execution starts.
+Low- and medium-risk actions require one approval. High-risk role changes and member removals require two distinct approvers and disallow requester self-approval. A rejection closes the proposal immediately. Natural-language requests can create proposals but cannot approve or execute them.
 
-Natural-language requests may create proposals but never approve or execute them.
-
-## Action-management permissions
-
-Lifecycle access is separate from resource authorization:
-
-- `agent.actions.read`
-- `agent.actions.approve`
-- `agent.actions.execute`
-- `agent.actions.reconcile`
-
-A management permission never replaces the selected action's permission. For example, execution of a seat revocation requires both `agent.actions.execute` and `organization.seats.revoke`.
-
-## Rollback proposals
-
-A successful reversible action can generate a new rollback proposal:
+## Overview vertical slice
 
 ```text
-successful source action
-→ inspect stored before/after result
-→ build existing inverse action
-→ persist rollback lineage
-→ normal permission and dry-run validation
-→ normal approval threshold
-→ normal version-checked execution
+GET /workplace/organizations/{organization_id}/overview
+→ organization.profile.read authorization
+→ stable OrganizationOverview response
+→ append-only organization.overview.read audit event
 ```
 
-Rollback never executes automatically. Unsupported or incomplete inverse operations return `agent_action_rollback_unavailable` rather than guessing prior state.
+The existing contact-email action completes the first Cloudflare-style demonstration:
 
-## Operational hardening
-
-- Proposal lists use bounded cursor pagination and optional status, action and requester filters.
-- Pending proposal limits apply per organization and per requester.
-- Proposal rate limits apply per requester per minute.
-- Reconciliation and audit replay have bounded retry counts.
-- Audit replay writes only a recovery audit event; it never repeats the business mutation.
-- A failed execution-start audit remains `audit_pending` after successful mutation completion until replay succeeds.
-- `/ready/details` checks migration head, sandbox mode, registry/handler parity, management permissions and audit backlog without exposing secrets.
-- The deterministic sandbox seed contains three independent administrators so two-person approval policies are usable immediately.
-
-## Operational invariants
-
-- Membership activation is allowed only from `invited` to `active`.
-- Membership role changes are version checked.
-- The final active organization administrator cannot be demoted or removed.
-- A member with an active seat must be unseated before membership removal.
-- Membership, seat and report-access history is preserved through status changes; rows are not deleted.
-- Seat assignment and revocation use versioned conditional updates.
-- Report grants and revocations use versioned conditional updates.
-- An approved proposal whose reviewed resource changes becomes `stale` rather than producing an internal error.
-- One approver can record only one decision per proposal.
-- Rollback lineage is immutable and links source and rollback proposals.
-
-## Guardrails
-
-- Sandbox only; production access is denied.
-- No arbitrary SQL, arbitrary URL/HTTP, shell or browser tool.
-- No frontend code.
-- No production credentials or real employee data.
-- Permissions are loaded from backend role data.
-- Approval policy is owned by the action registry.
-- Concurrent approval and execution transitions use conditional database updates.
-- Successful mutations are not reversed when audit persistence fails.
-- Uncertain outcomes are reconciled by inspection without repeating an unapproved mutation.
-
-## Setup
-
-```bash
-python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-# macOS/Linux
-source .venv/bin/activate
-
-pip install -e ".[dev]"
-copy .env.example .env   # Windows
-# cp .env.example .env  # macOS/Linux
+```text
+read overview
+→ propose contact-email change
+→ approve or reject
+→ execute once
+→ re-read overview
+→ verify exact before/after state
+→ inspect audit history
 ```
+
+## Adapter boundary
+
+```text
+Workplace routes and agent tools
+        ↓
+OrganizationApiGateway
+        ├── MockOrganizationApiAdapter       current sandbox
+        └── NucleusOrganizationApiAdapter    future real integration
+```
+
+The future Nucleus adapter maps its real wire schema into the stable domain contracts. Frontend and agent code do not depend on raw Nucleus field names.
 
 ## Database
 
-Alembic is the only application schema authority:
+Alembic is the only schema authority. The current migration head is:
+
+```text
+0010_add_organization_overview
+```
+
+The sandbox has 14 application tables: the original organization/user/seat/report/audit tables, four action-lifecycle tables and `organization_overviews`.
 
 ```bash
 alembic upgrade head
 python -m app.db.seed
 ```
 
-The current migration head is `0009_operational_hardening`. The deterministic seed is idempotent and does not call `create_all()`.
+The seed is deterministic and idempotent. It contains one sandbox organization, a complete overview record, three administrators, three active reader members, one invited member, one outsider, five seats, three active assignments, five reports and three report grants.
+
+## Setup
+
+```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+Copy-Item .env.example .env
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+cp .env.example .env
+```
 
 ## Run
 
@@ -152,7 +139,7 @@ The current migration head is `0009_operational_hardening`. The deterministic se
 uvicorn app.main:app --reload
 ```
 
-The raw mock Nucleus API is disabled by default. Enable it only for isolated sandbox contract testing:
+Enable the unauthenticated raw mock system-of-record routes only for isolated local contract testing:
 
 ```env
 WORKPLACE_ENABLE_RAW_MOCK_API=true
@@ -163,22 +150,29 @@ WORKPLACE_ENABLE_RAW_MOCK_API=true
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | Liveness |
-| GET | `/ready` | Database connectivity readiness |
-| GET | `/ready/details` | Release-readiness details without secrets |
+| GET | `/ready` | Database connectivity |
+| GET | `/ready/details` | Release-readiness checks without secrets |
 | GET | `/workplace/capabilities` | Read tools, action catalogue and approval policies |
-| POST | `/workplace/organizations/{organization_id}/agent/query` | Read plan or dry-run action proposal |
+| GET | `/workplace/organizations/{organization_id}/overview` | Complete Overview page contract |
+| GET | `/workplace/organizations/{organization_id}/profile` | Organization profile |
+| GET | `/workplace/organizations/{organization_id}/users` | Users and memberships |
+| GET | `/workplace/organizations/{organization_id}/seats` | Seat summary |
+| GET | `/workplace/organizations/{organization_id}/reports` | Reports with organization access |
+| GET | `/workplace/organizations/{organization_id}/reports/{report_id}/access` | Exact report-access decision |
+| GET | `/workplace/organizations/{organization_id}/audit-log` | Organization audit log |
+| POST | `/workplace/organizations/{organization_id}/agent/query` | Natural-language read or dry-run proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/propose` | Explicit dry-run proposal |
-| GET | `/workplace/organizations/{organization_id}/agent/actions` | Bounded cursor-paginated proposal list |
+| GET | `/workplace/organizations/{organization_id}/agent/actions` | Bounded proposal list |
 | GET | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}` | Read a proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Record one approver decision |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Reject and close proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel` | Cancel pending/approved proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal` | Create a separately approved inverse proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Single-use threshold-gated execution |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Record approval |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Reject proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel` | Cancel proposal |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Threshold-gated execution |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile` | Inspect uncertain outcome |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal` | Prepare inverse proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/audit-replay` | Retry audit persistence only |
 
-All organization endpoints require `X-Mock-User-Id` except health, readiness and capabilities.
+All organization-scoped Workplace endpoints require `X-Mock-User-Id`.
 
 ## Validation
 
@@ -189,9 +183,4 @@ python -m app.db.seed
 pytest -q
 ```
 
-The GitHub Actions workflow runs on `main`, pull requests and manual `workflow_dispatch`, across Python 3.11 and 3.12. Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
-
-
-.\.venv\Scripts\uvicorn.exe app.main:app --reload
-
-
+The GitHub Actions workflow should run the same backend validation on Python 3.11 and 3.12. Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.

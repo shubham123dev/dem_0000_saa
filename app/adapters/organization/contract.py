@@ -4,6 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from app.domain.models import (
     OrganizationMember,
+    OrganizationOverview,
     OrganizationProfile,
     ReportAccessDecision,
     ReportWithAccess,
@@ -14,6 +15,9 @@ from app.domain.models import (
 @runtime_checkable
 class OrganizationApiGateway(Protocol):
     async def get_profile(self, organization_id: str) -> OrganizationProfile:
+        ...
+
+    async def get_overview(self, organization_id: str) -> OrganizationOverview:
         ...
 
     async def list_members(self, organization_id: str) -> list[OrganizationMember]:

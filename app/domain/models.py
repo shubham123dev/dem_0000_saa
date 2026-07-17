@@ -9,7 +9,7 @@ database is later replaced by the real Nucleus organization API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from app.domain.enums import (
     Environment,
@@ -20,6 +20,7 @@ from app.domain.enums import (
     ReportStatus,
     SeatType,
     UserStatus,
+    WorkspaceHealthStatus,
 )
 
 
@@ -35,6 +36,29 @@ class OrganizationProfile:
     status: OrganizationStatus
     version: int
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class OrganizationOverviewMetrics:
+    """Backend-owned metrics displayed on the organization overview page."""
+
+    licensed_modules: int
+    available_areas: int
+    organization_logins: int
+    workspace_health_percent: int
+
+
+@dataclass(frozen=True)
+class OrganizationOverview:
+    """Stable overview contract independent of the future Nucleus wire schema."""
+
+    organization: OrganizationProfile
+    organization_type: str
+    renewal_date: date | None
+    workspace_status: WorkspaceHealthStatus
+    metrics: OrganizationOverviewMetrics
+    version: int
     updated_at: datetime | None = None
 
 
@@ -122,7 +146,7 @@ class ReportAccessDecision:
 
 @dataclass(frozen=True)
 class AuditEvent:
-    """An append-only record of a read (or, in later steps, write) action."""
+    """An append-only record of a read or controlled action."""
 
     id: str
     actor_user_id: str

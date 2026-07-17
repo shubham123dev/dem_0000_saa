@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.action_contracts import AgentActionProposalInput
 from app.agent.contracts import AgentPlan
-from app.api.agent_dependencies import get_agent_answer_gateway, get_agent_model_gateway
+from app.api.agent_dependencies import (
+    UnavailableAgentModelGateway,
+    get_agent_answer_gateway,
+    get_agent_model_gateway,
+)
 from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import AuditEventORM, OrganizationORM
 from app.main import app
@@ -181,6 +185,9 @@ async def test_provider_failure_creates_no_action_proposal(
     db_session: AsyncSession,
     admin_headers: dict[str, str],
 ) -> None:
+    app.dependency_overrides[get_agent_model_gateway] = (
+        lambda: UnavailableAgentModelGateway()
+    )
     response = await client.post(
         QUERY_URL,
         headers=admin_headers,

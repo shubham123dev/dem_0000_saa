@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.agent.contracts import AgentPlan, AgentToolCall
 from app.agent.orchestrator import ReadOnlyAgentOrchestrator
 from app.agent.tool_registry import InvalidAgentToolCallError, ReadOnlyAgentToolRegistry
 from app.core.errors import OrganizationAccessDeniedError
-from app.domain.enums import OrganizationStatus, UserStatus
-from app.domain.models import OrganizationProfile, User
+from app.domain.enums import (
+    Environment,
+    OrganizationStatus,
+    UserStatus,
+    WorkspaceHealthStatus,
+)
+from app.domain.models import (
+    OrganizationOverview,
+    OrganizationOverviewMetrics,
+    OrganizationProfile,
+    User,
+)
 
 EXPECTED_ACTION_NAMES = {
     "update_organization_contact_email",
@@ -19,6 +31,16 @@ EXPECTED_ACTION_NAMES = {
     "revoke_organization_seat",
     "grant_organization_report_access",
     "revoke_organization_report_access",
+}
+
+EXPECTED_TOOL_NAMES = {
+    "get_organization_overview",
+    "get_organization_profile",
+    "list_organization_users",
+    "get_organization_seat_summary",
+    "list_organization_reports",
+    "check_organization_report_access",
+    "get_organization_audit_log",
 }
 
 
@@ -41,20 +63,29 @@ class FakeOrganizationService:
         self.deny_access = deny_access
         self.calls: list[tuple[str, str, str, str | None]] = []
 
-    async def read_profile(self, *, user: User, organization_id: str):
-        self._record_call("get_organization_profile", user, organization_id, None)
+    async def read_overview(self, *, user: User, organization_id: str):
+        self._record_call("get_organization_overview", user, organization_id, None)
+        profile = self._profile(organization_id)
         return (
-            OrganizationProfile(
-                id=organization_id,
-                display_name="Test Organization",
-                legal_name=None,
-                contact_email=None,
-                environment="sandbox",
-                status=OrganizationStatus.ACTIVE,
+            OrganizationOverview(
+                organization=profile,
+                organization_type="organization",
+                renewal_date=date(2026, 11, 26),
+                workspace_status=WorkspaceHealthStatus.HEALTHY,
+                metrics=OrganizationOverviewMetrics(
+                    licensed_modules=2,
+                    available_areas=9,
+                    organization_logins=1,
+                    workspace_health_percent=98,
+                ),
                 version=1,
             ),
             None,
         )
+
+    async def read_profile(self, *, user: User, organization_id: str):
+        self._record_call("get_organization_profile", user, organization_id, None)
+        return (self._profile(organization_id), None)
 
     async def list_users(self, *, user: User, organization_id: str):
         self._record_call("list_organization_users", user, organization_id, None)
@@ -87,6 +118,18 @@ class FakeOrganizationService:
         self._record_call("get_organization_audit_log", user, organization_id, None)
         return ([], None)
 
+    @staticmethod
+    def _profile(organization_id: str) -> OrganizationProfile:
+        return OrganizationProfile(
+            id=organization_id,
+            display_name="Test Organization",
+            legal_name=None,
+            contact_email=None,
+            environment=Environment.SANDBOX,
+            status=OrganizationStatus.ACTIVE,
+            version=1,
+        )
+
     def _record_call(
         self,
         tool_name: str,
@@ -118,25 +161,25 @@ def build_orchestrator(plan: AgentPlan, service: FakeOrganizationService | None 
     return gateway, orchestrator
 
 
-async def test_agent_executes_allowlisted_tool_with_backend_context() -> None:
+async def test_agent_executes_overview_with_backend_context() -> None:
     organization_service = FakeOrganizationService()
     gateway, orchestrator = build_orchestrator(
-        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)),
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_overview"),)),
         organization_service,
     )
     execution_result = await orchestrator.execute(
         user=build_user(),
         organization_id="org_request_001",
-        user_request="Show the organization profile",
+        user_request="Show the organization overview",
     )
 
-    assert gateway.received_user_request == "Show the organization profile"
-    assert "get_organization_profile" in gateway.received_tool_names
+    assert gateway.received_user_request == "Show the organization overview"
+    assert set(gateway.received_tool_names) == EXPECTED_TOOL_NAMES
     assert set(gateway.received_action_names) == EXPECTED_ACTION_NAMES
     assert organization_service.calls == [
-        ("get_organization_profile", "usr_request_001", "org_request_001", None)
+        ("get_organization_overview", "usr_request_001", "org_request_001", None)
     ]
-    assert execution_result.results[0].data.id == "org_request_001"
+    assert execution_result.results[0].data.metrics.workspace_health_percent == 98
 
 
 async def test_agent_rejects_unknown_tool_before_service_execution() -> None:
@@ -160,7 +203,7 @@ async def test_agent_rejects_model_supplied_organization_identity() -> None:
         AgentPlan(
             tool_calls=(
                 AgentToolCall(
-                    tool_name="get_organization_profile",
+                    tool_name="get_organization_overview",
                     arguments={"organization_id": "org_other_001"},
                 ),
             )
@@ -199,14 +242,14 @@ async def test_agent_requires_exact_report_access_arguments() -> None:
 
 async def test_agent_propagates_backend_authorization_failure() -> None:
     _, orchestrator = build_orchestrator(
-        AgentPlan(tool_calls=(AgentToolCall(tool_name="list_organization_users"),)),
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_overview"),)),
         FakeOrganizationService(deny_access=True),
     )
     with pytest.raises(OrganizationAccessDeniedError):
         await orchestrator.execute(
             user=build_user(),
             organization_id="org_request_001",
-            user_request="List users",
+            user_request="Show overview",
         )
 
 
@@ -215,7 +258,7 @@ async def test_agent_executes_multiple_validated_calls_in_order() -> None:
     _, orchestrator = build_orchestrator(
         AgentPlan(
             tool_calls=(
-                AgentToolCall(tool_name="get_organization_profile"),
+                AgentToolCall(tool_name="get_organization_overview"),
                 AgentToolCall(tool_name="list_organization_reports"),
                 AgentToolCall(tool_name="get_organization_audit_log"),
             )
@@ -228,12 +271,12 @@ async def test_agent_executes_multiple_validated_calls_in_order() -> None:
         user_request="Give me an organization overview",
     )
     assert [call[0] for call in service.calls] == [
-        "get_organization_profile",
+        "get_organization_overview",
         "list_organization_reports",
         "get_organization_audit_log",
     ]
     assert [result.tool_name for result in execution_result.results] == [
-        "get_organization_profile",
+        "get_organization_overview",
         "list_organization_reports",
         "get_organization_audit_log",
     ]
@@ -245,7 +288,10 @@ async def test_read_executor_rejects_action_plan() -> None:
             intent="action_proposal",
             action_proposal={
                 "action_name": "assign_organization_seat",
-                "arguments": {"user_id": "usr_member_003", "seat_type": "standard"},
+                "arguments": {
+                    "user_id": "usr_member_003",
+                    "seat_type": "standard",
+                },
             },
         )
     )

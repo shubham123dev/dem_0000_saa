@@ -7,12 +7,16 @@ from app.domain.enums import MembershipStatus, SeatType, UserStatus
 from app.domain.models import (
     AuditEvent,
     OrganizationMember,
+    OrganizationOverview,
     OrganizationProfile,
     ReportAccessDecision,
     ReportWithAccess,
     SeatSummary,
 )
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.organization_overview_repository import (
+    OrganizationOverviewRepository,
+)
 from app.repositories.organization_repository import OrganizationRepository
 from app.repositories.report_repository import ReportRepository
 from app.repositories.seat_repository import SeatRepository
@@ -22,6 +26,7 @@ from app.repositories.user_repository import UserRepository
 class MockOrganizationApi:
     def __init__(self, database_session: AsyncSession) -> None:
         self._organization_repository = OrganizationRepository(database_session)
+        self._overview_repository = OrganizationOverviewRepository(database_session)
         self._user_repository = UserRepository(database_session)
         self._seat_repository = SeatRepository(database_session)
         self._report_repository = ReportRepository(database_session)
@@ -41,15 +46,21 @@ class MockOrganizationApi:
     async def get_organization(self, organization_id: str) -> OrganizationProfile:
         return await self._require_organization_profile(organization_id)
 
+    async def get_overview(self, organization_id: str) -> OrganizationOverview:
+        profile = await self._require_organization_profile(organization_id)
+        return await self._overview_repository.get_for_profile(profile)
+
     async def update_contact_email(
         self,
         organization_id: str,
         contact_email: str,
     ) -> OrganizationProfile:
         await self._require_organization_profile(organization_id)
-        organization_profile = await self._organization_repository.update_contact_email(
-            organization_id,
-            contact_email,
+        organization_profile = (
+            await self._organization_repository.update_contact_email(
+                organization_id,
+                contact_email,
+            )
         )
         if organization_profile is None:
             raise OrganizationNotFoundError()

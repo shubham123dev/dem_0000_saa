@@ -1,7 +1,7 @@
 [project]
 name = "dbmr-workplace-agent"
-version = "0.0.1"
-description = "DBMR Workplace Agent - Step 0 contract-first, read-only sandbox backend foundation"
+version = "0.1.0"
+description = "DBMR Workplace Agent sandbox with stable overview reads and approval-gated actions"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }

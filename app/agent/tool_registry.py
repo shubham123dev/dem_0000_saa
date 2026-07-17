@@ -10,6 +10,13 @@ class InvalidAgentToolCallError(ValueError):
 class ReadOnlyAgentToolRegistry:
     def __init__(self) -> None:
         self._tool_definitions_by_name = {
+            "get_organization_overview": AgentToolDefinition(
+                name="get_organization_overview",
+                description=(
+                    "Read the current organization overview, renewal, workspace "
+                    "health and dashboard metrics."
+                ),
+            ),
             "get_organization_profile": AgentToolDefinition(
                 name="get_organization_profile",
                 description="Read the current organization profile.",
@@ -58,6 +65,8 @@ class ReadOnlyAgentToolRegistry:
             "role",
         }
         if supplied_argument_names & forbidden_argument_names:
-            raise InvalidAgentToolCallError("Identity and authorization arguments are forbidden")
+            raise InvalidAgentToolCallError(
+                "Identity and authorization arguments are forbidden"
+            )
 
         return tool_call

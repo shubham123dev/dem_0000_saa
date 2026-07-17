@@ -1,33 +1,41 @@
 # Agent Tool Contracts
 
-The Workplace Agent exposes a small fixed set of read-only tools. There is no arbitrary SQL, shell, browser control or unrestricted HTTP execution.
+The Workplace Agent exposes a fixed allowlist. It has no arbitrary SQL, shell, browser control or unrestricted HTTP execution.
 
-| Tool | Permission | Input | Output |
+| Tool | Permission | Model-supplied input | Output |
 |---|---|---|---|
-| `get_organization_profile` | `organization.profile.read` | `organization_id` | organization profile |
-| `list_organization_users` | `organization.users.read` | `organization_id` | organization members |
-| `get_organization_seat_summary` | `organization.seats.read` | `organization_id` | calculated seat summary |
-| `list_organization_reports` | `organization.reports.read` | `organization_id` | report catalog with access annotations |
-| `check_organization_report_access` | `organization.reports.read` | `organization_id`, `report_id` | exact access decision |
+| `get_organization_overview` | `organization.profile.read` | none | stable overview contract |
+| `get_organization_profile` | `organization.profile.read` | none | organization profile |
+| `list_organization_users` | `organization.users.read` | none | organization members |
+| `get_organization_seat_summary` | `organization.seats.read` | none | calculated seat summary |
+| `list_organization_reports` | `organization.reports.read` | none | report catalogue with access |
+| `check_organization_report_access` | `organization.reports.read` | `report_id` | exact access decision |
+| `get_organization_audit_log` | `audit.read` | none | organization audit events |
 
-All tools are sandbox-only and backed by `OrganizationApiGateway`. They authenticate with `X-Mock-User-Id`, authorize against database-owned membership and permission data, and append audit events for successful business reads.
+Organization ID, user identity, roles and permissions come only from trusted backend request context. They are forbidden in model-generated tool arguments.
+
+## Overview questions now supported
+
+- Show my organization overview.
+- What is our workspace health?
+- How many modules are licensed?
+- How many areas are available?
+- When is the renewal date?
+- How many organization logins are configured?
+
+## Write boundary
+
+Natural-language changes can create only dry-run proposals. Approval and execution remain separate explicit backend calls. The nine action types continue to use the existing proposal, approval, idempotency, verification, audit, reconciliation and rollback controls.
 
 ## Failure cases
 
 | HTTP | Error code | When |
 |---|---|---|
-| 401 | `unauthenticated` | missing or unknown user identity |
-| 403 | `user_disabled` | user account is disabled |
-| 403 | `organization_access_denied` | user lacks active organization membership |
-| 403 | `permission_denied` | membership role lacks the required permission |
-| 403 | `production_access_blocked` | organization is not sandbox |
-| 404 | `organization_not_found` | organization does not exist |
+| 401 | `unauthenticated` | missing or unknown identity |
+| 403 | `user_disabled` | disabled user |
+| 403 | `organization_access_denied` | no active membership |
+| 403 | `permission_denied` | role lacks permission |
+| 403 | `production_access_blocked` | non-sandbox organization |
+| 404 | `organization_not_found` | organization absent |
+| 422 | `agent_tool_call_invalid` | unknown tool, extra arguments or model-supplied identity |
 | 500 | `internal_error` | unexpected failure |
-
-## Write boundary
-
-Step 0 registers no write tools and exposes no workplace `POST`, `PUT`, `PATCH` or `DELETE` routes. Future writes must follow explicit proposal, approval, verification, audit and rollback controls.
-
-## Testing boundary
-
-Runtime code under `app/` contains production-facing contracts and sandbox adapters only. Test doubles, fake planners, fixtures and deterministic model responses must be placed under `tests/`.

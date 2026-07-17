@@ -1,7 +1,7 @@
-"""Organization adapter package.
+"""Replaceable organization system-of-record adapter package.
 
-Step 0 ships ``MockOrganizationApiAdapter``, which delegates to the in-process
-``MockOrganizationApi`` backed by the mock SQLite database. The future
-production implementation will be ``NucleusOrganizationApiAdapter`` (NOT
-implemented in Step 0). Both satisfy the ``OrganizationApiGateway`` contract.
+``MockOrganizationApiAdapter`` provides the current SQLite-backed sandbox.
+A future ``NucleusOrganizationApiAdapter`` must satisfy the same
+``OrganizationApiGateway`` and map real provider fields into stable domain
+models without changing agent or frontend contracts.
 """

@@ -1,18 +1,16 @@
-# Security Model (Step 0)
+# Security Model
 
-## Backend-owned authorization
+## Backend-owned identity and authorization
 
-- Identity comes only from `X-Mock-User-Id` and must resolve to an active user.
-- Organization access requires an active row in `organization_memberships`.
-- Roles and permissions are stored in `organization_memberships` and `role_permissions` and are enforced by the backend permission service.
-- Authorization is never derived from request bodies, query parameters, prompts or user-provided text.
+- Identity comes only from `X-Mock-User-Id` in the sandbox and must resolve to an active user.
+- Organization access requires an active membership in the exact requested organization.
+- Roles and permissions are loaded from backend tables.
+- Authorization never comes from request bodies, query parameters, prompts or model output.
 - There is no default administrator.
 
-## Current roles
+## Permission families
 
-Both roles receive the implemented read permissions. `sandbox_admin` also receives reserved organization-management write permissions for later controlled phases, but Step 0 exposes no write routes.
-
-Current read permissions are:
+Read/resource permissions include:
 
 - `organization.profile.read`
 - `organization.users.read`
@@ -20,40 +18,52 @@ Current read permissions are:
 - `organization.reports.read`
 - `audit.read`
 
+Administrative resource permissions include profile, user, seat and report grant/revoke permissions. Action lifecycle access is separate:
+
+- `agent.actions.read`
+- `agent.actions.approve`
+- `agent.actions.execute`
+- `agent.actions.reconcile`
+
+A lifecycle permission never substitutes for the selected action's resource permission.
+
 ## Organization isolation
 
-- Every organization-scoped request verifies active membership in that exact organization.
-- Data and audit queries are constrained by `organization_id`.
-- Administrative reads do not require a seat; membership and permission are the authorization boundary.
+- Every organization-scoped request checks active membership in that organization.
+- Data and audit operations are constrained by `organization_id`.
+- Reads do not require a licensed seat.
+- Non-sandbox organizations are rejected with `production_access_blocked`.
+- Suspended organizations are rejected before business data is returned.
 
-## Sandbox-only enforcement
+## Fixed tool and action surface
 
-- Only organizations with `environment = sandbox` are accessible.
-- Non-sandbox access is rejected with `production_access_blocked`.
-- Production credentials and integrations are out of scope.
+- Seven read tools are allowlisted.
+- Nine write action types are allowlisted.
+- Model-generated organization IDs, actor IDs, permissions, roles, proposal IDs, approvals, execution commands and idempotency keys are forbidden.
+- Natural-language requests can prepare proposals but cannot approve or execute them.
+- No arbitrary SQL, unrestricted URL/HTTP execution, shell or browser automation exists.
 
-## Fixed tool surface
+## Action integrity
 
-- Five read-only workplace tools are implemented.
-- No arbitrary SQL, URL/HTTP execution, shell access, browser automation or LLM planner exists.
-- No workplace `POST`, `PUT`, `PATCH` or `DELETE` route exists.
+- Proposals store normalized arguments, reviewed before/after changes, resource version, approval policy and fingerprint.
+- Execution revalidates permissions, fingerprint, approval threshold and resource version.
+- Execution is single-use and idempotency-key protected.
+- Stale resources are blocked.
+- High-risk actions require distinct approvers and disallow requester self-approval.
+- Rollback is a new proposal and never runs automatically.
 
-## Repository separation
+## Audit and uncertain outcomes
 
-- SARA/chatbot runtime code, clients, credentials, gateways and permissions are not part of this repository.
-- Any future model/provider integration must use a provider-neutral Workplace Agent contract.
-- Fake providers, fixtures and deterministic responses belong under `tests/` only.
-
-## Audit requirements
-
-- Every successful business read appends an immutable audit event.
-- Audit rows are not updated or deleted by application behavior.
-- Audit events record actor, organization, event type, operation, outcome, resource and structured details.
-- Reading the audit log is not itself audited to avoid recursive growth.
+- Successful business reads append organization-scoped audit events.
+- Action proposal, approval/rejection, execution and reconciliation transitions are audited.
+- Audit-log reads are not audited to avoid recursive growth.
+- A successful mutation is not reversed solely because audit persistence failed.
+- Audit replay persists the missing audit record without repeating the mutation.
+- Uncertain provider outcomes require bounded reconciliation by inspection.
 
 ## Secret and error policy
 
-- Error responses use a consistent contract with a generated `request_id`.
-- Responses do not expose stack traces, database paths, SQL or secrets.
-- `.env` is ignored; `.env.example` contains only non-secret local defaults.
-- Seed identities and email addresses are synthetic.
+- Responses use a consistent error contract with a request ID.
+- Stack traces, database paths, SQL and secrets are not returned.
+- `.env` is ignored; `.env.example` contains only local defaults.
+- Seed identities are synthetic.

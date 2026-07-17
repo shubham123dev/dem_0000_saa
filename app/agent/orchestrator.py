@@ -78,7 +78,13 @@ class ReadOnlyAgentOrchestrator:
         organization_id: str,
         tool_call: AgentToolCall,
     ) -> AgentToolResult:
-        if tool_call.tool_name == "get_organization_profile":
+        if tool_call.tool_name == "get_organization_overview":
+            overview, _ = await self._organization_service.read_overview(
+                user=user,
+                organization_id=organization_id,
+            )
+            result_data = overview
+        elif tool_call.tool_name == "get_organization_profile":
             organization_profile, _ = await self._organization_service.read_profile(
                 user=user,
                 organization_id=organization_id,

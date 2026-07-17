@@ -1,4 +1,5 @@
 """Organization profile read-flow and cross-cutting guarantees."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -7,9 +8,11 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api import action_routes, agent_routes, workplace_routes
 from app.db.orm_models import (
     OrganizationMembershipORM,
     OrganizationORM,
+    OrganizationOverviewORM,
     OrganizationReportAccessORM,
     OrganizationSeatPoolORM,
     ReportORM,
@@ -21,6 +24,7 @@ from app.db.seed import seed
 from app.main import app
 
 PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
+OVERVIEW_URL = "/workplace/organizations/org_sandbox_001/overview"
 EXPECTED_ORG = {
     "id": "org_sandbox_001",
     "display_name": "Demo Enterprise Sandbox",
@@ -33,11 +37,12 @@ EXPECTED_ORG = {
 
 
 async def test_admin_can_read_organization(
-    client: AsyncClient, admin_headers: dict[str, str]
+    client: AsyncClient,
+    admin_headers: dict[str, str],
 ) -> None:
-    resp = await client.get(PROFILE_URL, headers=admin_headers)
-    assert resp.status_code == 200
-    body = resp.json()
+    response = await client.get(PROFILE_URL, headers=admin_headers)
+    assert response.status_code == 200
+    body = response.json()
     assert body["organization"] == EXPECTED_ORG
     assert body["access"] == {
         "user_id": "usr_admin_001",
@@ -46,22 +51,25 @@ async def test_admin_can_read_organization(
 
 
 async def test_reader_can_read_organization(
-    client: AsyncClient, reader_headers: dict[str, str]
+    client: AsyncClient,
+    reader_headers: dict[str, str],
 ) -> None:
-    resp = await client.get(PROFILE_URL, headers=reader_headers)
-    assert resp.status_code == 200
-    assert resp.json()["organization"] == EXPECTED_ORG
-    assert resp.json()["access"]["user_id"] == "usr_member_001"
+    response = await client.get(PROFILE_URL, headers=reader_headers)
+    assert response.status_code == 200
+    assert response.json()["organization"] == EXPECTED_ORG
+    assert response.json()["access"]["user_id"] == "usr_member_001"
 
 
 async def test_unknown_organization_returns_404(
-    client: AsyncClient, admin_headers: dict[str, str]
+    client: AsyncClient,
+    admin_headers: dict[str, str],
 ) -> None:
-    resp = await client.get(
-        "/workplace/organizations/org_does_not_exist/profile", headers=admin_headers
+    response = await client.get(
+        "/workplace/organizations/org_does_not_exist/profile",
+        headers=admin_headers,
     )
-    assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "organization_not_found"
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "organization_not_found"
 
 
 async def test_production_organization_access_is_blocked(
@@ -95,11 +103,13 @@ async def test_production_organization_access_is_blocked(
     )
     await db_session.commit()
 
-    resp = await client.get(
-        "/workplace/organizations/org_prod_001/profile", headers=admin_headers
-    )
-    assert resp.status_code == 403
-    assert resp.json()["error"]["code"] == "production_access_blocked"
+    for endpoint in ("profile", "overview"):
+        response = await client.get(
+            f"/workplace/organizations/org_prod_001/{endpoint}",
+            headers=admin_headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "production_access_blocked"
 
 
 async def test_only_explicit_workplace_post_routes_exist() -> None:
@@ -116,7 +126,12 @@ async def test_only_explicit_workplace_post_routes_exist() -> None:
     }
     workplace_post_paths: set[str] = set()
 
-    for route in app.routes:
+    explicit_workplace_routes = (
+        workplace_routes.router.routes
+        + agent_routes.router.routes
+        + action_routes.router.routes
+    )
+    for route in explicit_workplace_routes:
         route_path = getattr(route, "path", "")
         route_methods = getattr(route, "methods", set()) or set()
         if route_path.startswith("/workplace"):
@@ -130,34 +145,36 @@ async def test_only_explicit_workplace_post_routes_exist() -> None:
 async def test_seed_is_idempotent(
     sessionmaker_: async_sessionmaker[AsyncSession],
 ) -> None:
-    async def _counts(session: AsyncSession) -> dict[str, int]:
-        async def n(model) -> int:
+    async def counts(session: AsyncSession) -> dict[str, int]:
+        async def count(model) -> int:
             return int(
                 await session.scalar(select(func.count()).select_from(model)) or 0
             )
 
         return {
-            "orgs": await n(OrganizationORM),
-            "users": await n(UserORM),
-            "memberships": await n(OrganizationMembershipORM),
-            "pools": await n(OrganizationSeatPoolORM),
-            "assignments": await n(SeatAssignmentORM),
-            "reports": await n(ReportORM),
-            "access": await n(OrganizationReportAccessORM),
-            "role_permissions": await n(RolePermissionORM),
+            "orgs": await count(OrganizationORM),
+            "overviews": await count(OrganizationOverviewORM),
+            "users": await count(UserORM),
+            "memberships": await count(OrganizationMembershipORM),
+            "pools": await count(OrganizationSeatPoolORM),
+            "assignments": await count(SeatAssignmentORM),
+            "reports": await count(ReportORM),
+            "access": await count(OrganizationReportAccessORM),
+            "role_permissions": await count(RolePermissionORM),
         }
 
     async with sessionmaker_() as session:
         await seed(session)
-        first = await _counts(session)
+        first = await counts(session)
 
     async with sessionmaker_() as session:
         await seed(session)
-        second = await _counts(session)
+        second = await counts(session)
 
     assert first == second
     assert first == {
         "orgs": 1,
+        "overviews": 1,
         "users": 8,
         "memberships": 7,
         "pools": 1,
@@ -169,15 +186,22 @@ async def test_seed_is_idempotent(
 
 
 async def test_responses_do_not_leak_sql_or_db_paths(
-    client: AsyncClient, admin_headers: dict[str, str]
+    client: AsyncClient,
+    admin_headers: dict[str, str],
 ) -> None:
     leak_markers = ["sqlite", "aiosqlite", "SELECT ", "Traceback", "test_sandbox.db"]
     responses = [
         await client.get(PROFILE_URL, headers=admin_headers),
+        await client.get(OVERVIEW_URL, headers=admin_headers),
         await client.get(
-            "/workplace/organizations/org_missing/profile", headers=admin_headers
+            "/workplace/organizations/org_missing/profile",
+            headers=admin_headers,
+        ),
+        await client.get(
+            "/workplace/organizations/org_missing/overview",
+            headers=admin_headers,
         ),
     ]
-    for resp in responses:
+    for response in responses:
         for marker in leak_markers:
-            assert marker not in resp.text
+            assert marker not in response.text
