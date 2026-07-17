@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.agent.action_contracts import AgentActionDefinition
 from app.agent.action_registry import AgentActionRegistry
 from app.agent.answer_contracts import (
@@ -20,8 +21,15 @@ from app.agent.response_service import ReadOnlyAgentResponseService
 from app.agent.synthesis import AgentAnswerSynthesisService
 from app.agent.tool_registry import ReadOnlyAgentToolRegistry
 from app.api.action_dependencies import AgentActionServiceDep, get_agent_action_registry
-from app.api.dependencies import OrganizationServiceDep
+from app.api.dependencies import (
+    MockOrganizationApiDep,
+    OrganizationServiceDep,
+    get_user_repository,
+)
 from app.core.config import get_settings
+from app.permissions.permission_service import PermissionService
+from app.repositories.user_repository import UserRepository
+from app.services.agent_preflight_service import AgentAuthorizationPreflightService
 
 
 class UnavailableAgentModelGateway:
@@ -74,6 +82,16 @@ def get_agent_evidence_compiler() -> AgentEvidenceCompiler:
     return AgentEvidenceCompiler()
 
 
+def get_agent_authorization_preflight_service(
+    api: MockOrganizationApiDep,
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
+) -> AgentAuthorizationPreflightService:
+    return AgentAuthorizationPreflightService(
+        organization_gateway=MockOrganizationApiAdapter(api),
+        permission_service=PermissionService(user_repository),
+    )
+
+
 def get_read_only_agent_orchestrator(
     organization_service: OrganizationServiceDep,
     model_gateway: Annotated[AgentModelGateway, Depends(get_agent_model_gateway)],
@@ -114,12 +132,17 @@ def get_read_only_agent_response_service(
         Depends(get_agent_synthesis_service),
     ],
     action_service: AgentActionServiceDep,
+    preflight_service: Annotated[
+        AgentAuthorizationPreflightService,
+        Depends(get_agent_authorization_preflight_service),
+    ],
 ) -> ReadOnlyAgentResponseService:
     return ReadOnlyAgentResponseService(
         orchestrator=orchestrator,
         evidence_compiler=evidence_compiler,
         synthesis_service=synthesis_service,
         action_service=action_service,
+        preflight_service=preflight_service,
     )
 
 
