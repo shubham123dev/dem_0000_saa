@@ -3,7 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from app.agent.action_contracts import AgentActionProposalInput
-from app.api.action_dependencies import AgentActionServiceDep
+from app.api.action_dependencies import (
+    AgentActionReconciliationServiceDep,
+    AgentActionServiceDep,
+)
 from app.api.dependencies import UserDep
 from app.schemas.agent_actions import (
     AgentActionApprovalResponse,
@@ -169,9 +172,9 @@ async def reconcile_agent_action(
     organization_id: str,
     proposal_id: str,
     user: UserDep,
-    action_service: AgentActionServiceDep,
+    reconciliation_service: AgentActionReconciliationServiceDep,
 ) -> AgentActionExecutionResponse:
-    execution = await action_service.reconcile(
+    execution = await reconciliation_service.reconcile(
         user=user,
         organization_id=organization_id,
         proposal_id=proposal_id,
