@@ -9,7 +9,6 @@ The seed intentionally does not call ``Base.metadata.create_all``. Alembic is
 the only application schema authority; tests may create isolated schemas from
 metadata in their own fixtures.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -68,6 +67,8 @@ SEAT_POOL = {
 
 USERS = [
     ("usr_admin_001", "Sandbox Admin", "admin@example.test"),
+    ("usr_approval_admin_001", "Approval Admin One", "approval.admin1@example.test"),
+    ("usr_approval_admin_002", "Approval Admin Two", "approval.admin2@example.test"),
     ("usr_member_001", "Seated Member One", "member1@example.test"),
     ("usr_member_002", "Seated Member Two", "member2@example.test"),
     ("usr_member_003", "Unseated Member", "member3@example.test"),
@@ -77,6 +78,8 @@ USERS = [
 
 MEMBERSHIPS = [
     ("usr_admin_001", Role.SANDBOX_ADMIN.value, MembershipStatus.ACTIVE.value),
+    ("usr_approval_admin_001", Role.SANDBOX_ADMIN.value, MembershipStatus.ACTIVE.value),
+    ("usr_approval_admin_002", Role.SANDBOX_ADMIN.value, MembershipStatus.ACTIVE.value),
     ("usr_member_001", Role.SANDBOX_READER.value, MembershipStatus.ACTIVE.value),
     ("usr_member_002", Role.SANDBOX_READER.value, MembershipStatus.ACTIVE.value),
     ("usr_member_003", Role.SANDBOX_READER.value, MembershipStatus.ACTIVE.value),
