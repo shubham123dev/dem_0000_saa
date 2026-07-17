@@ -7,8 +7,9 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
+from app.agent.action_contracts import AgentActionDefinition, AgentActionProposalInput
 from app.agent.answer_contracts import AgentAnswerDraft, AgentEvidenceItem
-from app.agent.contracts import AgentPlan, AgentToolDefinition
+from app.agent.contracts import AgentPlan, AgentToolCall, AgentToolDefinition
 from app.agent.errors import AgentModelRequestFailedError, AgentModelResponseInvalidError
 
 _RETRYABLE_STATUS_CODES = frozenset({408, 409, 429, 500, 502, 503, 504})
@@ -41,11 +42,13 @@ class OpenAIResponsesAgentModelGateway:
         *,
         user_request: str,
         available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
     ) -> AgentPlan:
         response_payload = await self._post_with_retries(
             self._build_plan_request_payload(
                 user_request=user_request,
                 available_tools=available_tools,
+                available_actions=available_actions,
             )
         )
         return self._parse_plan(response_payload)
@@ -69,17 +72,29 @@ class OpenAIResponsesAgentModelGateway:
         *,
         user_request: str,
         available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
     ) -> dict[str, Any]:
         tool_catalog = [
             {
-                "name": tool_definition.name,
-                "description": tool_definition.description,
-                "required_argument_names": list(
-                    tool_definition.required_argument_names
-                ),
+                "name": definition.name,
+                "description": definition.description,
+                "required_argument_names": list(definition.required_argument_names),
             }
-            for tool_definition in available_tools
+            for definition in available_tools
         ]
+        action_catalog = [
+            {
+                "name": definition.name,
+                "description": definition.description,
+                "required_argument_names": list(definition.required_argument_names),
+                "risk_level": definition.risk_level,
+                "requires_approval": definition.requires_approval,
+                "supports_dry_run": definition.supports_dry_run,
+            }
+            for definition in available_actions
+        ]
+        tool_names = [definition.name for definition in available_tools]
+        action_names = [definition.name for definition in available_actions]
         return {
             "model": self._model,
             "store": False,
@@ -91,11 +106,12 @@ class OpenAIResponsesAgentModelGateway:
                         {
                             "type": "input_text",
                             "text": (
-                                "Create a read-only tool plan. Use only tools from the "
-                                "provided catalog. Never invent tools or arguments. Never "
-                                "include organization_id, user_id, roles, permissions, or "
-                                "authorization decisions. Return between one and five calls. "
-                                "Set report_id to null for tools that do not require it."
+                                "Choose exactly one intent. For read intent, return one to five "
+                                "allowlisted read tool calls and no action. For action_proposal "
+                                "intent, return exactly one allowlisted action proposal and no "
+                                "read calls. Never include organization, user, role, permission, "
+                                "approval, proposal, execution, or idempotency state. An action "
+                                "proposal only requests a dry-run pending explicit backend approval."
                             ),
                         }
                     ],
@@ -109,7 +125,9 @@ class OpenAIResponsesAgentModelGateway:
                                 {
                                     "request": user_request,
                                     "available_tools": tool_catalog,
+                                    "available_actions": action_catalog,
                                 },
+                                ensure_ascii=False,
                                 separators=(",", ":"),
                             ),
                         }
@@ -119,36 +137,45 @@ class OpenAIResponsesAgentModelGateway:
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "read_only_agent_plan",
+                    "name": "workplace_agent_plan",
                     "strict": True,
                     "schema": {
                         "type": "object",
                         "additionalProperties": False,
-                        "required": ["tool_calls"],
+                        "required": [
+                            "intent",
+                            "tool_calls",
+                            "action_name",
+                            "contact_email",
+                        ],
                         "properties": {
+                            "intent": {
+                                "type": "string",
+                                "enum": ["read", "action_proposal"],
+                            },
                             "tool_calls": {
                                 "type": "array",
-                                "minItems": 1,
                                 "maxItems": 5,
                                 "items": {
                                     "type": "object",
                                     "additionalProperties": False,
-                                    "required": ["tool_name", "arguments"],
+                                    "required": ["tool_name", "report_id"],
                                     "properties": {
-                                        "tool_name": {"type": "string"},
-                                        "arguments": {
-                                            "type": "object",
-                                            "additionalProperties": False,
-                                            "required": ["report_id"],
-                                            "properties": {
-                                                "report_id": {
-                                                    "type": ["string", "null"]
-                                                }
-                                            },
+                                        "tool_name": {
+                                            "type": "string",
+                                            "enum": tool_names,
+                                        },
+                                        "report_id": {
+                                            "type": ["string", "null"]
                                         },
                                     },
                                 },
-                            }
+                            },
+                            "action_name": {
+                                "type": ["string", "null"],
+                                "enum": action_names + [None],
+                            },
+                            "contact_email": {"type": ["string", "null"]},
                         },
                     },
                 }
@@ -242,7 +269,7 @@ class OpenAIResponsesAgentModelGateway:
                         },
                         json=request_payload,
                     )
-                except (httpx.TimeoutException, httpx.NetworkError) as exception:
+                except httpx.RequestError as exception:
                     if attempt_number == self._maximum_attempts:
                         raise AgentModelRequestFailedError() from exception
                     await asyncio.sleep(self._retry_delay_seconds)
@@ -253,22 +280,25 @@ class OpenAIResponsesAgentModelGateway:
                         raise AgentModelRequestFailedError()
                     await asyncio.sleep(self._retry_delay_seconds)
                     continue
-
                 if response.is_error:
                     raise AgentModelRequestFailedError()
-
                 try:
                     response_payload = response.json()
                 except ValueError as exception:
                     raise AgentModelResponseInvalidError() from exception
-
                 if not isinstance(response_payload, dict):
+                    raise AgentModelResponseInvalidError()
+                if response_payload.get("status") in {
+                    "failed",
+                    "incomplete",
+                    "cancelled",
+                    "in_progress",
+                }:
                     raise AgentModelResponseInvalidError()
                 return response_payload
         finally:
             if owns_http_client:
                 await http_client.aclose()
-
         raise AgentModelRequestFailedError()
 
     def _extract_output_text(self, response_payload: dict[str, Any]) -> str:
@@ -294,20 +324,43 @@ class OpenAIResponsesAgentModelGateway:
 
     def _parse_plan(self, response_payload: dict[str, Any]) -> AgentPlan:
         try:
-            plan_payload = json.loads(self._extract_output_text(response_payload))
-            tool_calls = plan_payload.get("tool_calls")
-            if not isinstance(tool_calls, list):
+            payload = json.loads(self._extract_output_text(response_payload))
+            if not isinstance(payload, dict):
                 raise AgentModelResponseInvalidError()
-            for tool_call in tool_calls:
-                if not isinstance(tool_call, dict):
+            intent = payload.get("intent")
+            raw_tool_calls = payload.get("tool_calls")
+            if not isinstance(raw_tool_calls, list):
+                raise AgentModelResponseInvalidError()
+            if intent == "read":
+                tool_calls = []
+                for raw_call in raw_tool_calls:
+                    if not isinstance(raw_call, dict):
+                        raise AgentModelResponseInvalidError()
+                    arguments = {}
+                    report_id = raw_call.get("report_id")
+                    if report_id is not None:
+                        arguments["report_id"] = report_id
+                    tool_calls.append(
+                        AgentToolCall(
+                            tool_name=raw_call.get("tool_name"),
+                            arguments=arguments,
+                        )
+                    )
+                return AgentPlan(intent="read", tool_calls=tuple(tool_calls))
+            if intent == "action_proposal":
+                action_name = payload.get("action_name")
+                contact_email = payload.get("contact_email")
+                if not isinstance(action_name, str) or not isinstance(contact_email, str):
                     raise AgentModelResponseInvalidError()
-                arguments = tool_call.get("arguments")
-                if not isinstance(arguments, dict):
-                    raise AgentModelResponseInvalidError()
-                if arguments.get("report_id") is None:
-                    arguments.pop("report_id", None)
-            return AgentPlan.model_validate(plan_payload)
-        except (json.JSONDecodeError, ValidationError) as exception:
+                return AgentPlan(
+                    intent="action_proposal",
+                    action_proposal=AgentActionProposalInput(
+                        action_name=action_name,
+                        arguments={"contact_email": contact_email},
+                    ),
+                )
+            raise AgentModelResponseInvalidError()
+        except (json.JSONDecodeError, ValidationError, TypeError) as exception:
             raise AgentModelResponseInvalidError() from exception
 
     def _parse_answer(self, response_payload: dict[str, Any]) -> AgentAnswerDraft:
