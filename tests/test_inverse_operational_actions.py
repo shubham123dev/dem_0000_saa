@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.orm_models import (
@@ -150,8 +150,21 @@ async def test_update_member_role_is_versioned(
 
 async def test_last_active_admin_cannot_be_demoted(
     client: AsyncClient,
+    db_session: AsyncSession,
     admin_headers: dict[str, str],
 ) -> None:
+    await db_session.execute(
+        update(OrganizationMembershipORM)
+        .where(
+            OrganizationMembershipORM.organization_id == ORGANIZATION_ID,
+            OrganizationMembershipORM.user_id.in_(
+                ("usr_approval_admin_001", "usr_approval_admin_002")
+            ),
+        )
+        .values(membership_status="removed")
+    )
+    await db_session.commit()
+
     response = await propose(
         client,
         admin_headers,
