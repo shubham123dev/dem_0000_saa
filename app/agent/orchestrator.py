@@ -19,12 +19,12 @@ class ReadOnlyAgentOrchestrator:
         *,
         model_gateway: AgentModelGateway,
         tool_registry: ReadOnlyAgentToolRegistry,
-        action_registry: AgentActionRegistry,
         organization_service: OrganizationService,
+        action_registry: AgentActionRegistry | None = None,
     ) -> None:
         self._model_gateway = model_gateway
         self._tool_registry = tool_registry
-        self._action_registry = action_registry
+        self._action_registry = action_registry or AgentActionRegistry()
         self._organization_service = organization_service
 
     async def create_plan(self, *, user_request: str) -> AgentPlan:
