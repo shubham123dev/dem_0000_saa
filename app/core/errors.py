@@ -29,6 +29,7 @@ ERROR_CODES = frozenset(
         "agent_action_invalid",
         "agent_action_proposal_not_found",
         "agent_action_state_conflict",
+        "agent_action_limit_exceeded",
         "agent_action_expired",
         "agent_action_stale",
         "agent_action_cancelled",
