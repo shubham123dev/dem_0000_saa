@@ -39,6 +39,19 @@ def _as_aware(value: datetime) -> datetime:
     return value
 
 
+def _normalize_contact_email(value: str) -> str:
+    normalized_value = value.strip().lower()
+    local_part, separator, domain_part = normalized_value.partition("@")
+    if (
+        not separator
+        or not local_part
+        or "." not in domain_part
+        or len(normalized_value) > 320
+    ):
+        raise AgentActionInvalidError("Contact email is invalid.")
+    return normalized_value
+
+
 class AgentActionService:
     def __init__(
         self,
@@ -72,7 +85,9 @@ class AgentActionService:
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
         )
-        contact_email = proposal_input.arguments["contact_email"].strip().lower()
+        contact_email = _normalize_contact_email(
+            proposal_input.arguments["contact_email"]
+        )
         normalized_arguments = {"contact_email": contact_email}
         changes = (
             AgentActionChange(
@@ -238,14 +253,6 @@ class AgentActionService:
                 },
                 error_code=None,
             )
-            await self._append_audit(
-                user=user,
-                proposal=proposal,
-                event_type="agent_action_succeeded",
-                outcome="success",
-                details=execution_result.result,
-            )
-            return execution_result
         except Exception:
             await self._action_repository.complete_execution(
                 proposal_id=proposal.id,
@@ -261,6 +268,15 @@ class AgentActionService:
                 details={"error_code": "action_execution_failed"},
             )
             raise
+
+        await self._append_audit(
+            user=user,
+            proposal=proposal,
+            event_type="agent_action_succeeded",
+            outcome="success",
+            details=execution_result.result,
+        )
+        return execution_result
 
     async def _authorize(
         self,
