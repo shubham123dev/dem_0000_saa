@@ -110,6 +110,7 @@ class AgentActionProposalListResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     proposals: tuple[AgentActionProposal, ...]
+    next_cursor: str | None = None
 
 
 class AgentActionApprovalResponse(BaseModel):
