@@ -74,6 +74,7 @@ class AgentActionService:
         user: User,
         organization_id: str,
         proposal_input: AgentActionProposalInput,
+        provenance: dict[str, str] | None = None,
     ) -> AgentActionProposal:
         try:
             action_definition = self._action_registry.validate(proposal_input)
@@ -116,12 +117,15 @@ class AgentActionService:
             resource_id=organization_id,
             expires_at=_utcnow() + timedelta(minutes=15),
         )
+        audit_details = {"risk_level": proposal.risk_level}
+        if provenance:
+            audit_details.update(provenance)
         await self._append_audit(
             user=user,
             proposal=proposal,
             event_type="agent_action_proposed",
             outcome="success",
-            details={"risk_level": proposal.risk_level},
+            details=audit_details,
         )
         return proposal
 
