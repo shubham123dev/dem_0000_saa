@@ -145,6 +145,26 @@ async def cancel_agent_action(
 
 
 @router.post(
+    "/{organization_id}/agent/actions/{proposal_id}/rollback-proposal",
+    response_model=AgentActionProposalResponse,
+)
+async def create_agent_action_rollback_proposal(
+    organization_id: str,
+    proposal_id: str,
+    request_body: AgentActionDecisionRequest,
+    user: UserDep,
+    action_service: AgentActionServiceDep,
+) -> AgentActionProposalResponse:
+    proposal = await action_service.create_rollback_proposal(
+        user=user,
+        organization_id=organization_id,
+        source_proposal_id=proposal_id,
+        reason=request_body.reason,
+    )
+    return AgentActionProposalResponse(proposal=proposal)
+
+
+@router.post(
     "/{organization_id}/agent/actions/{proposal_id}/execute",
     response_model=AgentActionExecutionResponse,
 )
