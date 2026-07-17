@@ -26,8 +26,13 @@ AgentActionStatusFilter = Literal[
 AgentActionName = Literal[
     "update_organization_contact_email",
     "invite_organization_user",
+    "activate_organization_membership",
+    "update_organization_member_role",
+    "remove_organization_user",
     "assign_organization_seat",
+    "revoke_organization_seat",
     "grant_organization_report_access",
+    "revoke_organization_report_access",
 ]
 
 
@@ -42,9 +47,9 @@ class AgentActionProposalRequest(BaseModel):
     @classmethod
     def validate_arguments(cls, value: dict[str, str]) -> dict[str, str]:
         normalized: dict[str, str] = {}
-        for argument_name, argument_value in value.items():
-            normalized_name = argument_name.strip()
-            normalized_value = argument_value.strip()
+        for name, argument in value.items():
+            normalized_name = name.strip()
+            normalized_value = argument.strip()
             if (
                 not normalized_name
                 or len(normalized_name) > 100
@@ -60,11 +65,11 @@ class AgentActionProposalRequest(BaseModel):
     def validate_contact_email(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        normalized_value = value.strip().lower()
-        local_part, separator, domain_part = normalized_value.partition("@")
-        if not separator or not local_part or "." not in domain_part:
+        normalized = value.strip().lower()
+        local, separator, domain = normalized.partition("@")
+        if not separator or not local or "." not in domain:
             raise ValueError("Contact email is invalid")
-        return normalized_value
+        return normalized
 
     @model_validator(mode="after")
     def validate_compatible_payload(self) -> "AgentActionProposalRequest":
