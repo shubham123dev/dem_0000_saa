@@ -39,6 +39,8 @@ async def capabilities() -> CapabilitiesResponse:
                 risk_level=definition.risk_level,
                 requires_approval=definition.requires_approval,
                 supports_dry_run=definition.supports_dry_run,
+                minimum_approvals=definition.approval_policy.minimum_approvals,
+                self_approval_allowed=definition.approval_policy.self_approval_allowed,
             )
             for definition in definitions
         ),
