@@ -75,7 +75,7 @@ class AgentActionExecutionResult(BaseModel):
 
     proposal_id: str
     idempotency_key: str
-    outcome: Literal["succeeded", "failed"]
+    outcome: Literal["executing", "succeeded", "failed"]
     result: dict[str, Any] | None
     error_code: str | None
     started_at: datetime
