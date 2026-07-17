@@ -30,6 +30,12 @@ ERROR_CODES = frozenset(
         "agent_action_proposal_not_found",
         "agent_action_state_conflict",
         "agent_action_expired",
+        "agent_action_stale",
+        "agent_action_cancelled",
+        "agent_action_already_decided",
+        "agent_action_execution_in_progress",
+        "agent_action_reconciliation_required",
+        "agent_action_idempotency_conflict",
         "internal_error",
     }
 )
