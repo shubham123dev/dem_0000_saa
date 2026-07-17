@@ -8,7 +8,8 @@ This repository is a separate backend for the DBMR Workplace Agent. The existing
 X-Mock-User-Id
 → active backend user
 → active organization membership
-→ backend-owned permission check
+→ backend-owned resource permission
+→ backend-owned action-management permission
 → sandbox and organization-status guard
 → one structured planner call
 → read execution or immutable action proposal
@@ -57,6 +58,17 @@ Low- and medium-risk actions require one approval. High-risk role changes and me
 
 Natural-language requests may create proposals but never approve or execute them.
 
+## Action-management permissions
+
+Lifecycle access is separate from resource authorization:
+
+- `agent.actions.read`
+- `agent.actions.approve`
+- `agent.actions.execute`
+- `agent.actions.reconcile`
+
+A management permission never replaces the selected action's permission. For example, execution of a seat revocation requires both `agent.actions.execute` and `organization.seats.revoke`.
+
 ## Rollback proposals
 
 A successful reversible action can generate a new rollback proposal:
@@ -72,6 +84,17 @@ successful source action
 ```
 
 Rollback never executes automatically. Unsupported or incomplete inverse operations return `agent_action_rollback_unavailable` rather than guessing prior state.
+
+## Operational hardening
+
+- Proposal lists use bounded cursor pagination and optional status, action and requester filters.
+- Pending proposal limits apply per organization and per requester.
+- Proposal rate limits apply per requester per minute.
+- Reconciliation and audit replay have bounded retry counts.
+- Audit replay writes only a recovery audit event; it never repeats the business mutation.
+- A failed execution-start audit remains `audit_pending` after successful mutation completion until replay succeeds.
+- `/ready/details` checks migration head, sandbox mode, registry/handler parity, management permissions and audit backlog without exposing secrets.
+- The deterministic sandbox seed contains three independent administrators so two-person approval policies are usable immediately.
 
 ## Operational invariants
 
@@ -121,7 +144,7 @@ alembic upgrade head
 python -m app.db.seed
 ```
 
-The current migration head is `0008_add_multi_approval_and_rollbacks`. The deterministic seed is idempotent and does not call `create_all()`.
+The current migration head is `0009_operational_hardening`. The deterministic seed is idempotent and does not call `create_all()`.
 
 ## Run
 
@@ -140,11 +163,12 @@ WORKPLACE_ENABLE_RAW_MOCK_API=true
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | Liveness |
-| GET | `/ready` | Database readiness |
-| GET | `/workplace/capabilities` | Read tools and action catalogue |
+| GET | `/ready` | Database connectivity readiness |
+| GET | `/ready/details` | Release-readiness details without secrets |
+| GET | `/workplace/capabilities` | Read tools, action catalogue and approval policies |
 | POST | `/workplace/organizations/{organization_id}/agent/query` | Read plan or dry-run action proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/propose` | Explicit dry-run proposal |
-| GET | `/workplace/organizations/{organization_id}/agent/actions` | List proposals |
+| GET | `/workplace/organizations/{organization_id}/agent/actions` | Bounded cursor-paginated proposal list |
 | GET | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}` | Read a proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Record one approver decision |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Reject and close proposal |
@@ -152,6 +176,7 @@ WORKPLACE_ENABLE_RAW_MOCK_API=true
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal` | Create a separately approved inverse proposal |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Single-use threshold-gated execution |
 | POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile` | Inspect uncertain outcome |
+| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/audit-replay` | Retry audit persistence only |
 
 All organization endpoints require `X-Mock-User-Id` except health, readiness and capabilities.
 
@@ -164,4 +189,4 @@ python -m app.db.seed
 pytest -q
 ```
 
-Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
+The GitHub Actions workflow runs on `main`, pull requests and manual `workflow_dispatch`, across Python 3.11 and 3.12. Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
