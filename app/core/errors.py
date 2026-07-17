@@ -38,6 +38,8 @@ ERROR_CODES = frozenset(
         "organization_access_denied",
         "permission_denied",
         "production_access_blocked",
+        "agent_model_unavailable",
+        "agent_tool_call_invalid",
         "internal_error",
     }
 )
