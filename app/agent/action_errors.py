@@ -42,7 +42,7 @@ class AgentActionCancelledError(AppError):
 class AgentActionAlreadyDecidedError(AppError):
     code = "agent_action_already_decided"
     status_code = status.HTTP_409_CONFLICT
-    message = "Agent action already has an approval decision."
+    message = "This approver has already decided this action or the action is closed."
 
 
 class AgentActionExecutionInProgressError(AppError):
@@ -61,3 +61,9 @@ class AgentActionIdempotencyConflictError(AppError):
     code = "agent_action_idempotency_conflict"
     status_code = status.HTTP_409_CONFLICT
     message = "Agent action was already executed with another idempotency key."
+
+
+class AgentActionRollbackUnavailableError(AppError):
+    code = "agent_action_rollback_unavailable"
+    status_code = status.HTTP_409_CONFLICT
+    message = "A safe rollback proposal is not available for this action outcome."
