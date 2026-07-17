@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.agent.action_registry import AgentActionRegistry
 from app.api.action_dependencies import AgentActionServiceDep
@@ -39,7 +40,13 @@ async def readiness_details(
 ) -> dict:
     await session.execute(text("SELECT 1"))
     settings = get_settings()
-    migration_head = await session.scalar(text("SELECT version_num FROM alembic_version"))
+    try:
+        migration_head = await session.scalar(
+            text("SELECT version_num FROM alembic_version")
+        )
+    except SQLAlchemyError:
+        await session.rollback()
+        migration_head = None
 
     registry_names = {
         definition.name for definition in AgentActionRegistry().list_definitions()
