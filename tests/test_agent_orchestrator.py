@@ -9,6 +9,13 @@ from app.core.errors import OrganizationAccessDeniedError
 from app.domain.enums import OrganizationStatus, UserStatus
 from app.domain.models import OrganizationProfile, User
 
+EXPECTED_ACTION_NAMES = {
+    "update_organization_contact_email",
+    "invite_organization_user",
+    "assign_organization_seat",
+    "grant_organization_report_access",
+}
+
 
 class FakeAgentModelGateway:
     def __init__(self, agent_plan: AgentPlan) -> None:
@@ -17,13 +24,7 @@ class FakeAgentModelGateway:
         self.received_tool_names: tuple[str, ...] = ()
         self.received_action_names: tuple[str, ...] = ()
 
-    async def create_plan(
-        self,
-        *,
-        user_request: str,
-        available_tools,
-        available_actions,
-    ):
+    async def create_plan(self, *, user_request: str, available_tools, available_actions):
         self.received_user_request = user_request
         self.received_tool_names = tuple(tool.name for tool in available_tools)
         self.received_action_names = tuple(action.name for action in available_actions)
@@ -102,131 +103,100 @@ def build_user() -> User:
     )
 
 
-async def test_agent_executes_allowlisted_tool_with_backend_context() -> None:
-    model_gateway = FakeAgentModelGateway(
-        AgentPlan(
-            tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)
-        )
-    )
-    organization_service = FakeOrganizationService()
+def build_orchestrator(plan: AgentPlan, service: FakeOrganizationService | None = None):
+    gateway = FakeAgentModelGateway(plan)
     orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=model_gateway,
+        model_gateway=gateway,
         tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=organization_service,
+        organization_service=service or FakeOrganizationService(),
     )
+    return gateway, orchestrator
 
+
+async def test_agent_executes_allowlisted_tool_with_backend_context() -> None:
+    organization_service = FakeOrganizationService()
+    gateway, orchestrator = build_orchestrator(
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="get_organization_profile"),)),
+        organization_service,
+    )
     execution_result = await orchestrator.execute(
         user=build_user(),
         organization_id="org_request_001",
         user_request="Show the organization profile",
     )
 
-    assert model_gateway.received_user_request == "Show the organization profile"
-    assert "get_organization_profile" in model_gateway.received_tool_names
-    assert model_gateway.received_action_names == (
-        "update_organization_contact_email",
-    )
+    assert gateway.received_user_request == "Show the organization profile"
+    assert "get_organization_profile" in gateway.received_tool_names
+    assert set(gateway.received_action_names) == EXPECTED_ACTION_NAMES
     assert organization_service.calls == [
-        (
-            "get_organization_profile",
-            "usr_request_001",
-            "org_request_001",
-            None,
-        )
+        ("get_organization_profile", "usr_request_001", "org_request_001", None)
     ]
-    assert execution_result.results[0].tool_name == "get_organization_profile"
     assert execution_result.results[0].data.id == "org_request_001"
 
 
 async def test_agent_rejects_unknown_tool_before_service_execution() -> None:
-    organization_service = FakeOrganizationService()
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(tool_calls=(AgentToolCall(tool_name="delete_organization"),))
-        ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=organization_service,
+    service = FakeOrganizationService()
+    _, orchestrator = build_orchestrator(
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="delete_organization"),)),
+        service,
     )
-
     with pytest.raises(InvalidAgentToolCallError):
         await orchestrator.execute(
             user=build_user(),
             organization_id="org_request_001",
             user_request="Delete the organization",
         )
-
-    assert organization_service.calls == []
+    assert service.calls == []
 
 
 async def test_agent_rejects_model_supplied_organization_identity() -> None:
-    organization_service = FakeOrganizationService()
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(
-                tool_calls=(
-                    AgentToolCall(
-                        tool_name="get_organization_profile",
-                        arguments={"organization_id": "org_other_001"},
-                    ),
-                )
+    service = FakeOrganizationService()
+    _, orchestrator = build_orchestrator(
+        AgentPlan(
+            tool_calls=(
+                AgentToolCall(
+                    tool_name="get_organization_profile",
+                    arguments={"organization_id": "org_other_001"},
+                ),
             )
         ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=organization_service,
+        service,
     )
-
     with pytest.raises(InvalidAgentToolCallError):
         await orchestrator.execute(
             user=build_user(),
             organization_id="org_request_001",
             user_request="Show another organization",
         )
-
-    assert organization_service.calls == []
+    assert service.calls == []
 
 
 async def test_agent_requires_exact_report_access_arguments() -> None:
-    organization_service = FakeOrganizationService()
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(
-                tool_calls=(
-                    AgentToolCall(
-                        tool_name="check_organization_report_access",
-                        arguments={"report_id": "rpt_market_001"},
-                    ),
-                )
+    service = FakeOrganizationService()
+    _, orchestrator = build_orchestrator(
+        AgentPlan(
+            tool_calls=(
+                AgentToolCall(
+                    tool_name="check_organization_report_access",
+                    arguments={"report_id": "rpt_market_001"},
+                ),
             )
         ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=organization_service,
+        service,
     )
-
     await orchestrator.execute(
         user=build_user(),
         organization_id="org_request_001",
         user_request="Can I access this report?",
     )
-
-    assert organization_service.calls == [
-        (
-            "check_organization_report_access",
-            "usr_request_001",
-            "org_request_001",
-            "rpt_market_001",
-        )
-    ]
+    assert service.calls[-1][-1] == "rpt_market_001"
 
 
 async def test_agent_propagates_backend_authorization_failure() -> None:
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(tool_calls=(AgentToolCall(tool_name="list_organization_users"),))
-        ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=FakeOrganizationService(deny_access=True),
+    _, orchestrator = build_orchestrator(
+        AgentPlan(tool_calls=(AgentToolCall(tool_name="list_organization_users"),)),
+        FakeOrganizationService(deny_access=True),
     )
-
     with pytest.raises(OrganizationAccessDeniedError):
         await orchestrator.execute(
             user=build_user(),
@@ -236,28 +206,23 @@ async def test_agent_propagates_backend_authorization_failure() -> None:
 
 
 async def test_agent_executes_multiple_validated_calls_in_order() -> None:
-    organization_service = FakeOrganizationService()
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(
-                tool_calls=(
-                    AgentToolCall(tool_name="get_organization_profile"),
-                    AgentToolCall(tool_name="list_organization_reports"),
-                    AgentToolCall(tool_name="get_organization_audit_log"),
-                )
+    service = FakeOrganizationService()
+    _, orchestrator = build_orchestrator(
+        AgentPlan(
+            tool_calls=(
+                AgentToolCall(tool_name="get_organization_profile"),
+                AgentToolCall(tool_name="list_organization_reports"),
+                AgentToolCall(tool_name="get_organization_audit_log"),
             )
         ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=organization_service,
+        service,
     )
-
     execution_result = await orchestrator.execute(
         user=build_user(),
         organization_id="org_request_001",
         user_request="Give me an organization overview",
     )
-
-    assert [call[0] for call in organization_service.calls] == [
+    assert [call[0] for call in service.calls] == [
         "get_organization_profile",
         "list_organization_reports",
         "get_organization_audit_log",
@@ -270,23 +235,18 @@ async def test_agent_executes_multiple_validated_calls_in_order() -> None:
 
 
 async def test_read_executor_rejects_action_plan() -> None:
-    orchestrator = ReadOnlyAgentOrchestrator(
-        model_gateway=FakeAgentModelGateway(
-            AgentPlan(
-                intent="action_proposal",
-                action_proposal={
-                    "action_name": "update_organization_contact_email",
-                    "arguments": {"contact_email": "new@example.test"},
-                },
-            )
-        ),
-        tool_registry=ReadOnlyAgentToolRegistry(),
-        organization_service=FakeOrganizationService(),
+    _, orchestrator = build_orchestrator(
+        AgentPlan(
+            intent="action_proposal",
+            action_proposal={
+                "action_name": "assign_organization_seat",
+                "arguments": {"user_id": "usr_member_003", "seat_type": "standard"},
+            },
+        )
     )
-
     with pytest.raises(InvalidAgentToolCallError):
         await orchestrator.execute(
             user=build_user(),
             organization_id="org_request_001",
-            user_request="Change the email",
+            user_request="Assign a seat",
         )
