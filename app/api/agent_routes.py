@@ -38,14 +38,9 @@ async def query_read_only_agent(
         answer_source=completed_execution.synthesis.answer_source,
         results=tuple(
             AgentToolResultOut(
-                evidence_id=evidence_item.id,
                 tool_name=tool_result.tool_name,
                 data=jsonable_encoder(tool_result.data),
             )
-            for tool_result, evidence_item in zip(
-                completed_execution.results,
-                completed_execution.evidence,
-                strict=True,
-            )
+            for tool_result in completed_execution.results
         ),
     )
