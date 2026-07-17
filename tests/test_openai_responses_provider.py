@@ -10,7 +10,7 @@ from app.agent.errors import AgentModelRequestFailedError, AgentModelResponseInv
 from app.agent.providers.openai_responses import OpenAIResponsesAgentModelGateway
 
 
-def build_gateway(transport: httpx.BaseTransport, *, maximum_attempts: int = 2):
+def build_gateway(transport: httpx.AsyncBaseTransport, *, maximum_attempts: int = 2):
     return OpenAIResponsesAgentModelGateway(
         api_key="test-key",
         model="test-model",
@@ -52,7 +52,7 @@ async def test_provider_builds_safe_structured_request_and_parses_plan() -> None
                     "tool_calls": [
                         {
                             "tool_name": "get_organization_profile",
-                            "arguments": {},
+                            "arguments": {"report_id": None},
                         }
                     ]
                 }
@@ -61,7 +61,7 @@ async def test_provider_builds_safe_structured_request_and_parses_plan() -> None
 
     gateway = build_gateway(httpx.MockTransport(handler))
     plan = await gateway.create_plan(
-        user_request="Show the profile",
+        user_request="Show the profile for org_request_secret",
         available_tools=(
             AgentToolDefinition(
                 name="get_organization_profile",
@@ -71,9 +71,44 @@ async def test_provider_builds_safe_structured_request_and_parses_plan() -> None
     )
 
     assert plan.tool_calls[0].tool_name == "get_organization_profile"
+    assert plan.tool_calls[0].arguments == {}
     assert captured_request["store"] is False
     assert captured_request["text"]["format"]["strict"] is True
-    assert "organization_id" not in json.dumps(captured_request)
+    assert "org_sandbox_001" not in json.dumps(captured_request)
+    await gateway._http_client.aclose()
+
+
+async def test_provider_preserves_required_report_argument() -> None:
+    gateway = build_gateway(
+        httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json=response_payload(
+                    {
+                        "tool_calls": [
+                            {
+                                "tool_name": "check_organization_report_access",
+                                "arguments": {"report_id": "rpt_market_001"},
+                            }
+                        ]
+                    }
+                ),
+            )
+        )
+    )
+
+    plan = await gateway.create_plan(
+        user_request="Check report access",
+        available_tools=(
+            AgentToolDefinition(
+                name="check_organization_report_access",
+                description="Check report access.",
+                required_argument_names=("report_id",),
+            ),
+        ),
+    )
+
+    assert plan.tool_calls[0].arguments == {"report_id": "rpt_market_001"}
     await gateway._http_client.aclose()
 
 
@@ -92,7 +127,7 @@ async def test_provider_retries_retryable_status_then_succeeds() -> None:
                     "tool_calls": [
                         {
                             "tool_name": "list_organization_reports",
-                            "arguments": {},
+                            "arguments": {"report_id": None},
                         }
                     ]
                 }
