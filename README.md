@@ -258,20 +258,3 @@ See `frontend/README.md` and validate with:
 python scripts/validate_frontend_contracts.py --repo .
 pytest -q tests/test_frontend_contracts.py
 ```
-
-<!-- ANGULAR_FRONTEND_PHASE_1_FOUNDATION -->
-## Angular frontend Phase 1
-
-The governed backend now has a native Angular 21 LTS frontend foundation under
-`frontend/`. All 31 existing backend operations are hidden behind one validated
-Angular API facade. Phase 1 adds no fake streaming, reasoning, proposal progress
-or execution progress.
-
-Validate with:
-
-```bash
-python scripts/validate_angular_phase1.py --repo .
-pytest -q tests/test_angular_phase1_foundation.py
-cd frontend
-npm run validate:phase1
-```

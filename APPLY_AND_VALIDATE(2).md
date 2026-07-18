@@ -77,7 +77,7 @@ python -m app.db.seed
 Expected migration:
 
 ```text
-0014_workplace_resources (head)
+0011_nucleus_organization_schema (head)
 ```
 
 Both seed runs must complete successfully.
@@ -155,8 +155,8 @@ Invoke-RestMethod "$base/workplace/capabilities" |
 Expected current surface:
 
 ```text
-20 read tools
-43 write actions
+11 read tools
+16 write actions
 ```
 
 ## 9. Smoke-test one controlled action
@@ -215,8 +215,8 @@ Invoke-RestMethod "$base/ready/details" |
     ConvertTo-Json -Depth 20
 ```
 
-Readiness must report migration `0013_nucleus_admin`, Nucleus administrative
-sidecar support, and registry/handler parity of 38/38, plus workplace-resource runtime and permission checks.
+Readiness must report migration `0011_nucleus_organization_schema` and registry/
+handler parity of 16/16.
 
 ## 11. Commit only after validation
 
@@ -225,78 +225,10 @@ Do not add the ZIP archive.
 ```powershell
 git status --short
 git add app alembic tests docs README.md pyproject.toml APPLY_AND_VALIDATE.md FILE_MANIFEST.md SOURCE_STATE_AUDIT.md VALIDATION_REPORT.md
-git commit -m "add governed workplace resource runtime"
+git commit -m "add Nucleus organization schema vertical slice"
 git push origin main
 git status --short
 ```
 
 After push, the working tree should be clean except for an intentionally
 untracked transport archive outside the repository or excluded by `.gitignore`.
-## Agent-native resource validation
-
-After applying the agent-native resource patch, the migration head remains:
-
-```text
-0014_workplace_resources
-```
-
-Expected capability surface:
-
-```text
-16 read tools
-38 write actions
-38 handlers
-```
-
-Validate natural-language resource discovery and clarification through:
-
-```powershell
-$base = "http://127.0.0.1:8000"
-$org = "org_sandbox_001"
-$admin = @{ "X-Mock-User-Id" = "usr_admin_001" }
-
-Invoke-RestMethod -Method Post -Headers $admin -ContentType "application/json" `
-    -Uri "$base/workplace/organizations/$org/agent/query" `
-    -Body '{"query":"What workplace resources can you manage?"}' |
-    ConvertTo-Json -Depth 40
-
-Invoke-RestMethod "$base/ready/details" | ConvertTo-Json -Depth 30
-```
-
-Readiness must report `read_tools.registered = 16`, exact action/handler parity
-of `38/38`, `agent_resource_tools_registered = true`, and
-`workplace_operation_routes_valid = true`.
-
-
-## Final workplace-workflow validation
-
-Expected migration and governed surface:
-
-```text
-0015_workplace_workflows
-20 read tools
-43 registered actions
-43 handlers
-42 model-selectable actions
-```
-
-Readiness must report `workflow_schema_supported = true`,
-`workplace_workflow_permission_seeded = true`,
-`internal_rollback_hidden_from_model = true`, exact `43/43` action parity and
-20 registered read tools. Run the seed twice and the complete test suite before
-committing.
-
-<!-- ANGULAR_FRONTEND_PHASE_0_VALIDATION -->
-## Angular frontend Phase 0 validation
-
-```powershell
-python scripts/validate_frontend_contracts.py --repo .
-pytest -q tests/test_frontend_contracts.py
-python -m compileall -q scripts tests
-pytest -q
-git diff --check
-```
-
-Expected contract surface: 31 unique public endpoint method/path pairs and 13
-validated synthetic examples. No Angular runtime or fake streaming behavior is
-introduced in this phase.

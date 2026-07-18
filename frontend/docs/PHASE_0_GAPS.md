@@ -19,15 +19,3 @@ Phase 0 records missing interfaces instead of inventing them.
 ## Non-blocking for Phase 0
 
 These gaps do not invalidate the existing governed backend. They prevent the frontend from pretending features exist before their contracts are added.
-
-<!-- ANGULAR_FRONTEND_PHASE_1_STATUS -->
-## Status after Phase 1
-
-Phase 1 closes the missing Angular runtime, runtime configuration, typed API
-facade, request correlation, sandbox-auth interceptor, runtime response
-validation, unit-test foundation and Playwright foundation.
-
-Conversation persistence, SSE/WebSocket streaming, backend activity events,
-execution-step projections, file upload and request-changes behavior remain
-unimplemented. The Angular application explicitly uses `streamTransport: rest`
-and does not simulate any of those capabilities.
