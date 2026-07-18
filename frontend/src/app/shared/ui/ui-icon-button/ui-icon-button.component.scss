@@ -1,0 +1,17 @@
+:host { display: inline-flex; }
+.icon-button {
+  display: inline-grid;
+  width: var(--ui-control-md);
+  height: var(--ui-control-md);
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  transition: background var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard);
+}
+.icon-button:hover:not(:disabled),
+.icon-button[aria-pressed='true'] { background: var(--ui-surface-hover); color: var(--ui-text-primary); }
+.icon-button--danger:hover:not(:disabled) { background: var(--ui-status-danger-bg); color: var(--ui-status-danger-fg); }
+.icon-button:disabled { cursor: not-allowed; opacity: 0.5; }

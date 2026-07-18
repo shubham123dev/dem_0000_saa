@@ -1,0 +1,11 @@
+<button
+  type="button"
+  class="icon-button icon-button--{{ tone }}"
+  [disabled]="disabled"
+  [attr.aria-label]="label"
+  [attr.aria-pressed]="pressed"
+  [attr.title]="label"
+  (click)="activated.emit($event)"
+>
+  <ng-content />
+</button>

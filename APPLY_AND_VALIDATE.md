@@ -327,3 +327,16 @@ Expected frontend foundation: Angular 21 LTS, strict standalone/zoneless
 bootstrap, 31 typed API operations, functional interceptors, fail-closed runtime
 validation, Vitest tests and Playwright discovery. Streaming remains unavailable
 and must not be simulated.
+
+<!-- ANGULAR_FRONTEND_PHASE_2_VALIDATION -->
+## Angular frontend Phase 2 validation
+
+```powershell
+python scripts/validate_angular_phase2.py --repo .
+pytest -q tests/test_angular_phase2.py
+Set-Location frontend
+npm run validate:phase2
+npx playwright test
+Set-Location ..
+git diff --check
+```

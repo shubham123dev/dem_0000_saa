@@ -1,0 +1,6 @@
+.status { display: inline-flex; align-items: center; gap: var(--ui-space-2); color: var(--ui-text-secondary); font-size: var(--ui-text-sm); }
+.status__dot { width: 0.5rem; height: 0.5rem; border-radius: var(--ui-radius-pill); background: var(--ui-text-muted); box-shadow: 0 0 0 3px var(--ui-surface-muted); }
+.status--info .status__dot { background: var(--ui-status-info-fg); box-shadow: 0 0 0 3px var(--ui-status-info-bg); }
+.status--success .status__dot { background: var(--ui-status-success-fg); box-shadow: 0 0 0 3px var(--ui-status-success-bg); }
+.status--warning .status__dot { background: var(--ui-status-warning-fg); box-shadow: 0 0 0 3px var(--ui-status-warning-bg); }
+.status--danger .status__dot { background: var(--ui-status-danger-fg); box-shadow: 0 0 0 3px var(--ui-status-danger-bg); }

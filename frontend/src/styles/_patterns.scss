@@ -1,0 +1,18 @@
+.ui-dot-grid {
+  background-color: var(--ui-surface-subtle);
+  background-image: radial-gradient(var(--ui-border-subtle) 0.7px, transparent 0.7px);
+  background-size: 12px 12px;
+}
+
+.ui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-stack-gap, var(--ui-space-4));
+}
+
+.ui-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-cluster-gap, var(--ui-space-3));
+}

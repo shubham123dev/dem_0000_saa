@@ -1,0 +1,27 @@
+<div class="field" [class.field--invalid]="error">
+  <label class="field__label" [for]="inputId">
+    {{ label }}
+    @if (required) { <span aria-hidden="true">*</span> }
+  </label>
+  <div class="field__control">
+    <ng-content select="[uiInputPrefix]" />
+    <input
+      [id]="inputId"
+      [type]="type"
+      [value]="value"
+      [placeholder]="placeholder"
+      [disabled]="disabled"
+      [required]="required"
+      [autocomplete]="autocomplete"
+      [attr.aria-invalid]="error ? true : null"
+      [attr.aria-describedby]="error ? inputId + '-error' : description ? inputId + '-description' : null"
+      (input)="update($event)"
+    >
+    <ng-content select="[uiInputSuffix]" />
+  </div>
+  @if (error) {
+    <p class="field__message field__message--error" [id]="inputId + '-error'">{{ error }}</p>
+  } @else if (description) {
+    <p class="field__message" [id]="inputId + '-description'">{{ description }}</p>
+  }
+</div>

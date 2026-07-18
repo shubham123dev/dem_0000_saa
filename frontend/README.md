@@ -45,3 +45,8 @@ The browser uses the same-origin `/api` prefix. `npm start` loads
 `http://127.0.0.1:8000`, and removes the prefix. Production must provide the
 same reverse-proxy contract. This avoids exposing endpoint infrastructure in the
 non-technical UI and avoids cross-origin custom-header failures.
+
+<!-- ANGULAR_FRONTEND_PHASE_2_DESIGN_SYSTEM -->
+## Phase 2 design system
+
+The Angular frontend now has semantic light/dark themes, ten accessible UI primitives, a visual showcase, and automated token/component validation. See `frontend/docs/DESIGN_SYSTEM.md`.

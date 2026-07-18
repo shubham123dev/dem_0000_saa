@@ -1,0 +1,49 @@
+:host {
+  display: inline-flex;
+}
+
+:host:has(.ui-button--full) {
+  display: flex;
+  width: 100%;
+}
+
+.ui-button {
+  display: inline-flex;
+  min-width: max-content;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  font-weight: var(--ui-weight-semibold);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--ui-duration-fast) var(--ui-ease-standard), border-color var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard), box-shadow var(--ui-duration-fast) var(--ui-ease-standard), transform var(--ui-duration-fast) var(--ui-ease-standard);
+}
+
+.ui-button:hover:not(:disabled) {
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.ui-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-button--small { min-height: var(--ui-control-sm); padding: 0 var(--ui-space-3); font-size: var(--ui-text-sm); }
+.ui-button--medium { min-height: var(--ui-control-md); padding: 0 var(--ui-space-4); font-size: var(--ui-text-md); }
+.ui-button--large { min-height: var(--ui-control-lg); padding: 0 var(--ui-space-5); font-size: var(--ui-text-lg); }
+.ui-button--full { width: 100%; }
+
+.ui-button--primary { background: var(--ui-brand-500); color: var(--ui-neutral-950); }
+.ui-button--primary:hover:not(:disabled) { background: var(--ui-brand-600); color: var(--ui-neutral-0); }
+.ui-button--secondary { background: var(--ui-surface-inverse); color: var(--ui-text-inverse); }
+.ui-button--outline { border-color: var(--ui-border-default); background: var(--ui-surface-base); color: var(--ui-text-primary); }
+.ui-button--outline:hover:not(:disabled),
+.ui-button--ghost:hover:not(:disabled) { background: var(--ui-surface-hover); }
+.ui-button--ghost { background: transparent; color: var(--ui-text-primary); }
+.ui-button--danger { background: var(--ui-status-danger-fg); color: var(--ui-neutral-0); }

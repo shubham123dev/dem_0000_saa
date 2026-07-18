@@ -1,0 +1,14 @@
+<button
+  class="ui-button ui-button--{{ variant }} ui-button--{{ size }}"
+  [class.ui-button--full]="fullWidth"
+  [class.ui-button--loading]="loading"
+  [type]="buttonType"
+  [disabled]="disabled || loading"
+  [attr.aria-busy]="loading || null"
+  (click)="activate($event)"
+>
+  @if (loading) {
+    <app-ui-spinner [label]="loadingLabel" />
+  }
+  <span class="ui-button__content"><ng-content /></span>
+</button>

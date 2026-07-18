@@ -275,3 +275,8 @@ pytest -q tests/test_angular_phase1_foundation.py
 cd frontend
 npm run validate:phase1
 ```
+
+<!-- ANGULAR_FRONTEND_PHASE_2_DESIGN_SYSTEM -->
+## Angular frontend Phase 2 design system
+
+The Angular workspace now includes semantic light/dark themes, ten accessible UI primitives, and a tested design-system showcase. See `frontend/docs/DESIGN_SYSTEM.md`.

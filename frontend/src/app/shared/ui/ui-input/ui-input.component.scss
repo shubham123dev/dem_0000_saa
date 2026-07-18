@@ -1,0 +1,10 @@
+.field { display: grid; gap: var(--ui-space-2); }
+.field__label { color: var(--ui-text-primary); font-size: var(--ui-text-sm); font-weight: var(--ui-weight-semibold); }
+.field__control { display: flex; min-height: var(--ui-control-md); align-items: center; gap: var(--ui-space-2); border: 1px solid var(--ui-border-default); border-radius: var(--ui-radius-sm); background: var(--ui-surface-base); padding: 0 var(--ui-space-3); transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), box-shadow var(--ui-duration-fast) var(--ui-ease-standard); }
+.field__control:focus-within { border-color: var(--ui-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-border-focus) 18%, transparent); }
+.field__control input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ui-text-primary); }
+.field__control input::placeholder { color: var(--ui-text-muted); }
+.field__control:has(input:disabled) { background: var(--ui-surface-muted); opacity: 0.7; }
+.field__message { margin: 0; color: var(--ui-text-muted); font-size: var(--ui-text-xs); }
+.field--invalid .field__control { border-color: var(--ui-status-danger-fg); }
+.field__message--error { color: var(--ui-status-danger-fg); }

@@ -1,0 +1,23 @@
+<div class="field" [class.field--invalid]="error">
+  <div class="field__heading">
+    <label class="field__label" [for]="textareaId">{{ label }} @if (required) { <span aria-hidden="true">*</span> }</label>
+    @if (maxLength !== null) { <span class="field__count">{{ value.length }} / {{ maxLength }}</span> }
+  </div>
+  <textarea
+    [id]="textareaId"
+    [value]="value"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    [required]="required"
+    [rows]="rows"
+    [attr.maxlength]="maxLength"
+    [attr.aria-invalid]="error ? true : null"
+    [attr.aria-describedby]="error ? textareaId + '-error' : description ? textareaId + '-description' : null"
+    (input)="update($event)"
+  ></textarea>
+  @if (error) {
+    <p class="field__message field__message--error" [id]="textareaId + '-error'">{{ error }}</p>
+  } @else if (description) {
+    <p class="field__message" [id]="textareaId + '-description'">{{ description }}</p>
+  }
+</div>
