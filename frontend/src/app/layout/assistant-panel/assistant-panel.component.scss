@@ -25,3 +25,6 @@ header > div { display: flex; align-items: center; gap: var(--ui-space-2); }
 .assistant-pending small { color: var(--ui-text-muted); font-size: var(--ui-text-xs); }
 footer { display: grid; gap: var(--ui-space-2); border-top: 1px solid var(--ui-border-subtle); background: var(--ui-surface-base); padding: var(--ui-space-3); }
 .session-note { margin: 0; color: var(--ui-text-muted); font-size: var(--ui-text-xs); line-height: var(--ui-leading-normal); }
+
+.resume-actions { display:grid; gap:var(--ui-space-3); }
+.resume-actions app-ui-button { justify-self:start; }

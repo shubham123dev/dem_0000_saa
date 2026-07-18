@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "run_id": "run_example",
+  "sequence": 5,
+  "type": "answer.completed",
+  "stage": "completion",
+  "message": "Answer ready",
+  "payload": {
+    "message": {
+      "id": "message_assistant_example",
+      "sequence": 2,
+      "role": "assistant",
+      "content": "There are twelve active users.",
+      "mode": "read",
+      "answer_source": "model",
+      "safe_metadata": {
+        "source_count": 1,
+        "missing_fields": []
+      },
+      "created_at": "2026-07-19T12:00:04Z"
+    }
+  },
+  "terminal": true,
+  "occurred_at": "2026-07-19T12:00:04Z"
+}

@@ -43,6 +43,13 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
     ) -> AgentActionProposal:
         settings = get_settings()
         repository = self._hardened_repository
+        source_agent_run_id = (provenance or {}).get("agent_run_id")
+        if isinstance(source_agent_run_id, str) and source_agent_run_id:
+            existing = await repository.get_proposal_by_source_agent_run_id(
+                source_agent_run_id
+            )
+            if existing is not None:
+                return existing
         pending_organization = await repository.count_pending(
             organization_id=organization_id
         )

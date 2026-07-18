@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Angular Phase 0 contracts against the current FastAPI application."""
+"""Validate the browser-facing contract inventory against FastAPI OpenAPI."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+
+EXPECTED_ENDPOINT_COUNT = 36
 
 
 def _load_json(path: Path) -> Any:
@@ -32,7 +34,9 @@ def _ref_name(schema: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _operation_schema(operation: dict[str, Any], *, request: bool) -> dict[str, Any] | None:
+def _operation_schema(
+    operation: dict[str, Any], *, request: bool, response_status: int = 200
+) -> dict[str, Any] | None:
     if request:
         return (
             operation.get("requestBody", {})
@@ -40,13 +44,13 @@ def _operation_schema(operation: dict[str, Any], *, request: bool) -> dict[str, 
             .get("application/json", {})
             .get("schema")
         )
-    return (
-        operation.get("responses", {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema")
-    )
+    response = operation.get("responses", {}).get(str(response_status), {})
+    content = response.get("content", {})
+    for media_type in ("application/json", "text/event-stream"):
+        schema = content.get(media_type, {}).get("schema")
+        if schema:
+            return schema
+    return None
 
 
 def _validate_ui_samples(examples_dir: Path, errors: list[str]) -> None:
@@ -72,9 +76,7 @@ def _validate_ui_samples(examples_dir: Path, errors: list[str]) -> None:
             continue
         missing_payload = payload_requirements[event_type] - set(payload)
         if missing_payload:
-            errors.append(
-                f"{path}: missing payload fields {sorted(missing_payload)}"
-            )
+            errors.append(f"{path}: missing payload fields {sorted(missing_payload)}")
 
 
 def validate_contracts(repo: Path) -> list[str]:
@@ -88,6 +90,12 @@ def validate_contracts(repo: Path) -> list[str]:
         AgentActionExecutionResponse,
         AgentActionProposalResponse,
     )
+    from app.schemas.agent_run import (
+        AgentConversationResponse,
+        AgentRunCreateResponse,
+        AgentRunEventOut,
+        AgentRunOut,
+    )
     from app.schemas.organization import CapabilitiesResponse
     from app.schemas.workplace_resources import WorkplaceResourceSearchResponse
 
@@ -95,6 +103,7 @@ def validate_contracts(repo: Path) -> list[str]:
     contracts = repo / "frontend" / "contracts"
     manifest_path = contracts / "api-manifest.json"
     schema_path = contracts / "ui-event.schema.json"
+    run_event_schema_path = contracts / "agent-run-event.schema.json"
     examples_dir = contracts / "examples"
 
     manifest = _load_json(manifest_path)
@@ -103,8 +112,10 @@ def validate_contracts(repo: Path) -> list[str]:
         return ["api-manifest.json: endpoints must be an array"]
     if manifest.get("endpoint_count") != len(endpoints):
         errors.append("api-manifest.json: endpoint_count does not match endpoints")
-    if len(endpoints) != 31:
-        errors.append(f"api-manifest.json: expected 31 endpoints, found {len(endpoints)}")
+    if len(endpoints) != EXPECTED_ENDPOINT_COUNT:
+        errors.append(
+            f"api-manifest.json: expected {EXPECTED_ENDPOINT_COUNT} endpoints, found {len(endpoints)}"
+        )
 
     seen: set[tuple[str, str]] = set()
     openapi = create_app().openapi()
@@ -137,17 +148,22 @@ def validate_contracts(repo: Path) -> list[str]:
             actual_request = _ref_name(_operation_schema(operation, request=True))
             if actual_request != request_model:
                 errors.append(
-                    f"{method} {path}: request model {actual_request!r}, "
-                    f"expected {request_model!r}"
+                    f"{method} {path}: request model {actual_request!r}, expected {request_model!r}"
                 )
 
         response_model = item.get("response_model")
         if response_model:
-            actual_response = _ref_name(_operation_schema(operation, request=False))
+            status_code = int(item.get("response_status", 200))
+            actual_response = _ref_name(
+                _operation_schema(
+                    operation,
+                    request=False,
+                    response_status=status_code,
+                )
+            )
             if actual_response != response_model:
                 errors.append(
-                    f"{method} {path}: response model {actual_response!r}, "
-                    f"expected {response_model!r}"
+                    f"{method} {path}: response model {actual_response!r}, expected {response_model!r}"
                 )
 
     model_samples = {
@@ -160,11 +176,16 @@ def validate_contracts(repo: Path) -> list[str]:
         "execution-reconciliation-required.json": AgentActionExecutionResponse,
         "resource-search.json": WorkplaceResourceSearchResponse,
         "capabilities-shape.json": CapabilitiesResponse,
+        "agent-run-created.json": AgentRunCreateResponse,
+        "agent-run-conversation.json": AgentConversationResponse,
+        "agent-run-state.json": AgentRunOut,
+        "agent-run-activity.json": AgentRunEventOut,
+        "agent-run-answer.json": AgentRunEventOut,
     }
     for filename, model in model_samples.items():
         try:
             model.model_validate(_load_json(examples_dir / filename))
-        except Exception as exception:  # validator reports exact sample context
+        except Exception as exception:
             errors.append(f"{filename}: {exception}")
 
     error_sample = _load_json(examples_dir / "error-stale.json")
@@ -199,26 +220,35 @@ def validate_contracts(repo: Path) -> list[str]:
             "error",
         }
         if event_types != required_types:
-            errors.append(
-                "ui-event.schema.json: normalized event types do not match contract"
-            )
+            errors.append("ui-event.schema.json: normalized event types do not match contract")
         if "reasoning" in event_types or "chain_of_thought" in event_types:
             errors.append("ui-event.schema.json: raw reasoning event is forbidden")
+
+    run_event_schema = _load_json(run_event_schema_path)
+    forbidden_serialized = json.dumps(run_event_schema).lower()
+    for forbidden in ("chain_of_thought", "reasoning", "tool_arguments", "system_prompt"):
+        if forbidden in forbidden_serialized:
+            errors.append(f"agent-run-event.schema.json contains forbidden field {forbidden}")
 
     _validate_ui_samples(examples_dir, errors)
 
     gap_text = (repo / "frontend" / "docs" / "PHASE_0_GAPS.md").read_text(
         encoding="utf-8"
     )
-    for required_gap in (
-        "Conversation persistence API",
-        "Streaming transport",
-        "Live activity trace",
+    for resolved in (
+        "Conversation persistence API | Resolved in Phase 5",
+        "Streaming transport | Resolved in Phase 5",
+        "Live activity trace | Resolved in Phase 5",
+    ):
+        if resolved not in gap_text:
+            errors.append(f"PHASE_0_GAPS.md: missing resolved status {resolved}")
+    for remaining in (
         "Stable execution-step endpoint",
         "Current-user endpoint",
+        "File upload",
     ):
-        if required_gap not in gap_text:
-            errors.append(f"PHASE_0_GAPS.md: missing {required_gap}")
+        if remaining not in gap_text:
+            errors.append(f"PHASE_0_GAPS.md: missing remaining gap {remaining}")
 
     return errors
 
@@ -227,14 +257,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=".")
     args = parser.parse_args()
-    repo = Path(args.repo).resolve()
-    errors = validate_contracts(repo)
+    errors = validate_contracts(Path(args.repo).resolve())
     if errors:
-        print("Angular Phase 0 contract validation failed:")
+        print("Frontend contract validation failed:")
         for error in errors:
             print(f"- {error}")
         return 1
-    print("Angular Phase 0 contracts are valid: 31 endpoints and 13 examples.")
+    print("Frontend contracts are valid: 36 endpoints, durable runs, and safe SSE events.")
     return 0
 
 

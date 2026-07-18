@@ -1,0 +1,29 @@
+{
+  "conversation_id": "conversation_example",
+  "messages": [
+    {
+      "id": "message_user_example",
+      "sequence": 1,
+      "role": "user",
+      "content": "List active users",
+      "mode": null,
+      "answer_source": null,
+      "safe_metadata": null,
+      "created_at": "2026-07-19T12:00:00Z"
+    }
+  ],
+  "active_run": {
+    "id": "run_example",
+    "conversation_id": "conversation_example",
+    "status": "running",
+    "current_stage": "access_check",
+    "final_mode": null,
+    "error_code": null,
+    "cancellation_requested_at": null,
+    "attempt_count": 1,
+    "terminal": false,
+    "created_at": "2026-07-19T12:00:00Z",
+    "started_at": "2026-07-19T12:00:01Z",
+    "completed_at": null
+  }
+}

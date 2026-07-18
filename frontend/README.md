@@ -60,3 +60,7 @@ The Angular app now uses the production-shaped three-panel workplace shell. Phas
 ## Phase 4 Ask AI conversation
 
 The responsive Ask AI panel is connected to `WorkplaceAgentApiService.query`. It renders all three current backend response modes, keeps only normalized current-tab history, and never invents streaming or hidden reasoning.
+<!-- ANGULAR_FRONTEND_PHASE_5_DURABLE_RUNS -->
+## Phase 5 durable runs and live activity
+
+Ask AI now uses backend-authoritative conversations and resumable authenticated SSE. The browser keeps only recovery identifiers and a replay cursor; `/agent/query` remains the explicit REST fallback.

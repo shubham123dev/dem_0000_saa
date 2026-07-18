@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = new URL('../src/app/', import.meta.url);
 const rootPath = fileURLToPath(root);
-const allowedHttpFiles = new Set(['core/api/validated-http.service.ts']);
+const allowedHttpFiles = new Set(['core/api/validated-http.service.ts', 'core/agent-run/agent-run-stream.service.ts']);
 const violations = [];
 
 async function walk(url) {

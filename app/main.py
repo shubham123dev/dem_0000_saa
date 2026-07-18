@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import uuid
 
 from fastapi import FastAPI, Request
@@ -10,6 +11,7 @@ from app import __version__
 from app.api import (
     action_routes,
     agent_routes,
+    agent_run_routes,
     health_routes,
     nucleus_routes,
     workplace_resource_routes,
@@ -17,7 +19,26 @@ from app.api import (
 )
 from app.core.config import get_settings
 from app.core.errors import REQUEST_ID_HEADER, register_exception_handlers
+from app.db.session import get_sessionmaker
 from app.mock_api import routes as mock_api_routes
+from app.services.agent_run_worker import AgentRunCoordinator
+
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
+    settings = get_settings()
+    coordinator = AgentRunCoordinator(
+        get_sessionmaker(),
+        poll_seconds=settings.agent_run_poll_seconds,
+        lease_seconds=settings.agent_run_lease_seconds,
+        lease_renew_seconds=settings.agent_run_lease_renew_seconds,
+    )
+    application.state.agent_run_coordinator = coordinator
+    await coordinator.start()
+    try:
+        yield
+    finally:
+        await coordinator.stop()
 
 
 def create_app() -> FastAPI:
@@ -31,6 +52,7 @@ def create_app() -> FastAPI:
             "grounded chat planning and explicit approval-gated actions. "
             "Production organization access is blocked."
         ),
+        lifespan=_lifespan,
     )
 
     @application.middleware("http")
@@ -48,6 +70,7 @@ def create_app() -> FastAPI:
     application.include_router(nucleus_routes.router)
     application.include_router(workplace_resource_routes.router)
     application.include_router(agent_routes.router)
+    application.include_router(agent_run_routes.router)
     application.include_router(action_routes.router)
 
     if settings.is_sandbox and settings.enable_raw_mock_api:

@@ -1,63 +1,37 @@
 import { DOCUMENT } from '@angular/common';
 import { computed, DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
-import type { Subscription } from 'rxjs';
+import { map, switchMap, type Subscription } from 'rxjs';
+import { AgentRunApiService } from '../../core/agent-run/agent-run-api.service';
+import type { AgentRunEvent, AgentRunMessage, AgentRunStreamUpdate } from '../../core/agent-run/agent-run.models';
+import { agentRunMessageSchema } from '../../core/agent-run/agent-run.schemas';
+import { AgentRunStreamService } from '../../core/agent-run/agent-run-stream.service';
 import { WorkplaceAgentApiService } from '../../core/api/workplace-agent-api.service';
 import { APP_RUNTIME_CONFIG } from '../../core/config/app-config.token';
 import { normalizeWorkplaceError } from '../../core/errors/error-normalizer';
-import type { ConversationMessage, ConversationSnapshot, PendingClarification } from './agent-conversation.model';
-import { conversationSnapshotSchema, emptyConversationMessage } from './agent-conversation.model';
-import { mapAgentResponse } from './agent-response.mapper';
+import type { AgentActivityItem, AgentConversationRecovery, AgentRunConnectionState } from './agent-activity.model';
+import type { ConversationMessage, PendingClarification } from './agent-conversation.model';
+import { emptyConversationMessage } from './agent-conversation.model';
+import { mapAgentResponse, mapAgentRunMessage } from './agent-response.mapper';
 
-const STORAGE_KEY = 'dbmr-workplace-conversation-v1';
-const SNAPSHOT_VERSION = 1;
-const MAX_MESSAGES = 60;
-const MAX_SNAPSHOT_BYTES = 220_000;
+const STORAGE_KEY = 'dbmr-workplace-conversation-v2';
+const MAX_MESSAGES = 100;
 export const CLARIFICATION_REPLY_LIMIT = 1200;
 
 interface SubmissionRecord {
   readonly displayText: string;
   readonly apiQuery: string;
-  readonly rootOriginal: string;
-  readonly collectedDetails: readonly string[];
-  readonly contextNote: string | null;
+  readonly clientRequestId: string;
 }
 
-
-function createOrganizationScope(value: string): string {
+function organizationScope(value: string): string {
   let hash = 2166136261;
-  for (const character of value) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
+  for (const character of value) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16777619); }
   return `scope-${(hash >>> 0).toString(16)}`;
 }
 
-function truncate(value: string, limit: number): string {
-  const compact = value.trim();
-  return compact.length <= limit ? compact : `${compact.slice(0, limit - 1)}…`;
-}
-
 export function composeClarificationQuery(context: PendingClarification, reply: string): string {
-  const previousDetails = context.collectedDetails.length
-    ? context.collectedDetails.map((detail, index) => `${index + 1}. ${detail}`).join('\n')
-    : 'None yet.';
-  const query = [
-    'Original request:',
-    truncate(context.originalRequest, 1300),
-    '',
-    'Previous clarification details:',
-    truncate(previousDetails, 600),
-    '',
-    'Clarification requested by the workplace agent:',
-    truncate(context.question, 500),
-    '',
-    'Additional details from the user:',
-    truncate(reply, CLARIFICATION_REPLY_LIMIT),
-    '',
-    'Re-evaluate the original request using these details. Ask another clarification only when a required field is still missing.'
-  ].join('\n');
-  if (query.length > 4000) throw new Error('Clarification context exceeds the backend request limit.');
-  return query;
+  const details = context.collectedDetails.length ? context.collectedDetails.join('\n') : 'None yet.';
+  return ['Original request:', context.originalRequest.slice(0,1300), '', 'Previous clarification details:', details.slice(0,600), '', 'Clarification requested by the workplace agent:', context.question.slice(0,500), '', 'Additional details from the user:', reply.slice(0,CLARIFICATION_REPLY_LIMIT)].join('\n').slice(0,4000);
 }
 
 @Injectable({ providedIn: 'root' })
@@ -65,136 +39,276 @@ export class AgentConversationStore {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly config = inject(APP_RUNTIME_CONFIG);
-  private readonly api = inject(WorkplaceAgentApiService);
+  private readonly restApi = inject(WorkplaceAgentApiService);
+  private readonly runApi = inject(AgentRunApiService);
+  private readonly stream = inject(AgentRunStreamService);
   private readonly organizationId = this.config.defaultOrganizationId;
-  private readonly organizationScope = this.organizationId ? createOrganizationScope(this.organizationId) : null;
-  private readonly initialSnapshot = this.readSnapshot();
-  private readonly messagesState = signal<ConversationMessage[]>(this.initialSnapshot?.messages ?? []);
+  private readonly scope = this.organizationId ? organizationScope(this.organizationId) : null;
+  private readonly recovery = this.readRecovery();
+  private readonly messagesState = signal<ConversationMessage[]>([]);
+  private readonly activitiesState = signal<AgentActivityItem[]>([]);
   private readonly pendingState = signal(false);
-  private readonly clarificationState = signal<PendingClarification | null>(this.initialSnapshot?.pendingClarification ?? null);
+  private readonly clarificationState = signal<PendingClarification | null>(null);
   private readonly retryMessageIdState = signal<string | null>(null);
-  private activeRequest: Subscription | null = null;
+  private readonly connectionState = signal<AgentRunConnectionState>('closed');
+  private readonly conversationIdState = signal<string | null>(this.recovery?.conversationId ?? null);
+  private readonly activeRunIdState = signal<string | null>(this.recovery?.activeRunId ?? null);
+  private readonly lastEventSequenceState = signal(this.recovery?.lastEventSequence ?? 0);
+  private readonly cancellationRequestedState = signal(false);
+  private readonly watchingStoppedState = signal(false);
+  private requestSubscription: Subscription | null = null;
+  private streamSubscription: Subscription | null = null;
+  private streamAbort: AbortController | null = null;
   private lastSubmission: SubmissionRecord | null = null;
 
   readonly messages = this.messagesState.asReadonly();
+  readonly activities = this.activitiesState.asReadonly();
   readonly pending = this.pendingState.asReadonly();
   readonly pendingClarification = this.clarificationState.asReadonly();
   readonly retryMessageId = this.retryMessageIdState.asReadonly();
+  readonly connection = this.connectionState.asReadonly();
+  readonly cancellationRequested = this.cancellationRequestedState.asReadonly();
+  readonly streamingEnabled = computed(() => this.config.streamTransport === 'sse');
   readonly hasMessages = computed(() => this.messages().length > 0);
   readonly inputLimit = computed(() => this.pendingClarification() ? CLARIFICATION_REPLY_LIMIT : 4000);
   readonly configured = computed(() => Boolean(this.organizationId));
-  readonly canSubmit = computed(() => this.configured() && !this.pending());
+  readonly canSubmit = computed(() => this.configured() && !this.pending() && !this.activeRunIdState());
+  readonly canCancel = computed(() => this.streamingEnabled() && Boolean(this.activeRunIdState()) && !this.cancellationRequested());
+  readonly canResume = computed(() => this.streamingEnabled() && Boolean(this.activeRunIdState()) && this.watchingStoppedState());
 
   constructor() {
-    effect(() => this.persistSnapshot(this.messages(), this.pendingClarification()));
-    this.destroyRef.onDestroy(() => this.activeRequest?.unsubscribe());
+    effect(() => this.persistRecovery());
+    this.destroyRef.onDestroy(() => this.stopAll());
+    if (this.streamingEnabled() && this.conversationIdState()) queueMicrotask(() => this.recover());
   }
 
   submit(text: string): void {
     const normalized = text.trim();
     if (!normalized || !this.canSubmit() || normalized.length > this.inputLimit()) return;
-    const clarification = this.pendingClarification();
-    const submission: SubmissionRecord = clarification
-      ? {
-          displayText: normalized,
-          apiQuery: composeClarificationQuery(clarification, normalized),
-          rootOriginal: clarification.originalRequest,
-          collectedDetails: [...clarification.collectedDetails, normalized],
-          contextNote: 'Sent together with the original request and earlier clarification details.'
-        }
-      : {
-          displayText: normalized,
-          apiQuery: normalized,
-          rootOriginal: normalized,
-          collectedDetails: [],
-          contextNote: null
-        };
-    this.send(submission);
+    if (this.streamingEnabled()) this.submitRun(normalized);
+    else this.submitRest(normalized);
   }
 
   retryLast(): void {
     if (!this.lastSubmission || this.pending()) return;
-    this.send({
-      ...this.lastSubmission,
-      contextNote: 'Retried manually. Check Pending approvals if the earlier request may have completed.'
-    });
+    if (this.streamingEnabled()) this.submitRun(this.lastSubmission.displayText, this.lastSubmission.clientRequestId);
+    else this.submitRest(this.lastSubmission.displayText);
   }
 
   stopWaiting(): void {
     if (!this.pending()) return;
-    this.activeRequest?.unsubscribe();
-    this.activeRequest = null;
+    if (this.streamingEnabled() && this.activeRunIdState()) {
+      this.streamAbort?.abort();
+      this.streamSubscription?.unsubscribe();
+      this.streamSubscription = null;
+      this.pendingState.set(false);
+      this.connectionState.set('closed');
+      this.watchingStoppedState.set(true);
+      this.appendNotice('Stopped watching this run. It continues safely in the backend and can be resumed without resubmitting.', 'Run still active');
+      return;
+    }
+    this.requestSubscription?.unsubscribe();
+    this.requestSubscription = null;
     this.pendingState.set(false);
-    this.retryMessageIdState.set(null);
-    this.append({
-      ...emptyConversationMessage(
-        'notice',
-        'Stopped waiting for this response. The backend may still have completed the read or prepared a proposal, so check Pending approvals before repeating the request.',
-        this.createId(),
-        this.now()
-      ),
-      tone: 'warning',
-      title: 'Browser request stopped'
+    this.appendNotice('Stopped waiting for this response. The backend may still have completed the request.', 'Browser request stopped');
+  }
+
+  resumeWatching(): void {
+    const runId = this.activeRunIdState();
+    if (!runId || !this.organizationId) return;
+    this.watchingStoppedState.set(false);
+    this.pendingState.set(true);
+    this.connect(runId);
+  }
+
+  cancelActiveRun(): void {
+    const runId = this.activeRunIdState();
+    if (!runId || !this.organizationId || !this.canCancel()) return;
+    this.cancellationRequestedState.set(true);
+    this.runApi.cancel(this.organizationId, runId).subscribe({
+      next: () => { if (this.watchingStoppedState()) this.resumeWatching(); },
+      error: (error: unknown) => {
+        this.cancellationRequestedState.set(false);
+        this.appendError(error);
+      }
     });
   }
 
-  dismissClarification(): void {
-    this.clarificationState.set(null);
-  }
+  dismissClarification(): void { this.clearConversation(); }
 
   clearConversation(): void {
-    this.activeRequest?.unsubscribe();
-    this.activeRequest = null;
+    this.stopAll();
     this.lastSubmission = null;
-    this.pendingState.set(false);
-    this.retryMessageIdState.set(null);
-    this.clarificationState.set(null);
     this.messagesState.set([]);
-    this.removeSnapshot();
+    this.activitiesState.set([]);
+    this.pendingState.set(false);
+    this.clarificationState.set(null);
+    this.retryMessageIdState.set(null);
+    this.connectionState.set('closed');
+    this.conversationIdState.set(null);
+    this.activeRunIdState.set(null);
+    this.lastEventSequenceState.set(0);
+    this.cancellationRequestedState.set(false);
+    this.watchingStoppedState.set(false);
+    this.removeRecovery();
   }
 
-  private send(submission: SubmissionRecord): void {
+  private submitRun(displayText: string, existingRequestId?: string): void {
     if (!this.organizationId) return;
-    this.activeRequest?.unsubscribe();
-    this.lastSubmission = submission;
+    const clientRequestId = existingRequestId ?? (globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}`);
+    this.lastSubmission = { displayText, apiQuery: displayText, clientRequestId };
     this.retryMessageIdState.set(null);
-    this.append({
-      ...emptyConversationMessage('user', submission.displayText, this.createId(), this.now()),
-      contextNote: submission.contextNote
-    });
     this.pendingState.set(true);
-
-    this.activeRequest = this.api.query(this.organizationId, submission.apiQuery).subscribe({
-      next: (response) => {
-        this.append(mapAgentResponse(response, this.createId(), this.now()));
-        if (response.mode === 'clarification_required') {
-          this.clarificationState.set({
-            originalRequest: submission.rootOriginal,
-            collectedDetails: [...submission.collectedDetails].slice(-8),
-            question: truncate(response.answer, 4000),
-            missingFields: response.missing_fields.slice(0, 20).map((field) => truncate(field, 160))
-          });
-        } else {
-          this.clarificationState.set(null);
-        }
+    this.watchingStoppedState.set(false);
+    this.activitiesState.set([]);
+    this.requestSubscription?.unsubscribe();
+    this.requestSubscription = this.runApi.create(this.organizationId, {
+      query: displayText,
+      client_request_id: clientRequestId,
+      conversation_id: this.conversationIdState()
+    }).pipe(
+      switchMap((created) => this.runApi.conversation(this.organizationId!, created.conversation_id).pipe(map((conversation) => ({ created, conversation }))))
+    ).subscribe({
+      next: ({ created, conversation }) => {
+        this.conversationIdState.set(created.conversation_id);
+        this.activeRunIdState.set(created.run.id);
+        this.lastEventSequenceState.set(0);
+        this.messagesState.set(conversation.messages.map(mapAgentRunMessage).slice(-MAX_MESSAGES));
+        this.pendingState.set(true);
+        this.connect(created.run.id);
       },
       error: (error: unknown) => {
-        const normalized = normalizeWorkplaceError(error);
-        const messageId = this.createId();
-        this.append({
-          ...emptyConversationMessage('error', normalized.message, messageId, this.now()),
-          tone: 'danger',
-          title: normalized.title,
-          retryable: normalized.retryable
-        });
-        this.retryMessageIdState.set(normalized.retryable ? messageId : null);
         this.pendingState.set(false);
-        this.activeRequest = null;
+        this.appendError(error, true);
+      }
+    });
+  }
+
+  private connect(runId: string): void {
+    if (!this.organizationId) return;
+    this.streamAbort?.abort();
+    this.streamSubscription?.unsubscribe();
+    this.streamAbort = new AbortController();
+    this.streamSubscription = this.stream.watch(
+      this.organizationId, runId, this.lastEventSequenceState(), this.streamAbort.signal
+    ).subscribe({
+      next: (update) => this.handleStreamUpdate(update),
+      error: (error: unknown) => {
+        this.pendingState.set(false);
+        this.connectionState.set('closed');
+        this.watchingStoppedState.set(true);
+        this.appendError(error);
       },
       complete: () => {
-        this.pendingState.set(false);
-        this.activeRequest = null;
+        if (!this.activeRunIdState()) this.pendingState.set(false);
       }
+    });
+  }
+
+  private handleStreamUpdate(update: AgentRunStreamUpdate): void {
+    if (update.kind === 'state') {
+      this.connectionState.set(update.state);
+      return;
+    }
+    const event = update.event;
+    if (event.sequence <= this.lastEventSequenceState()) return;
+    this.lastEventSequenceState.set(event.sequence);
+    if (event.type === 'run.cancel_requested') this.cancellationRequestedState.set(true);
+    if (!event.terminal) this.recordActivity(event);
+    if (event.terminal) this.finishFromEvent(event);
+  }
+
+  private recordActivity(event: AgentRunEvent): void {
+    this.activitiesState.update((items) => {
+      const completed = items.map((item) => ({ ...item, state: 'completed' as const }));
+      return [...completed, { sequence:event.sequence, stage:event.stage, message:event.message, occurredAt:event.occurred_at, state:'active' as const }].slice(-12);
+    });
+  }
+
+  private finishFromEvent(event: AgentRunEvent): void {
+    this.activitiesState.update((items) => items.map((item) => ({ ...item, state:'completed' as const })));
+    const candidate = event.payload?.['message'];
+    const parsed = agentRunMessageSchema.safeParse(candidate);
+    if (parsed.success) {
+      const mapped = mapAgentRunMessage(parsed.data);
+      this.messagesState.update((messages) => {
+        const without = messages.filter((message) => message.id !== mapped.id);
+        return [...without, mapped].slice(-MAX_MESSAGES);
+      });
+      this.setClarificationFromMessage(parsed.data);
+    } else if (event.type === 'run.cancelled') {
+      this.appendNotice('The backend confirmed that this run was cancelled.', 'Run cancelled');
+    } else if (event.type === 'run.failed') {
+      this.appendNotice('The run could not be completed. No hidden error details were exposed.', 'Run failed', 'danger');
+    }
+    this.pendingState.set(false);
+    this.connectionState.set('closed');
+    this.activeRunIdState.set(null);
+    this.cancellationRequestedState.set(false);
+    this.watchingStoppedState.set(false);
+  }
+
+  private setClarificationFromMessage(message: AgentRunMessage): void {
+    if (message.mode !== 'clarification_required') {
+      this.clarificationState.set(null);
+      return;
+    }
+    const missing = Array.isArray(message.safe_metadata?.['missing_fields']) ? message.safe_metadata?.['missing_fields'] : [];
+    this.clarificationState.set({
+      originalRequest: '',
+      collectedDetails: [],
+      question: message.content,
+      missingFields: missing.filter((value): value is string => typeof value === 'string').slice(0,20)
+    });
+  }
+
+  private recover(): void {
+    const conversationId = this.conversationIdState();
+    if (!conversationId || !this.organizationId) return;
+    this.requestSubscription = this.runApi.conversation(this.organizationId, conversationId).subscribe({
+      next: (conversation) => {
+        this.messagesState.set(conversation.messages.map(mapAgentRunMessage).slice(-MAX_MESSAGES));
+        const last = conversation.messages.at(-1);
+        if (last) this.setClarificationFromMessage(last);
+        const active = conversation.active_run;
+        if (active) {
+          if (this.activeRunIdState() !== active.id) {
+            this.lastEventSequenceState.set(0);
+            this.activitiesState.set([]);
+          }
+          this.activeRunIdState.set(active.id);
+          this.pendingState.set(true);
+          this.connect(active.id);
+        } else {
+          this.activeRunIdState.set(null);
+          this.pendingState.set(false);
+        }
+      },
+      error: () => this.clearConversation()
+    });
+  }
+
+  private submitRest(displayText: string): void {
+    if (!this.organizationId) return;
+    const clarification = this.pendingClarification();
+    const apiQuery = clarification ? composeClarificationQuery(clarification, displayText) : displayText;
+    this.lastSubmission = { displayText, apiQuery, clientRequestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}` };
+    this.append(emptyConversationMessage('user', displayText, this.createId(), this.now()));
+    this.pendingState.set(true);
+    this.requestSubscription = this.restApi.query(this.organizationId, apiQuery).subscribe({
+      next: (response) => {
+        const mapped = mapAgentResponse(response, this.createId(), this.now());
+        this.append(mapped);
+        if (response.mode === 'clarification_required') {
+          this.clarificationState.set({ originalRequest: clarification?.originalRequest || displayText, collectedDetails:[...(clarification?.collectedDetails ?? []), ...(clarification ? [displayText] : [])].slice(-8), question:response.answer, missingFields:response.missing_fields.slice(0,20) });
+        } else this.clarificationState.set(null);
+      },
+      error: (error: unknown) => {
+        this.pendingState.set(false);
+        this.requestSubscription = null;
+        this.appendError(error, true);
+      },
+      complete: () => { this.pendingState.set(false); this.requestSubscription = null; }
     });
   }
 
@@ -202,52 +316,47 @@ export class AgentConversationStore {
     this.messagesState.update((messages) => [...messages, message].slice(-MAX_MESSAGES));
   }
 
-  private now(): string {
-    return new Date().toISOString();
+  private appendError(error: unknown, retryable = false): void {
+    const normalized = normalizeWorkplaceError(error);
+    const id = this.createId();
+    this.append({ ...emptyConversationMessage('error', normalized.message, id, this.now()), tone:'danger', title:normalized.title, retryable: retryable && normalized.retryable });
+    this.retryMessageIdState.set(retryable && normalized.retryable ? id : null);
   }
 
-  private createId(): string {
-    return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  private appendNotice(text: string, title: string, tone: 'warning' | 'danger' = 'warning'): void {
+    this.append({ ...emptyConversationMessage(tone === 'danger' ? 'error' : 'notice', text, this.createId(), this.now()), tone, title });
   }
 
-  private readSnapshot(): ConversationSnapshot | null {
-    if (!this.organizationScope) return null;
+  private stopAll(): void {
+    this.requestSubscription?.unsubscribe();
+    this.streamSubscription?.unsubscribe();
+    this.streamAbort?.abort();
+    this.requestSubscription = null;
+    this.streamSubscription = null;
+    this.streamAbort = null;
+  }
+
+  private now(): string { return new Date().toISOString(); }
+  private createId(): string { return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+
+  private readRecovery(): AgentConversationRecovery | null {
+    if (!this.scope) return null;
     try {
       const raw = this.document.defaultView?.sessionStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
-      const parsed: unknown = JSON.parse(raw);
-      const snapshot = conversationSnapshotSchema.parse(parsed);
-      return snapshot.organizationScope === this.organizationScope ? snapshot : null;
-    } catch {
-      this.removeSnapshot();
-      return null;
-    }
+      const value = JSON.parse(raw) as Partial<AgentConversationRecovery>;
+      if (value.version !== 2 || value.organizationScope !== this.scope) return null;
+      return { version:2, organizationScope:this.scope, conversationId:typeof value.conversationId === 'string' ? value.conversationId : null, activeRunId:typeof value.activeRunId === 'string' ? value.activeRunId : null, lastEventSequence:Number.isInteger(value.lastEventSequence) ? Math.max(0, Number(value.lastEventSequence)) : 0 };
+    } catch { return null; }
   }
 
-  private persistSnapshot(messages: readonly ConversationMessage[], pendingClarification: PendingClarification | null): void {
-    if (!this.organizationScope) return;
-    const snapshot: ConversationSnapshot = {
-      version: SNAPSHOT_VERSION,
-      organizationScope: this.organizationScope,
-      messages: [...messages].slice(-MAX_MESSAGES),
-      pendingClarification
-    };
-    try {
-      let encoded = JSON.stringify(snapshot);
-      if (encoded.length > MAX_SNAPSHOT_BYTES) {
-        encoded = JSON.stringify({ ...snapshot, messages: snapshot.messages.slice(-20) });
-      }
-      this.document.defaultView?.sessionStorage.setItem(STORAGE_KEY, encoded);
-    } catch {
-      // Session storage is an optional convenience and never blocks the agent.
-    }
+  private persistRecovery(): void {
+    if (!this.scope || !this.streamingEnabled()) return;
+    const recovery: AgentConversationRecovery = { version:2, organizationScope:this.scope, conversationId:this.conversationIdState(), activeRunId:this.activeRunIdState(), lastEventSequence:this.lastEventSequenceState() };
+    try { this.document.defaultView?.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(recovery)); } catch { /* optional convenience */ }
   }
 
-  private removeSnapshot(): void {
-    try {
-      this.document.defaultView?.sessionStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Storage may be disabled.
-    }
+  private removeRecovery(): void {
+    try { this.document.defaultView?.sessionStorage.removeItem(STORAGE_KEY); } catch { /* storage may be disabled */ }
   }
 }

@@ -38,6 +38,9 @@ ERROR_CODES = frozenset(
         "agent_action_reconciliation_required",
         "agent_action_idempotency_conflict",
         "agent_action_rollback_unavailable",
+        "agent_conversation_not_found",
+        "agent_conversation_busy",
+        "agent_run_not_found",
         "workplace_resource_invalid",
         "workplace_resource_not_found",
         "internal_error",
@@ -105,6 +108,24 @@ class ProductionAccessBlockedError(AppError):
     code = "production_access_blocked"
     status_code = status.HTTP_403_FORBIDDEN
     message = "Production access is blocked in the sandbox environment."
+
+
+class AgentConversationNotFoundError(AppError):
+    code = "agent_conversation_not_found"
+    status_code = status.HTTP_404_NOT_FOUND
+    message = "Conversation not found."
+
+
+class AgentConversationBusyError(AppError):
+    code = "agent_conversation_busy"
+    status_code = status.HTTP_409_CONFLICT
+    message = "The conversation already has an active run."
+
+
+class AgentRunNotFoundError(AppError):
+    code = "agent_run_not_found"
+    status_code = status.HTTP_404_NOT_FOUND
+    message = "Agent run not found."
 
 
 class InternalError(AppError):

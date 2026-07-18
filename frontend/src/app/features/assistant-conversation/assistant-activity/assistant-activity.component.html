@@ -1,0 +1,14 @@
+<section class="activity" aria-label="Agent activity" role="status">
+  <div class="activity__heading">
+    <strong>Activity</strong>
+    <span>{{ cancellationRequested ? 'Cancellation requested' : connection === 'reconnecting' ? 'Reconnecting' : connection === 'open' ? 'Live' : 'Working' }}</span>
+  </div>
+  <ol>
+    @for (item of items; track item.sequence) {
+      <li [class.activity__item--active]="item.state === 'active'">
+        <span class="activity__marker" aria-hidden="true">{{ item.state === 'completed' ? '✓' : '●' }}</span>
+        <span>{{ item.message }}</span>
+      </li>
+    }
+  </ol>
+</section>

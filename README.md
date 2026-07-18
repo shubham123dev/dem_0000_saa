@@ -290,3 +290,7 @@ The design system is hardened for contrast, pre-bootstrap theming, Angular forms
 ## Angular frontend Phase 4 conversation
 
 Ask AI now submits real requests through the existing governed REST agent endpoint and renders read answers, clarification requests, and reviewable action proposals. Current-tab history is normalized and session-scoped; no streaming or server-side conversation persistence is claimed. See `frontend/docs/PHASE_4_CONVERSATION.md`.
+<!-- DURABLE_AGENT_RUNS_SSE_PHASE_5 -->
+## Durable agent runs and resumable SSE
+
+The workplace agent now persists conversations, normalized messages, idempotent runs, leases, and safe operational events. Angular submits commands over REST and follows/replays real backend activity through authenticated fetch-based SSE. See `docs/AGENT_RUNS_SSE.md`.

@@ -1,7 +1,7 @@
 {
-  "contract_version": "0.1.0",
+  "contract_version": "0.2.0",
   "baseline_commit": "1863fc0ec62b148dc1976c154afa1f91e3375c16",
-  "scope": "Angular frontend Phase 0 contract inventory",
+  "scope": "Angular frontend contracts through Phase 5 durable agent runs and SSE",
   "authentication": {
     "mode": "sandbox_header",
     "header": "X-Mock-User-Id",
@@ -23,7 +23,7 @@
     "validation_status": 422,
     "validation_code": "internal_error"
   },
-  "endpoint_count": 31,
+  "endpoint_count": 36,
   "endpoints": [
     {
       "group": "health",
@@ -341,6 +341,63 @@
       "response_model": "AgentActionExecutionResponse",
       "source": "app/api/action_routes.py",
       "purpose": "Replay a pending audit write."
+    },
+    {
+      "group": "agent-runs",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/runs",
+      "auth": true,
+      "request_model": "AgentRunCreateRequest",
+      "response_model": "AgentRunCreateResponse",
+      "response_status": 202,
+      "source": "app/api/agent_run_routes.py",
+      "purpose": "Create or recover an idempotent durable agent run."
+    },
+    {
+      "group": "agent-runs",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/agent/conversations/{conversation_id}",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentConversationResponse",
+      "source": "app/api/agent_run_routes.py",
+      "purpose": "Recover normalized conversation messages and an active run."
+    },
+    {
+      "group": "agent-runs",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/agent/runs/{run_id}",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentRunOut",
+      "source": "app/api/agent_run_routes.py",
+      "purpose": "Read one durable run state."
+    },
+    {
+      "group": "agent-runs",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/agent/runs/{run_id}/events",
+      "auth": true,
+      "request_model": null,
+      "response_model": null,
+      "source": "app/api/agent_run_routes.py",
+      "purpose": "Replay and follow safe persisted run events over SSE.",
+      "query_parameters": [
+        "after_sequence"
+      ],
+      "request_headers": [
+        "Last-Event-ID"
+      ]
+    },
+    {
+      "group": "agent-runs",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/runs/{run_id}/cancel",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentRunOut",
+      "source": "app/api/agent_run_routes.py",
+      "purpose": "Request idempotent cooperative cancellation."
     }
   ]
 }

@@ -18,7 +18,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0015_workplace_workflows"
+EXPECTED_MIGRATION_HEAD = "0016_agent_runs_events"
 
 
 @router.get("/health")
@@ -129,6 +129,23 @@ async def readiness_details(
     except SQLAlchemyError:
         await session.rollback()
         workflow_schema_supported = False
+    try:
+        await session.execute(
+            text(
+                "SELECT conversation_id, status, lease_expires_at, "
+                "next_event_sequence FROM agent_runs LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT run_id, sequence, event_type, terminal "
+                "FROM agent_run_events LIMIT 1"
+            )
+        )
+        agent_run_schema_supported = True
+    except SQLAlchemyError:
+        await session.rollback()
+        agent_run_schema_supported = False
     action_registry = AgentActionRegistry()
     registry_names = {
         definition.name for definition in action_registry.list_definitions()
@@ -241,6 +258,7 @@ async def readiness_details(
             workplace_resource_runtime_supported
         ),
         "workflow_schema_supported": workflow_schema_supported,
+        "agent_run_schema_supported": agent_run_schema_supported,
         "workplace_workflow_permission_seeded": (
             configured_workflow_permission == workflow_permission
         ),
@@ -287,6 +305,8 @@ async def readiness_details(
             "proposals_per_user_per_minute": settings.action_maximum_proposals_per_user_per_minute,
             "maximum_page_size": settings.action_maximum_page_size,
             "maximum_reconciliation_attempts": settings.action_maximum_reconciliation_attempts,
+            "agent_run_lease_seconds": settings.agent_run_lease_seconds,
+            "agent_run_heartbeat_seconds": settings.agent_run_heartbeat_seconds,
         },
         "model": {
             "provider_configured": bool(settings.agent_model_provider),

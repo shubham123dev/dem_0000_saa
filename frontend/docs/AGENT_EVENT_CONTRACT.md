@@ -55,3 +55,7 @@ Until streaming is implemented, Angular will:
 3. poll/get proposal state only when necessary;
 4. execute explicit approve/reject/execute commands;
 5. avoid fake timer-based planning stages.
+<!-- PHASE_5_REAL_SSE_STATUS -->
+## Phase 5 transport status
+
+The normalized activity contract is now backed by durable backend agent-run events. `GET /workplace/organizations/{organization_id}/agent/runs/{run_id}/events` delivers persisted safe events over authenticated fetch-based SSE, supports replay through `Last-Event-ID` or `after_sequence`, emits heartbeat comments, and closes after a terminal event. This transport never exposes private chain-of-thought, prompts, raw tool arguments, SQL, credentials, or unfiltered provider responses.

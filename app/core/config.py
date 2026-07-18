@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     agent_model_retry_delay_seconds: float = Field(default=0.25, ge=0, le=5)
     agent_model_maximum_output_tokens: int = Field(default=1000, ge=100, le=4000)
 
+    agent_run_poll_seconds: float = Field(default=0.75, ge=0.1, le=10)
+    agent_run_lease_seconds: int = Field(default=45, ge=15, le=300)
+    agent_run_lease_renew_seconds: int = Field(default=15, ge=5, le=120)
+    agent_run_stream_poll_seconds: float = Field(default=0.5, ge=0.1, le=5)
+    agent_run_heartbeat_seconds: float = Field(default=15.0, ge=5, le=60)
+
     action_maximum_pending_per_organization: int = Field(default=100, ge=1, le=1000)
     action_maximum_pending_per_user: int = Field(default=20, ge=1, le=200)
     action_maximum_proposals_per_user_per_minute: int = Field(default=10, ge=1, le=100)
@@ -35,6 +41,14 @@ class Settings(BaseSettings):
     action_maximum_page_size: int = Field(default=100, ge=1, le=200)
     action_maximum_reconciliation_attempts: int = Field(default=5, ge=1, le=20)
     action_maximum_audit_replay_attempts: int = Field(default=5, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def validate_agent_run_lease(self) -> "Settings":
+        if self.agent_run_lease_renew_seconds >= self.agent_run_lease_seconds:
+            raise ValueError(
+                "agent_run_lease_renew_seconds must be shorter than agent_run_lease_seconds"
+            )
+        return self
 
     @property
     def is_sandbox(self) -> bool:

@@ -148,6 +148,11 @@ class AgentActionService:
             fingerprint_version=4,
             approval_policy=effective_approval_policy,
             expires_at=expires_at,
+            source_agent_run_id=(
+                provenance.get("agent_run_id")
+                if provenance and isinstance(provenance.get("agent_run_id"), str)
+                else None
+            ),
         )
         details = {"risk_level": proposal.risk_level}
         if provenance:

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "run_id": "run_example",
+  "sequence": 3,
+  "type": "activity.updated",
+  "stage": "data_retrieval",
+  "message": "Reading membership and access information",
+  "payload": null,
+  "terminal": false,
+  "occurred_at": "2026-07-19T12:00:02Z"
+}

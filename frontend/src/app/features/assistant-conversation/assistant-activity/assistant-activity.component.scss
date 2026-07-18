@@ -1,0 +1,9 @@
+.activity { display:grid; gap:var(--ui-space-3); border:1px solid var(--ui-border-subtle); border-radius:var(--ui-radius-md); background:var(--ui-surface-subtle); padding:var(--ui-space-3); }
+.activity__heading { display:flex; align-items:center; justify-content:space-between; gap:var(--ui-space-3); }
+.activity__heading span { color:var(--ui-text-muted); font-size:var(--ui-text-xs); }
+ol { display:grid; gap:var(--ui-space-2); margin:0; padding:0; list-style:none; }
+li { display:flex; gap:var(--ui-space-2); color:var(--ui-text-muted); font-size:var(--ui-text-sm); }
+.activity__item--active { color:var(--ui-text-primary); font-weight:var(--ui-weight-medium); }
+.activity__marker { width:1rem; color:var(--ui-status-success-fg); text-align:center; }
+.activity__item--active .activity__marker { color:var(--ui-brand-600); animation:activity-pulse 1.2s ease-in-out infinite; }
+@keyframes activity-pulse { 50% { opacity:.35; } }

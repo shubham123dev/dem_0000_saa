@@ -15,32 +15,19 @@ export class AssistantComposerComponent {
   @Input() pending = false;
   @Input() maxLength = 4000;
   @Input() clarificationActive = false;
+  @Input() cancelAvailable = false;
   @Output() readonly submitted = new EventEmitter<string>();
   @Output() readonly stopRequested = new EventEmitter<void>();
+  @Output() readonly cancelRequested = new EventEmitter<void>();
   @Output() readonly clarificationCancelled = new EventEmitter<void>();
   readonly draft = signal('');
 
   get remaining(): number { return this.maxLength - this.draft().length; }
   get canSend(): boolean { return !this.disabled && !this.pending && this.draft().trim().length > 0 && this.remaining >= 0; }
-
-  update(event: Event): void {
-    this.draft.set((event.target as HTMLTextAreaElement).value);
-  }
-
+  update(event: Event): void { this.draft.set((event.target as HTMLTextAreaElement).value); }
   keydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-      event.preventDefault();
-      this.submit();
-    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); this.submit(); }
   }
-
-  submit(): void {
-    if (!this.canSend) return;
-    this.submitted.emit(this.draft().trim());
-    this.draft.set('');
-  }
-
-  focus(): void {
-    this.editor?.nativeElement.focus();
-  }
+  submit(): void { if (this.canSend) { this.submitted.emit(this.draft().trim()); this.draft.set(''); } }
+  focus(): void { this.editor?.nativeElement.focus(); }
 }

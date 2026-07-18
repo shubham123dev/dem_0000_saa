@@ -35,6 +35,17 @@ class AgentActionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get_proposal_by_source_agent_run_id(
+        self, source_agent_run_id: str
+    ) -> AgentActionProposal | None:
+        result = await self._session.execute(
+            select(AgentActionProposalORM).where(
+                AgentActionProposalORM.source_agent_run_id == source_agent_run_id
+            )
+        )
+        row = result.scalar_one_or_none()
+        return self._proposal_to_domain(row) if row is not None else None
+
     async def create_proposal(
         self,
         *,
@@ -52,11 +63,19 @@ class AgentActionRepository:
         fingerprint_version: int,
         approval_policy: AgentApprovalPolicy,
         expires_at: datetime,
+        source_agent_run_id: str | None = None,
     ) -> AgentActionProposal:
+        if source_agent_run_id is not None:
+            existing = await self.get_proposal_by_source_agent_run_id(
+                source_agent_run_id
+            )
+            if existing is not None:
+                return existing
         row = AgentActionProposalORM(
             id=uuid.uuid4().hex,
             organization_id=organization_id,
             requested_by_user_id=requested_by_user_id,
+            source_agent_run_id=source_agent_run_id,
             action_name=action_name,
             arguments_json=arguments,
             changes_json=[change.model_dump(mode="json") for change in changes],
@@ -74,7 +93,17 @@ class AgentActionRepository:
             expires_at=expires_at,
         )
         self._session.add(row)
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            if source_agent_run_id is not None:
+                existing = await self.get_proposal_by_source_agent_run_id(
+                    source_agent_run_id
+                )
+                if existing is not None:
+                    return existing
+            raise
         await self._session.refresh(row)
         return self._proposal_to_domain(row)
 

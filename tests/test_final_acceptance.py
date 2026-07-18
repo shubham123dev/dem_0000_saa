@@ -35,13 +35,14 @@ async def test_final_readiness_and_capability_counts(
     readiness = await client.get("/ready/details")
     assert readiness.status_code == 200
     body = readiness.json()
-    assert body["migration"]["expected"] == "0015_workplace_workflows"
+    assert body["migration"]["expected"] == "0016_agent_runs_events"
     assert body["migration"]["current"] in (
-        "0015_workplace_workflows", None
+        "0016_agent_runs_events", None
     )
     assert body["actions"] == {"registered": 43, "handlers": 43}
     assert body["read_tools"] == {"registered": 20}
     assert body["checks"]["workflow_schema_supported"] is True
+    assert body["checks"]["agent_run_schema_supported"] is True
     assert body["checks"]["workplace_workflow_permission_seeded"] is True
     assert body["checks"]["agent_resource_tools_registered"] is True
     assert body["checks"]["registry_handler_parity"] is True

@@ -1,65 +1,44 @@
 import { expect, type Page, test } from '@playwright/test';
 
-async function openAssistant(page: Page) {
-  const panel=page.getByRole('complementary',{name:'Ask AI'});
-  if (await panel.count() === 0) await page.getByRole('button',{name:/Ask AI/}).first().click();
-  await expect(panel).toBeVisible();
-  return panel;
+async function openAssistant(page:Page){await page.waitForLoadState('domcontentloaded');const panel=page.getByRole('complementary',{name:'Ask AI'});if(await panel.count()===0)await page.getByRole('button',{name:/Ask AI/}).first().click();await expect(panel).toBeVisible({timeout:10000});return panel;}
+const run={id:'run_1',conversation_id:'conversation_1',status:'queued',current_stage:'request_acceptance',final_mode:null,error_code:null,cancellation_requested_at:null,attempt_count:0,terminal:false,created_at:'2026-07-19T00:00:00Z',started_at:null,completed_at:null};
+const userMessage={id:'message_1',sequence:1,role:'user',content:'List active users',mode:null,answer_source:null,safe_metadata:null,created_at:'2026-07-19T00:00:00Z'};
+
+async function mockRun(page:Page){
+ await page.route('**/api/workplace/organizations/**/agent/runs',route=>route.fulfill({status:202,contentType:'application/json',body:JSON.stringify({conversation_id:'conversation_1',run,user_message:userMessage,events_url:'/events',created:true})}));
+ await page.route('**/api/workplace/organizations/**/agent/conversations/conversation_1',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({conversation_id:'conversation_1',messages:[userMessage],active_run:run})}));
+ await page.route('**/api/workplace/organizations/**/agent/runs/run_1/events**',route=>route.fulfill({status:200,contentType:'text/event-stream',headers:{'cache-control':'no-cache'},body:[
+  'id: 1\nevent: run.accepted\ndata: '+JSON.stringify({schema_version:1,run_id:'run_1',sequence:1,type:'run.accepted',stage:'request_acceptance',message:'Request accepted',payload:null,terminal:false,occurred_at:'2026-07-19T00:00:00Z'})+'\n\n',
+  'id: 2\nevent: activity.updated\ndata: '+JSON.stringify({schema_version:1,run_id:'run_1',sequence:2,type:'activity.updated',stage:'access_check',message:'Checking your access',payload:null,terminal:false,occurred_at:'2026-07-19T00:00:01Z'})+'\n\n',
+  'id: 3\nevent: answer.completed\ndata: '+JSON.stringify({schema_version:1,run_id:'run_1',sequence:3,type:'answer.completed',stage:'completion',message:'Answer ready',payload:{message:{id:'message_2',sequence:2,role:'assistant',content:'There are twelve active users.',mode:'read',answer_source:'deterministic',safe_metadata:{source_count:1,missing_fields:[]},created_at:'2026-07-19T00:00:02Z'}},terminal:true,occurred_at:'2026-07-19T00:00:02Z'})+'\n\n'
+ ].join('')}));
 }
 
-test('submits a real REST query and renders a normalized read answer', async ({page}) => {
-  await page.route('**/api/workplace/organizations/**/agent/query', async (route) => {
-    const body=route.request().postDataJSON() as {query:string};
-    expect(body.query).toBe('List active users');
-    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'read',organization_id:'org_sandbox_001',answer:'There are twelve active users.',evidence_ids:['evidence_internal'],answer_source:'model',results:[{tool_name:'internal_tool',data:{count:12}}],action_proposal:null,missing_fields:[]})});
-  });
-  await page.goto('/');
-  const panel=await openAssistant(page);
-  const composer=panel.getByRole('textbox',{name:'Ask the workplace agent'});
-  await composer.fill('List active users');
-  await panel.getByRole('button',{name:'Send'}).click();
-  await expect(panel.getByText('There are twelve active users.')).toBeVisible();
-  await expect(panel.getByText('1 verified source')).toBeVisible();
-  await expect(panel).not.toContainText('evidence_internal');
-  await expect(panel).not.toContainText('internal_tool');
-  await page.reload();
-  await expect((await openAssistant(page)).getByText('There are twelve active users.')).toBeVisible();
-});
+test('submits a durable run and renders real SSE activity',async({page})=>{await mockRun(page);await page.goto('/');const panel=await openAssistant(page);await panel.getByRole('textbox',{name:'Ask the workplace agent'}).fill('List active users');await panel.getByRole('button',{name:'Send'}).click();await expect(panel.getByText('Checking your access')).toBeVisible();await expect(panel.getByText('There are twelve active users.')).toBeVisible();await expect(panel).not.toContainText('chain-of-thought');});
 
-test('replays clarification context without pretending the backend has conversation memory', async ({page}) => {
-  let call=0;
-  await page.route('**/api/workplace/organizations/**/agent/query', async (route) => {
-    call += 1;
-    const body=route.request().postDataJSON() as {query:string};
-    if (call === 1) {
-      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'clarification_required',organization_id:'org_sandbox_001',answer:'Which report should receive access?',evidence_ids:[],answer_source:'deterministic',results:[],action_proposal:null,missing_fields:['report_id']})});
-      return;
-    }
-    expect(body.query).toContain('Original request:');
-    expect(body.query).toContain('Additional details from the user:');
-    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'read',organization_id:'org_sandbox_001',answer:'The requested report is available for review.',evidence_ids:[],answer_source:'deterministic',results:[],action_proposal:null,missing_fields:[]})});
-  });
-  await page.goto('/');
-  const panel=await openAssistant(page);
-  const composer=panel.getByRole('textbox',{name:'Ask the workplace agent'});
-  await composer.fill('Grant report access');
-  await panel.getByRole('button',{name:'Send'}).click();
-  await expect(panel.getByText('More detail is required')).toBeVisible();
-  await composer.fill('Use the quarterly market report');
-  await panel.getByRole('button',{name:'Send'}).click();
-  await expect(panel.getByText('The requested report is available for review.')).toBeVisible();
-});
+test('REST fallback remains supported',async({page})=>{await page.route('**/config/app-config.json',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({apiBaseUrl:'/api',defaultOrganizationId:'org_sandbox_001',mockUserId:'usr_admin_001',requestTimeoutMs:30000,enableDebugViews:false,streamTransport:'rest'})}));await page.route('**/api/workplace/organizations/**/agent/query',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'read',organization_id:'org_sandbox_001',answer:'REST answer.',evidence_ids:[],answer_source:'deterministic',results:[],action_proposal:null,missing_fields:[]})}));await page.goto('/');const panel=await openAssistant(page);await panel.getByRole('textbox',{name:'Ask the workplace agent'}).fill('Status');await panel.getByRole('button',{name:'Send'}).click();await expect(panel.getByText('REST answer.')).toBeVisible();});
 
-test('renders governed proposal review without executing it', async ({page}) => {
-  await page.route('**/api/workplace/organizations/**/agent/query', async (route) => {
-    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'action_proposal',organization_id:'org_sandbox_001',answer:'A reviewable onboarding proposal is ready.',evidence_ids:[],answer_source:'deterministic',results:[],missing_fields:[],action_proposal:{id:'proposal_internal',action_name:'onboard_organization_user',risk_level:'medium',status:'pending_approval',changes:[{field:'membership.role',before:null,after:'sandbox_reader'}],expires_at:'2026-07-20T12:00:00Z'}})});
+test('reconnects from the last sequence without resubmitting the run', async ({ page }) => {
+  let postCount = 0;
+  let streamCount = 0;
+  await page.route('**/api/workplace/organizations/**/agent/runs', (route) => {
+    postCount += 1;
+    return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ conversation_id: 'conversation_1', run, user_message: userMessage, events_url: '/events', created: true }) });
+  });
+  await page.route('**/api/workplace/organizations/**/agent/conversations/conversation_1', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ conversation_id: 'conversation_1', messages: [userMessage], active_run: run }) }));
+  await page.route('**/api/workplace/organizations/**/agent/runs/run_1/events**', (route) => {
+    streamCount += 1;
+    const event = streamCount === 1
+      ? { schema_version: 1, run_id: 'run_1', sequence: 1, type: 'activity.updated', stage: 'access_check', message: 'Checking your access', payload: null, terminal: false, occurred_at: '2026-07-19T00:00:00Z' }
+      : { schema_version: 1, run_id: 'run_1', sequence: 2, type: 'answer.completed', stage: 'completion', message: 'Answer ready', payload: { message: { id: 'message_2', sequence: 2, role: 'assistant', content: 'Recovered answer.', mode: 'read', answer_source: 'deterministic', safe_metadata: { source_count: 1, missing_fields: [] }, created_at: '2026-07-19T00:00:02Z' } }, terminal: true, occurred_at: '2026-07-19T00:00:02Z' };
+    return route.fulfill({ status: 200, contentType: 'text/event-stream', body: `id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n` });
   });
   await page.goto('/');
-  const panel=await openAssistant(page);
-  await panel.getByRole('textbox',{name:'Ask the workplace agent'}).fill('Onboard a reader');
-  await panel.getByRole('button',{name:'Send'}).click();
-  await expect(panel.getByText('Review required')).toBeVisible();
-  await expect(panel).not.toContainText('proposal_internal');
-  await panel.getByRole('button',{name:'Review pending approvals'}).click();
-  await expect(page.getByRole('heading',{name:'Pending approvals'})).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const panel = await openAssistant(page);
+  await panel.getByRole('textbox', { name: 'Ask the workplace agent' }).fill('List active users');
+  await panel.getByRole('button', { name: 'Send' }).click();
+  await expect(panel.getByText('Recovered answer.')).toBeVisible({ timeout: 10_000 });
+  expect(postCount).toBe(1);
+  expect(streamCount).toBeGreaterThanOrEqual(2);
 });

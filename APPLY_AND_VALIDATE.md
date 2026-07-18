@@ -369,3 +369,16 @@ Set-Location ..
 pytest -q
 git diff --check
 ```
+<!-- DURABLE_AGENT_RUNS_SSE_PHASE_5_VALIDATION -->
+## Phase 5 durable runs and SSE validation
+
+```powershell
+python scripts/validate_frontend_contracts.py --repo .
+python scripts/validate_phase5_agent_runs.py --repo .
+pytest -q
+Set-Location frontend
+npm run validate:phase5
+npm run e2e
+Set-Location ..
+git diff --check
+```

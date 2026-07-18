@@ -30,6 +30,11 @@ class AgentActionProposalORM(Base):
             "created_at",
             "id",
         ),
+        Index(
+            "ux_agent_action_proposal_source_run",
+            "source_agent_run_id",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -38,6 +43,11 @@ class AgentActionProposalORM(Base):
     )
     requested_by_user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id"), nullable=False, index=True
+    )
+    source_agent_run_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("agent_runs.id", ondelete="SET NULL"),
+        nullable=True,
     )
     action_name: Mapped[str] = mapped_column(String, nullable=False)
     arguments_json: Mapped[dict] = mapped_column(JSON, nullable=False)

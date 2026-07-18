@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0015_workplace_workflows"
+EXPECTED_HEAD = "0016_agent_runs_events"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -22,6 +22,10 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "agent_action_executions",
     "agent_action_proposals",
     "agent_action_rollbacks",
+    "agent_conversations",
+    "agent_messages",
+    "agent_runs",
+    "agent_run_events",
     "alembic_version",
     "audit_events",
     "nucleus_access_tombstones",
@@ -233,7 +237,26 @@ def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
     assert {
         "resource_preconditions_json",
         "fingerprint_version",
+        "source_agent_run_id",
     }.issubset(proposal_columns)
+
+    run_columns = read_column_names(connection, "agent_runs")
+    assert {
+        "conversation_id",
+        "requested_by_user_id",
+        "client_request_id",
+        "active_slot",
+        "status",
+        "current_stage",
+        "proposal_id",
+        "lease_owner",
+        "lease_expires_at",
+        "next_event_sequence",
+        "version",
+    }.issubset(run_columns)
+    assert {"run_id", "sequence", "event_type", "terminal"}.issubset(
+        read_column_names(connection, "agent_run_events")
+    )
 
     actor_columns = read_column_names(connection, "nucleus_actor_mappings")
     assert {"workplace_user_id", "nucleus_actor_id"}.issubset(actor_columns)
@@ -257,7 +280,12 @@ def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
         "ix_agent_action_proposal_org_created",
         "ix_agent_action_proposal_requester_created",
         "ix_agent_action_proposal_status_created",
+        "ux_agent_action_proposal_source_run",
     }.issubset(proposal_indexes)
+    assert "ix_agent_run_claim" in read_index_names(connection, "agent_runs")
+    assert "ix_agent_run_event_replay" in read_index_names(
+        connection, "agent_run_events"
+    )
     assert "ix_agent_action_execution_audit_replay" in read_index_names(
         connection,
         "agent_action_executions",

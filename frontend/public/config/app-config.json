@@ -4,5 +4,5 @@
   "mockUserId": "usr_admin_001",
   "requestTimeoutMs": 30000,
   "enableDebugViews": false,
-  "streamTransport": "rest"
+  "streamTransport": "sse"
 }

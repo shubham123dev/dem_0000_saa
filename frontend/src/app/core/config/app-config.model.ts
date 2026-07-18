@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
 function isSupportedApiBaseUrl(value: string): boolean {
-  if (value.startsWith('/') && !value.startsWith('//')) {
-    return value.length > 1;
-  }
+  if (value.startsWith('/') && !value.startsWith('//')) return value.length > 1;
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
@@ -23,7 +21,7 @@ export const appRuntimeConfigSchema = z.object({
   mockUserId: z.string().trim().min(1).nullable(),
   requestTimeoutMs: z.number().int().min(1000).max(120000),
   enableDebugViews: z.boolean(),
-  streamTransport: z.literal('rest')
+  streamTransport: z.enum(['sse', 'rest'])
 }).strict();
 
 export type AppRuntimeConfig = z.infer<typeof appRuntimeConfigSchema>;

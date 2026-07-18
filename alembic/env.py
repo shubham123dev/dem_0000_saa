@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db import (  # noqa: F401
     action_models,
+    agent_run_models,
     nucleus_admin_models,
     nucleus_models,
     orm_models,
