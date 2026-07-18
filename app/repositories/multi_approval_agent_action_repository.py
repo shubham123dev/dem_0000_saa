@@ -118,6 +118,8 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
         *,
         proposal_id: str,
         idempotency_key: str,
+        executed_by_user_id: str,
+        nucleus_actor_id: int | None,
     ) -> AgentActionExecutionResult:
         now = _utcnow()
         proposal = await self._session.scalar(
@@ -169,6 +171,8 @@ class MultiApprovalAgentActionRepository(AgentActionRepository):
             id=uuid.uuid4().hex,
             proposal_id=proposal_id,
             idempotency_key=idempotency_key,
+            executed_by_user_id=executed_by_user_id,
+            nucleus_actor_id=nucleus_actor_id,
             outcome="executing",
             attempt_count=1,
             last_attempt_at=now,

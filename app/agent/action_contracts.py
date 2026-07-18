@@ -28,6 +28,7 @@ class AgentActionDefinition(BaseModel):
     requires_approval: bool
     supports_dry_run: bool
     approval_policy: AgentApprovalPolicy
+    allow_suspended_organization: bool = False
 
 
 class AgentActionProposalInput(BaseModel):
@@ -182,11 +183,22 @@ class AgentActionApproval(BaseModel):
     consumed_at: datetime | None
 
 
+class AgentActionExecutionContext(BaseModel):
+    """Backend-derived identity and time for one execution attempt."""
+
+    model_config = ConfigDict(frozen=True)
+
+    organization_id: str
+    executed_by_user_id: str
+    nucleus_actor_id: int | None = None
+    execution_started_at: datetime
 class AgentActionExecutionResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     proposal_id: str
     idempotency_key: str
+    executed_by_user_id: str
+    nucleus_actor_id: int | None = None
     outcome: Literal[
         "executing",
         "succeeded",

@@ -16,7 +16,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0012_resource_preconditions"
+EXPECTED_MIGRATION_HEAD = "0013_nucleus_admin"
 
 
 @router.get("/health")
@@ -61,6 +61,30 @@ async def readiness_details(
         await session.rollback()
         proposal_preconditions_supported = False
 
+    try:
+        await session.execute(
+            text(
+                "SELECT workplace_user_id, nucleus_actor_id "
+                "FROM nucleus_actor_mappings LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT resource_type, access_id "
+                "FROM nucleus_access_tombstones LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT executed_by_user_id, nucleus_actor_id "
+                "FROM agent_action_executions LIMIT 1"
+            )
+        )
+        nucleus_admin_sidecars_supported = True
+    except SQLAlchemyError:
+        await session.rollback()
+        nucleus_admin_sidecars_supported = False
+
     registry_names = {
         definition.name for definition in AgentActionRegistry().list_definitions()
     }
@@ -82,6 +106,25 @@ async def readiness_details(
     ).scalars().all()
     configured_management_permissions = set(permission_rows)
 
+    nucleus_admin_permissions = {
+        Permission.ORGANIZATION_ACCOUNT_IDENTITY_UPDATE.value,
+        Permission.ORGANIZATION_LICENSE_UPDATE.value,
+        Permission.ORGANIZATION_LIFECYCLE_UPDATE.value,
+        Permission.ORGANIZATION_ENTITLEMENTS_DELETE.value,
+    }
+    configured_nucleus_admin_permissions = set(
+        (
+            await session.execute(
+                select(RolePermissionORM.permission).where(
+                    RolePermissionORM.role == Role.SANDBOX_ADMIN.value,
+                    RolePermissionORM.permission.in_(
+                        nucleus_admin_permissions
+                    ),
+                )
+            )
+        ).scalars().all()
+    )
+
     audit_pending = int(
         await session.scalar(
             select(func.count())
@@ -96,6 +139,10 @@ async def readiness_details(
         "sandbox_environment": settings.is_sandbox,
         "migration_at_expected_head": migration_head == EXPECTED_MIGRATION_HEAD,
         "proposal_resource_preconditions_supported": proposal_preconditions_supported,
+        "nucleus_admin_sidecars_supported": nucleus_admin_sidecars_supported,
+        "nucleus_admin_permissions_seeded": (
+            configured_nucleus_admin_permissions == nucleus_admin_permissions
+        ),
         "registry_handler_parity": registry_names == handler_names,
         "action_management_permissions_seeded": (
             configured_management_permissions == management_permissions

@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0012_resource_preconditions"
+EXPECTED_HEAD = "0013_nucleus_admin"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -24,6 +24,8 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "agent_action_rollbacks",
     "alembic_version",
     "audit_events",
+    "nucleus_access_tombstones",
+    "nucleus_actor_mappings",
     "nucleus_resource_versions",
     "organization_memberships",
     "organization_overviews",
@@ -208,6 +210,23 @@ def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
         "resource_preconditions_json",
         "fingerprint_version",
     }.issubset(proposal_columns)
+
+    actor_columns = read_column_names(connection, "nucleus_actor_mappings")
+    assert {"workplace_user_id", "nucleus_actor_id"}.issubset(actor_columns)
+    tombstone_columns = read_column_names(connection, "nucleus_access_tombstones")
+    assert {
+        "resource_type",
+        "access_id",
+        "organization_account_id",
+        "version",
+        "snapshot_json",
+        "revoked_by",
+        "revoked_at",
+    }.issubset(tombstone_columns)
+    execution_columns = read_column_names(connection, "agent_action_executions")
+    assert {"executed_by_user_id", "nucleus_actor_id"}.issubset(
+        execution_columns
+    )
 
     proposal_indexes = read_index_names(connection, "agent_action_proposals")
     assert {

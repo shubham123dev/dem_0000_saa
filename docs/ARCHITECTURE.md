@@ -68,3 +68,14 @@ Future:  NucleusOrganizationGateway → NucleusOrganizationApiAdapter → real N
 Routes and chat tools consume stable domain contracts, so the future adapter can
 replace persistence without exposing raw production schemas to the frontend or
 model.
+## Nucleus full administrative control
+
+Nucleus administrative writes are exposed only as named backend-owned
+actions. Profile fields remain low risk; username, license and lifecycle
+transitions require two independent approvals. Authenticated Workplace user
+IDs resolve to integer Nucleus actors through an internal mapping and the
+execution record preserves the original executor for deterministic
+reconciliation. Company-profile, drug, indication and market revocations use
+reversible tombstones because those supplied tables do not contain
+`IsActive`; exact source rows are never physically deleted by this package.
+Password is outside every action, model, response and audit contract.

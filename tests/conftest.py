@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.db import action_models, nucleus_models, orm_models  # noqa: F401
+from app.db import action_models, nucleus_admin_models, nucleus_models, orm_models  # noqa: F401
 from app.db.base import Base
 from app.db.seed import seed
 from app.db.session import get_session

@@ -18,6 +18,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.nucleus_admin_models import NucleusActorMappingORM
 from app.db.nucleus_models import (
     NucleusOrganizationAccountORM,
     NucleusOrganizationCategoryAccessORM,
@@ -110,6 +111,11 @@ USERS = [
     ("usr_outsider_001", "Outsider User", "outsider@example.test"),
 ]
 
+NUCLEUS_ACTOR_MAPPINGS = (
+    ("usr_admin_001", 1001),
+    ("usr_approval_admin_001", 1002),
+    ("usr_approval_admin_002", 1003),
+)
 MEMBERSHIPS = [
     ("usr_admin_001", Role.SANDBOX_ADMIN.value, MembershipStatus.ACTIVE.value),
     (
@@ -310,6 +316,20 @@ async def seed(session: AsyncSession) -> None:
             )
 
     await session.flush()
+
+    for workplace_user_id, nucleus_actor_id in NUCLEUS_ACTOR_MAPPINGS:
+        if (
+            await session.get(NucleusActorMappingORM, workplace_user_id)
+            is None
+        ):
+            session.add(
+                NucleusActorMappingORM(
+                    workplace_user_id=workplace_user_id,
+                    nucleus_actor_id=nucleus_actor_id,
+                    created_at=_EPOCH,
+                    updated_at=_EPOCH,
+                )
+            )
 
     for user_id, role, membership_status in MEMBERSHIPS:
         statement = select(OrganizationMembershipORM).where(

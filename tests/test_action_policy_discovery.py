@@ -10,7 +10,7 @@ async def test_capabilities_publish_backend_owned_approval_policies(
     assert response.status_code == 200
     actions = {item["name"]: item for item in response.json()["write_actions"]}
 
-    assert len(actions) == 16
+    assert len(actions) == 30
     assert actions["update_organization_contact_email"]["minimum_approvals"] == 1
     assert actions["update_organization_contact_email"]["self_approval_allowed"] is True
     assert actions["update_nucleus_organization_account_field"]["minimum_approvals"] == 1
@@ -21,6 +21,9 @@ async def test_capabilities_publish_backend_owned_approval_policies(
     assert actions["update_organization_member_role"]["self_approval_allowed"] is False
     assert actions["remove_organization_user"]["minimum_approvals"] == 2
     assert actions["remove_organization_user"]["self_approval_allowed"] is False
+    assert actions["update_nucleus_organization_license"]["minimum_approvals"] == 2
+    assert actions["update_nucleus_organization_license"]["self_approval_allowed"] is False
+    assert actions["revoke_nucleus_market_access"]["minimum_approvals"] == 2
 
 
 async def test_rollback_requires_successful_reversible_source(

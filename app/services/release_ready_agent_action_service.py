@@ -32,6 +32,9 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=definition.required_permission,
+            allow_suspended_organization=(
+                definition.allow_suspended_organization
+            ),
         )
         # Authorization must precede limit evaluation to avoid leaking queue state.
         # The parent lifecycle intentionally rechecks permission immediately before
@@ -54,6 +57,7 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_READ.value,
+            allow_suspended_organization=True,
         )
         proposal = await self._require_proposal(
             organization_id=organization_id,
@@ -64,5 +68,8 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
+            allow_suspended_organization=(
+                action_definition.allow_suspended_organization
+            ),
         )
         return await self._expire_if_needed(proposal)

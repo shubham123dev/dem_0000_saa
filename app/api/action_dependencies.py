@@ -16,6 +16,17 @@ from app.agent.action_handlers import (
     UpdateOrganizationMemberRoleHandler,
 )
 from app.agent.action_registry import AgentActionRegistry
+from app.agent.nucleus_admin_action_handlers import (
+    COMPANY_PROFILE_ACCESS,
+    DRUG_ACCESS,
+    INDICATION_ACCESS,
+    MARKET_ACCESS,
+    NucleusOrganizationLifecycleHandler,
+    GrantNucleusManagedAccessHandler,
+    RevokeNucleusManagedAccessHandler,
+    UpdateNucleusOrganizationLicenseHandler,
+    UpdateNucleusOrganizationUsernameHandler,
+)
 from app.agent.nucleus_action_handlers import (
     ClearNucleusOrganizationAccountFieldHandler,
     GrantNucleusCategoryAccessHandler,
@@ -37,6 +48,15 @@ from app.api.dependencies import (
 from app.permissions.permission_service import PermissionService
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.nucleus_actor_mapping_repository import (
+    NucleusActorMappingRepository,
+)
+from app.repositories.nucleus_administration_projection_repository import (
+    NucleusAdministrationProjectionRepository,
+)
+from app.repositories.nucleus_administration_repository import (
+    NucleusAdministrationRepository,
+)
 from app.repositories.hardened_agent_action_repository import (
     HardenedAgentActionRepository,
 )
@@ -60,6 +80,8 @@ def get_agent_action_handlers(
     organization_mutations: VersionedOrganizationMutationGatewayDep,
 ) -> dict[str, AgentActionHandler]:
     resources = OperationalResourceService(session)
+    nucleus_admin = NucleusAdministrationRepository(session)
+    nucleus_projections = NucleusAdministrationProjectionRepository(session)
     return {
         "update_organization_contact_email": (
             UpdateOrganizationContactEmailBridgeHandler(
@@ -86,6 +108,62 @@ def get_agent_action_handlers(
         "update_nucleus_organization_permissions": (
             UpdateNucleusOrganizationPermissionsHandler(nucleus)
         ),
+        "update_nucleus_organization_username": (
+            UpdateNucleusOrganizationUsernameHandler(nucleus_admin)
+        ),
+        "update_nucleus_organization_license": (
+            UpdateNucleusOrganizationLicenseHandler(
+                nucleus_admin, nucleus_projections
+            )
+        ),
+        "approve_nucleus_organization_account": (
+            NucleusOrganizationLifecycleHandler(
+                nucleus_admin, nucleus_projections, mode="approve"
+            )
+        ),
+        "reject_nucleus_organization_account": (
+            NucleusOrganizationLifecycleHandler(
+                nucleus_admin, nucleus_projections, mode="reject"
+            )
+        ),
+        "activate_nucleus_organization_account": (
+            NucleusOrganizationLifecycleHandler(
+                nucleus_admin, nucleus_projections, mode="activate"
+            )
+        ),
+        "deactivate_nucleus_organization_account": (
+            NucleusOrganizationLifecycleHandler(
+                nucleus_admin, nucleus_projections, mode="deactivate"
+            )
+        ),
+        "grant_nucleus_company_profile_access": (
+            GrantNucleusManagedAccessHandler(
+                nucleus_admin, COMPANY_PROFILE_ACCESS
+            )
+        ),
+        "revoke_nucleus_company_profile_access": (
+            RevokeNucleusManagedAccessHandler(
+                nucleus_admin, COMPANY_PROFILE_ACCESS
+            )
+        ),
+        "grant_nucleus_drug_access": GrantNucleusManagedAccessHandler(
+            nucleus_admin, DRUG_ACCESS
+        ),
+        "revoke_nucleus_drug_access": RevokeNucleusManagedAccessHandler(
+            nucleus_admin, DRUG_ACCESS
+        ),
+        "grant_nucleus_indication_access": GrantNucleusManagedAccessHandler(
+            nucleus_admin, INDICATION_ACCESS
+        ),
+        "revoke_nucleus_indication_access": RevokeNucleusManagedAccessHandler(
+            nucleus_admin, INDICATION_ACCESS
+        ),
+        "grant_nucleus_market_access": GrantNucleusManagedAccessHandler(
+            nucleus_admin, MARKET_ACCESS
+        ),
+        "revoke_nucleus_market_access": RevokeNucleusManagedAccessHandler(
+            nucleus_admin, MARKET_ACCESS
+        ),
         "invite_organization_user": InviteOrganizationUserHandler(resources),
         "activate_organization_membership": ActivateOrganizationMembershipHandler(
             resources
@@ -109,6 +187,7 @@ def get_agent_action_service(
     organization_gateway: OrganizationGatewayDep,
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repository: Annotated[AuditRepository, Depends(get_audit_repository)],
+    session: SessionDep,
     action_repository: Annotated[
         AgentActionRepository,
         Depends(get_agent_action_repository),
@@ -129,6 +208,7 @@ def get_agent_action_service(
         audit_repository=audit_repository,
         action_registry=action_registry,
         action_handlers=action_handlers,
+        nucleus_actor_mapping_repository=NucleusActorMappingRepository(session),
     )
 
 

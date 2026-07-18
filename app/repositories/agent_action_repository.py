@@ -204,6 +204,8 @@ class AgentActionRepository:
         *,
         proposal_id: str,
         idempotency_key: str,
+        executed_by_user_id: str,
+        nucleus_actor_id: int | None,
     ) -> AgentActionExecutionResult:
         require_transition("approved", "executing")
         now = _utcnow()
@@ -237,6 +239,8 @@ class AgentActionRepository:
             id=uuid.uuid4().hex,
             proposal_id=proposal_id,
             idempotency_key=idempotency_key,
+            executed_by_user_id=executed_by_user_id,
+            nucleus_actor_id=nucleus_actor_id,
             outcome="executing",
             attempt_count=1,
             last_attempt_at=now,
@@ -453,6 +457,8 @@ class AgentActionRepository:
         return AgentActionExecutionResult(
             proposal_id=row.proposal_id,
             idempotency_key=row.idempotency_key,
+            executed_by_user_id=row.executed_by_user_id,
+            nucleus_actor_id=row.nucleus_actor_id,
             outcome=row.outcome,
             result=row.result_json,
             error_code=row.error_code,

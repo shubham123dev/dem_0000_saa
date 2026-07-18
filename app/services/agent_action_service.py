@@ -6,6 +6,7 @@ from typing import Any
 from app.adapters.organization.contract import OrganizationApiGateway
 from app.agent.action_contracts import (
     AgentActionApproval,
+    AgentActionExecutionContext,
     AgentActionExecutionResult,
     AgentActionHandler,
     AgentActionProposal,
@@ -38,6 +39,9 @@ from app.repositories.agent_action_repository import (
     AgentActionTransitionConflictError,
 )
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.nucleus_actor_mapping_repository import (
+    NucleusActorMappingRepository,
+)
 
 
 def _utcnow() -> datetime:
@@ -60,6 +64,7 @@ class AgentActionService:
         audit_repository: AuditRepository,
         action_registry: AgentActionRegistry,
         action_handlers: dict[str, AgentActionHandler],
+        nucleus_actor_mapping_repository: NucleusActorMappingRepository,
     ) -> None:
         self._organization_gateway = organization_gateway
         self._permission_service = permission_service
@@ -67,6 +72,9 @@ class AgentActionService:
         self._audit_repository = audit_repository
         self._action_registry = action_registry
         self._action_handlers = action_handlers
+        self._nucleus_actor_mapping_repository = (
+            nucleus_actor_mapping_repository
+        )
 
     async def propose(
         self,
@@ -84,6 +92,9 @@ class AgentActionService:
             user=user,
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
+            allow_suspended_organization=(
+                action_definition.allow_suspended_organization
+            ),
         )
         handler = self._require_handler(action_definition.name)
         try:
@@ -173,6 +184,9 @@ class AgentActionService:
             user=user,
             organization_id=organization_id,
             required_permission=action_definition.required_permission,
+            allow_suspended_organization=(
+                action_definition.allow_suspended_organization
+            ),
         )
         return await self._expire_if_needed(proposal)
 
@@ -194,6 +208,7 @@ class AgentActionService:
             user=user,
             organization_id=organization_id,
             required_permission=proposal.approval_policy.required_approver_permission,
+            allow_suspended_organization=True,
         )
         if (
             not proposal.approval_policy.self_approval_allowed
@@ -315,10 +330,23 @@ class AgentActionService:
                 target_status="stale",
             )
             raise AgentActionStaleError()
+        nucleus_actor_id = None
+        if getattr(handler, "requires_execution_context", False):
+            nucleus_actor_id = (
+                await self._nucleus_actor_mapping_repository.get_nucleus_actor_id(
+                    user.id
+                )
+            )
+            if nucleus_actor_id is None:
+                raise AgentActionStateConflictError(
+                    "Executor has no Nucleus actor mapping."
+                )
         try:
-            await self._action_repository.start_execution(
+            started_execution = await self._action_repository.start_execution(
                 proposal_id=proposal.id,
                 idempotency_key=idempotency_key,
+                executed_by_user_id=user.id,
+                nucleus_actor_id=nucleus_actor_id,
             )
         except AgentActionTransitionConflictError as exception:
             concurrent_execution = await self._action_repository.get_execution(proposal.id)
@@ -337,8 +365,19 @@ class AgentActionService:
             outcome="success",
             details={"idempotency_key": idempotency_key},
         )
+        context = AgentActionExecutionContext(
+            organization_id=organization_id,
+            executed_by_user_id=started_execution.executed_by_user_id,
+            nucleus_actor_id=started_execution.nucleus_actor_id,
+            execution_started_at=started_execution.started_at,
+        )
         try:
-            handler_result = await handler.execute(proposal=proposal)
+            if getattr(handler, "requires_execution_context", False):
+                handler_result = await handler.execute(
+                    proposal=proposal, context=context
+                )
+            else:
+                handler_result = await handler.execute(proposal=proposal)
         except StaleActionResourceError as exception:
             await self._action_repository.mark_stale_execution(proposal.id)
             raise AgentActionStaleError() from exception
@@ -392,10 +431,23 @@ class AgentActionService:
             return execution
         await self._action_repository.increment_reconciliation_attempt(proposal.id)
         handler = self._require_handler(proposal.action_name)
-        handler_result = await handler.reconcile(
-            proposal=proposal,
-            execution=execution,
+        context = AgentActionExecutionContext(
+            organization_id=organization_id,
+            executed_by_user_id=execution.executed_by_user_id,
+            nucleus_actor_id=execution.nucleus_actor_id,
+            execution_started_at=execution.started_at,
         )
+        if getattr(handler, "requires_execution_context", False):
+            handler_result = await handler.reconcile(
+                proposal=proposal,
+                execution=execution,
+                context=context,
+            )
+        else:
+            handler_result = await handler.reconcile(
+                proposal=proposal,
+                execution=execution,
+            )
         if handler_result is None:
             return await self._action_repository.keep_reconciliation_required(
                 proposal_id=proposal.id,
@@ -462,13 +514,17 @@ class AgentActionService:
         user: User,
         organization_id: str,
         required_permission: str,
+        allow_suspended_organization: bool = False,
     ) -> None:
         organization_profile = await self._organization_gateway.get_profile(
             organization_id
         )
         if organization_profile.environment != Environment.SANDBOX:
             raise ProductionAccessBlockedError()
-        if organization_profile.status != OrganizationStatus.ACTIVE:
+        if (
+            organization_profile.status != OrganizationStatus.ACTIVE
+            and not allow_suspended_organization
+        ):
             raise OrganizationSuspendedError()
         await self._permission_service.authorize(
             user=user,

@@ -127,23 +127,23 @@ Country
 PostalCode
 ```
 
-Protected fields are not chat-editable in this slice:
+Administrative fields are controlled through dedicated actions rather than the generic profile-field action:
+
+```text
+UserName                  dedicated identity action, two approvals
+MaxUserLimit             dedicated license action, two approvals
+LicenseStartDate         dedicated license action, two approvals
+LicenseEndDate           dedicated license action, two approvals
+Status/IsActive          dedicated lifecycle actions, two approvals
+Approval/rejection data  backend-generated actor and UTC time
+```
+
+The following remain non-editable identifiers, credentials, and audit-owned fields:
 
 ```text
 OrganizationAccountId
 OrganizationCode
-UserName
 Password
-MaxUserLimit
-LicenseStartDate
-LicenseEndDate
-Status
-ApprovedBy
-ApprovedDate
-RejectedBy
-RejectedDate
-RejectionReason
-IsActive
 CreatedBy
 CreatedDate
 UpdatedBy
@@ -159,15 +159,26 @@ The supplied Category, Report and Permission tables contain `IsActive`, so
 those resources support controlled activation/deactivation or exact-row update.
 
 The supplied Company Profile, Drug, Indication and Market tables do not contain
-`IsActive`, timestamps, or a stated delete contract. They are intentionally
-read-only in this package rather than inventing destructive behavior.
+`IsActive`. The workplace layer therefore uses reversible internal tombstones:
+the exact source rows remain unchanged, entitlement reads exclude revoked rows,
+and approved grant actions can restore them without destructive deletion.
 
+## Administrative-control surface
+
+The sandbox now exposes 30 named write actions. Sensitive username,
+licensing, lifecycle and entitlement-revocation operations require two
+independent approvals and prohibit requester self-approval. Execution
+actor IDs are derived from authenticated backend mappings; the model cannot
+provide actor IDs, timestamps, organization scope, permissions, approvals or
+idempotency state. This is the same constrained-control pattern used by
+mature workplace administration agents; it is not arbitrary SQL access and
+it does not advertise production connectivity.
 ## Database and seed
 
 Current migration head:
 
 ```text
-0012_resource_preconditions
+0013_nucleus_admin
 ```
 
 The deterministic idempotent seed adds one synthetic exact-schema account and

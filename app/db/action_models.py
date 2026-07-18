@@ -101,6 +101,10 @@ class AgentActionExecutionORM(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     proposal_id: Mapped[str] = mapped_column(String, ForeignKey("agent_action_proposals.id"), nullable=False, index=True)
     idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    executed_by_user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False, index=True
+    )
+    nucleus_actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     outcome: Mapped[str] = mapped_column(String, nullable=False)
     result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String, nullable=True)

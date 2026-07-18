@@ -77,7 +77,7 @@ python -m app.db.seed
 Expected migration:
 
 ```text
-0012_resource_preconditions (head)
+0013_nucleus_admin (head)
 ```
 
 Both seed runs must complete successfully.
@@ -156,7 +156,7 @@ Expected current surface:
 
 ```text
 11 read tools
-16 write actions
+30 write actions
 ```
 
 ## 9. Smoke-test one controlled action
@@ -215,8 +215,8 @@ Invoke-RestMethod "$base/ready/details" |
     ConvertTo-Json -Depth 20
 ```
 
-Readiness must report migration `0012_resource_preconditions` and registry/
-handler parity of 16/16.
+Readiness must report migration `0013_nucleus_admin`, Nucleus administrative
+sidecar support, and registry/handler parity of 30/30.
 
 ## 11. Commit only after validation
 
@@ -225,7 +225,7 @@ Do not add the ZIP archive.
 ```powershell
 git status --short
 git add app alembic tests docs README.md pyproject.toml APPLY_AND_VALIDATE.md FILE_MANIFEST.md SOURCE_STATE_AUDIT.md VALIDATION_REPORT.md
-git commit -m "add multi-resource preconditions and projection synchronization"
+git commit -m "add Nucleus full administrative control"
 git push origin main
 git status --short
 ```

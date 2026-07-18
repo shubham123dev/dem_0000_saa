@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.nucleus_admin_models import NucleusAccessTombstoneORM
 from app.db.nucleus_models import (
     NucleusOrganizationAccountORM,
     NucleusOrganizationCategoryAccessORM,
@@ -232,6 +233,17 @@ class NucleusOrganizationRepository:
         if account is None:
             return None
         account_id = account.organization_account_id
+        tombstone_rows = (
+            await self._session.execute(
+                select(NucleusAccessTombstoneORM).where(
+                    NucleusAccessTombstoneORM.organization_account_id
+                    == account_id
+                )
+            )
+        ).scalars().all()
+        tombstones = {
+            (row.resource_type, row.access_id) for row in tombstone_rows
+        }
 
         category_rows = (
             await self._session.execute(
@@ -316,16 +328,48 @@ class NucleusOrganizationRepository:
                 [await self._category_to_domain(row) for row in category_rows]
             ),
             company_profile_access=tuple(
-                [await self._company_to_domain(row) for row in company_rows]
+                [
+                    await self._company_to_domain(row)
+                    for row in company_rows
+                    if (
+                        "OrganizationCompanyProfileAccess",
+                        row.organization_company_profile_access_id,
+                    )
+                    not in tombstones
+                ]
             ),
             drug_access=tuple(
-                [await self._drug_to_domain(row) for row in drug_rows]
+                [
+                    await self._drug_to_domain(row)
+                    for row in drug_rows
+                    if (
+                        "OrganizationDrugAccess",
+                        row.organization_drug_access_id,
+                    )
+                    not in tombstones
+                ]
             ),
             indication_access=tuple(
-                [await self._indication_to_domain(row) for row in indication_rows]
+                [
+                    await self._indication_to_domain(row)
+                    for row in indication_rows
+                    if (
+                        "OrganizationIndicationAccess",
+                        row.organization_indication_access_id,
+                    )
+                    not in tombstones
+                ]
             ),
             market_access=tuple(
-                [await self._market_to_domain(row) for row in market_rows]
+                [
+                    await self._market_to_domain(row)
+                    for row in market_rows
+                    if (
+                        "OrganizationMarketAccess",
+                        row.organization_market_access_id,
+                    )
+                    not in tombstones
+                ]
             ),
             report_access=tuple(
                 [await self._report_to_domain(row) for row in report_rows]

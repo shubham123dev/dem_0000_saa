@@ -103,6 +103,102 @@ class StaleSafeAgentActionService(AgentActionService):
         after = dict(result.get("after") or {})
         arguments = source.arguments
 
+        if source.action_name == "update_nucleus_organization_username":
+            previous_username = before.get("username")
+            if not isinstance(previous_username, str) or not previous_username:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="update_nucleus_organization_username",
+                arguments={"username": previous_username},
+            )
+
+        if source.action_name == "update_nucleus_organization_license":
+            previous_limit = before.get("max_user_limit")
+            if not isinstance(previous_limit, int) or previous_limit <= 0:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="update_nucleus_organization_license",
+                arguments={
+                    "max_user_limit": str(previous_limit),
+                    "license_start_date": _argument_value(
+                        before.get("license_start_date")
+                    ),
+                    "license_end_date": _argument_value(
+                        before.get("license_end_date")
+                    ),
+                },
+            )
+
+        if source.action_name == "activate_nucleus_organization_account":
+            return AgentActionProposalInput(
+                action_name="deactivate_nucleus_organization_account",
+                arguments={},
+            )
+
+        if source.action_name == "deactivate_nucleus_organization_account":
+            if before.get("is_active") is not True:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="activate_nucleus_organization_account",
+                arguments={},
+            )
+
+        access_pairs = {
+            "grant_nucleus_company_profile_access": (
+                "revoke_nucleus_company_profile_access",
+                "company_id",
+            ),
+            "grant_nucleus_drug_access": (
+                "revoke_nucleus_drug_access",
+                "drug_id",
+            ),
+            "grant_nucleus_indication_access": (
+                "revoke_nucleus_indication_access",
+                "indication_id",
+            ),
+            "grant_nucleus_market_access": (
+                "revoke_nucleus_market_access",
+                "market_id",
+            ),
+        }
+        if source.action_name in access_pairs:
+            access_id = after.get("access_id")
+            if not isinstance(access_id, int):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name=access_pairs[source.action_name][0],
+                arguments={"access_id": str(access_id)},
+            )
+
+        revoke_pairs = {
+            "revoke_nucleus_company_profile_access": (
+                "grant_nucleus_company_profile_access",
+                ("company_id",),
+            ),
+            "revoke_nucleus_drug_access": (
+                "grant_nucleus_drug_access",
+                ("drug_id",),
+            ),
+            "revoke_nucleus_indication_access": (
+                "grant_nucleus_indication_access",
+                ("indication_id",),
+            ),
+            "revoke_nucleus_market_access": (
+                "grant_nucleus_market_access",
+                ("market_id", "market_sample_id"),
+            ),
+        }
+        if source.action_name in revoke_pairs:
+            action_name, fields = revoke_pairs[source.action_name]
+            arguments = {
+                field: _argument_value(before.get(field)) for field in fields
+            }
+            if any(value == "null" for field, value in arguments.items() if field != "market_sample_id"):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name=action_name,
+                arguments=arguments,
+            )
         if source.action_name in {
             "update_nucleus_organization_account_field",
             "clear_nucleus_organization_account_field",

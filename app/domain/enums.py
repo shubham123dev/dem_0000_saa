@@ -86,8 +86,14 @@ class Permission(str, Enum):
     ORGANIZATION_PROFILE_UPDATE = "organization.profile.update"
     ORGANIZATION_ACCOUNT_READ = "organization.account.read"
     ORGANIZATION_ACCOUNT_UPDATE = "organization.account.update"
+    ORGANIZATION_ACCOUNT_IDENTITY_UPDATE = (
+        "organization.account.identity.update"
+    )
+    ORGANIZATION_LICENSE_UPDATE = "organization.license.update"
+    ORGANIZATION_LIFECYCLE_UPDATE = "organization.lifecycle.update"
     ORGANIZATION_ENTITLEMENTS_READ = "organization.entitlements.read"
     ORGANIZATION_ENTITLEMENTS_UPDATE = "organization.entitlements.update"
+    ORGANIZATION_ENTITLEMENTS_DELETE = "organization.entitlements.delete"
 
     ORGANIZATION_USERS_READ = "organization.users.read"
     ORGANIZATION_USERS_INVITE = "organization.users.invite"
@@ -123,7 +129,11 @@ _ADMIN_ONLY_PERMISSIONS: tuple[Permission, ...] = (
     Permission.ORGANIZATION_PROFILE_UPDATE,
     Permission.ORGANIZATION_ACCOUNT_READ,
     Permission.ORGANIZATION_ACCOUNT_UPDATE,
+    Permission.ORGANIZATION_ACCOUNT_IDENTITY_UPDATE,
+    Permission.ORGANIZATION_LICENSE_UPDATE,
+    Permission.ORGANIZATION_LIFECYCLE_UPDATE,
     Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+    Permission.ORGANIZATION_ENTITLEMENTS_DELETE,
     Permission.ORGANIZATION_USERS_INVITE,
     Permission.ORGANIZATION_USERS_UPDATE,
     Permission.ORGANIZATION_USERS_REMOVE,

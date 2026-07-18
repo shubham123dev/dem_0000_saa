@@ -89,6 +89,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_READ.value,
+            allow_suspended_organization=True,
         )
         settings = get_settings()
         resolved_limit = limit or settings.action_default_page_size
@@ -116,6 +117,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_READ.value,
+            allow_suspended_organization=True,
         )
         proposal = await self._require_proposal(
             organization_id=organization_id,
@@ -136,6 +138,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_APPROVE.value,
+            allow_suspended_organization=True,
         )
         return await super().decide(
             user=user,
@@ -157,6 +160,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_EXECUTE.value,
+            allow_suspended_organization=True,
         )
         return await super().cancel(
             user=user,
@@ -177,6 +181,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_EXECUTE.value,
+            allow_suspended_organization=True,
         )
         return await super().execute(
             user=user,
@@ -196,6 +201,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_RECONCILE.value,
+            allow_suspended_organization=True,
         )
         execution = await self._hardened_repository.get_execution(proposal_id)
         settings = get_settings()
@@ -225,6 +231,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_EXECUTE.value,
+            allow_suspended_organization=True,
         )
         return await super().create_rollback_proposal(
             user=user,
@@ -244,6 +251,7 @@ class HardenedAgentActionService(StaleSafeAgentActionService):
             user=user,
             organization_id=organization_id,
             required_permission=Permission.AGENT_ACTIONS_RECONCILE.value,
+            allow_suspended_organization=True,
         )
         proposal = await self._require_proposal(
             organization_id=organization_id,

@@ -23,6 +23,13 @@ AgentActionStatusFilter = Literal[
     "reconciliation_required",
 ]
 
+_NO_ARGUMENT_ACTIONS = {
+    "approve_nucleus_organization_account",
+    "activate_nucleus_organization_account",
+    "deactivate_nucleus_organization_account",
+}
+
+
 AgentActionName = Literal[
     "update_organization_contact_email",
     "update_nucleus_organization_account_field",
@@ -32,6 +39,20 @@ AgentActionName = Literal[
     "grant_nucleus_report_access",
     "revoke_nucleus_report_access",
     "update_nucleus_organization_permissions",
+    "update_nucleus_organization_username",
+    "update_nucleus_organization_license",
+    "approve_nucleus_organization_account",
+    "reject_nucleus_organization_account",
+    "activate_nucleus_organization_account",
+    "deactivate_nucleus_organization_account",
+    "grant_nucleus_company_profile_access",
+    "revoke_nucleus_company_profile_access",
+    "grant_nucleus_drug_access",
+    "revoke_nucleus_drug_access",
+    "grant_nucleus_indication_access",
+    "revoke_nucleus_indication_access",
+    "grant_nucleus_market_access",
+    "revoke_nucleus_market_access",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",
@@ -85,7 +106,7 @@ class AgentActionProposalRequest(BaseModel):
                 raise ValueError(
                     "contact_email is only valid for the contact-email action"
                 )
-        elif not self.arguments:
+        elif not self.arguments and self.action_name not in _NO_ARGUMENT_ACTIONS:
             raise ValueError("Action arguments are required")
         return self
 

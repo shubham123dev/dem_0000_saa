@@ -47,3 +47,14 @@ migrated version-2 proposals retain their original verification semantics.
 Execution re-prepares and compares all preconditions before consuming the
 approval. Cross-store reconciliation repairs only an unchanged reviewed
 projection and never overwrites a conflicting newer value.
+## Nucleus full administrative control
+
+Nucleus administrative writes are exposed only as named backend-owned
+actions. Profile fields remain low risk; username, license and lifecycle
+transitions require two independent approvals. Authenticated Workplace user
+IDs resolve to integer Nucleus actors through an internal mapping and the
+execution record preserves the original executor for deterministic
+reconciliation. Company-profile, drug, indication and market revocations use
+reversible tombstones because those supplied tables do not contain
+`IsActive`; exact source rows are never physically deleted by this package.
+Password is outside every action, model, response and audit contract.
