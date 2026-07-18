@@ -7,14 +7,23 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0010_add_organization_overview"
+EXPECTED_HEAD = "0011_nucleus_organization_schema"
 EXPECTED_DATABASE_TABLE_NAMES = {
+    "OrganizationAccount",
+    "OrganizationCategoryAccess",
+    "OrganizationCompanyProfileAccess",
+    "OrganizationDrugAccess",
+    "OrganizationIndicationAccess",
+    "OrganizationMarketAccess",
+    "OrganizationPermission",
+    "OrganizationReportAccess",
     "agent_action_approvals",
     "agent_action_executions",
     "agent_action_proposals",
     "agent_action_rollbacks",
     "alembic_version",
     "audit_events",
+    "nucleus_resource_versions",
     "organization_memberships",
     "organization_overviews",
     "organization_report_access",
@@ -78,6 +87,95 @@ def read_index_names(connection: sqlite3.Connection, table_name: str) -> set[str
 def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
     revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()
     assert revision == (EXPECTED_HEAD,)
+
+    account_columns = read_column_names(connection, "OrganizationAccount")
+    assert {
+        "OrganizationAccountId",
+        "OrganizationName",
+        "OrganizationCode",
+        "OrganizationType",
+        "Industry",
+        "Website",
+        "UserName",
+        "Password",
+        "Email",
+        "ContactPersonName",
+        "ContactPersonDesignation",
+        "ContactPhone",
+        "AddressLine1",
+        "AddressLine2",
+        "City",
+        "State",
+        "Country",
+        "PostalCode",
+        "MaxUserLimit",
+        "LicenseStartDate",
+        "LicenseEndDate",
+        "Status",
+        "ApprovedBy",
+        "ApprovedDate",
+        "RejectedBy",
+        "RejectedDate",
+        "RejectionReason",
+        "IsActive",
+        "CreatedBy",
+        "CreatedDate",
+        "UpdatedBy",
+        "UpdatedDate",
+    } == account_columns
+
+    assert read_column_names(connection, "OrganizationCategoryAccess") == {
+        "OrganizationCategoryAccessId",
+        "OrganizationAccountId",
+        "CategoryID",
+        "CategorySampleID",
+        "CreatedDate",
+        "IsActive",
+    }
+    assert read_column_names(connection, "OrganizationCompanyProfileAccess") == {
+        "OrganizationCompanyProfileAccessId",
+        "OrganizationAccountId",
+        "CompanyID",
+    }
+    assert read_column_names(connection, "OrganizationDrugAccess") == {
+        "OrganizationDrugAccessId",
+        "OrganizationAccountId",
+        "DrugID",
+    }
+    assert read_column_names(connection, "OrganizationIndicationAccess") == {
+        "OrganizationIndicationAccessId",
+        "OrganizationAccountId",
+        "IndicationID",
+    }
+    assert read_column_names(connection, "OrganizationMarketAccess") == {
+        "OrganizationMarketAccessId",
+        "OrganizationAccountId",
+        "MarketID",
+        "MarketSampleId",
+    }
+    assert read_column_names(connection, "OrganizationPermission") == {
+        "OrganizationPermissionId",
+        "OrganizationAccountId",
+        "cp_CompanyMaster_PharmaID",
+        "HC_TheropeticCategory_PharmaID",
+        "HC_TheropeticCategory_EpidemID",
+        "HC_Disease_Code_EpidemID",
+        "ReportsCustomID",
+        "importexportReportID",
+        "CreatedDate",
+        "IsActive",
+    }
+    assert read_column_names(connection, "OrganizationReportAccess") == {
+        "OrganizationReportAccessId",
+        "OrganizationAccountId",
+        "ReportsID",
+        "SampleID",
+        "SampleTocID",
+        "SpecialityID",
+        "IsExecutiveAccess",
+        "CreatedDate",
+        "IsActive",
+    }
 
     overview_columns = read_column_names(connection, "organization_overviews")
     assert {

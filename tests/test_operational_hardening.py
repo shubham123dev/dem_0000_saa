@@ -197,8 +197,8 @@ async def test_detailed_readiness_reports_latest_schema_without_secrets(
     assert body["checks"]["database_connected"] is True
     assert body["checks"]["registry_handler_parity"] is True
     assert body["checks"]["action_management_permissions_seeded"] is True
-    assert body["migration"]["expected"] == "0010_add_organization_overview"
-    assert body["actions"] == {"registered": 9, "handlers": 9}
+    assert body["migration"]["expected"] == "0011_nucleus_organization_schema"
+    assert body["actions"] == {"registered": 16, "handlers": 16}
     assert body["limits"]["maximum_page_size"] >= 1
     response_text = response.text.lower()
     assert "api_key" not in response_text

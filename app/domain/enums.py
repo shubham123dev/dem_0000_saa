@@ -84,6 +84,10 @@ class ReportAccessStatus(str, Enum):
 class Permission(str, Enum):
     ORGANIZATION_PROFILE_READ = "organization.profile.read"
     ORGANIZATION_PROFILE_UPDATE = "organization.profile.update"
+    ORGANIZATION_ACCOUNT_READ = "organization.account.read"
+    ORGANIZATION_ACCOUNT_UPDATE = "organization.account.update"
+    ORGANIZATION_ENTITLEMENTS_READ = "organization.entitlements.read"
+    ORGANIZATION_ENTITLEMENTS_UPDATE = "organization.entitlements.update"
 
     ORGANIZATION_USERS_READ = "organization.users.read"
     ORGANIZATION_USERS_INVITE = "organization.users.invite"
@@ -108,6 +112,7 @@ class Permission(str, Enum):
 
 _READER_PERMISSIONS: tuple[Permission, ...] = (
     Permission.ORGANIZATION_PROFILE_READ,
+    Permission.ORGANIZATION_ENTITLEMENTS_READ,
     Permission.ORGANIZATION_USERS_READ,
     Permission.ORGANIZATION_SEATS_READ,
     Permission.ORGANIZATION_REPORTS_READ,
@@ -116,6 +121,9 @@ _READER_PERMISSIONS: tuple[Permission, ...] = (
 
 _ADMIN_ONLY_PERMISSIONS: tuple[Permission, ...] = (
     Permission.ORGANIZATION_PROFILE_UPDATE,
+    Permission.ORGANIZATION_ACCOUNT_READ,
+    Permission.ORGANIZATION_ACCOUNT_UPDATE,
+    Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
     Permission.ORGANIZATION_USERS_INVITE,
     Permission.ORGANIZATION_USERS_UPDATE,
     Permission.ORGANIZATION_USERS_REMOVE,

@@ -25,6 +25,13 @@ AgentActionStatusFilter = Literal[
 
 AgentActionName = Literal[
     "update_organization_contact_email",
+    "update_nucleus_organization_account_field",
+    "clear_nucleus_organization_account_field",
+    "grant_nucleus_category_access",
+    "revoke_nucleus_category_access",
+    "grant_nucleus_report_access",
+    "revoke_nucleus_report_access",
+    "update_nucleus_organization_permissions",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",
@@ -40,7 +47,7 @@ class AgentActionProposalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action_name: AgentActionName
-    arguments: dict[str, str] = Field(default_factory=dict, max_length=10)
+    arguments: dict[str, str] = Field(default_factory=dict, max_length=12)
     contact_email: str | None = Field(default=None, min_length=3, max_length=320)
 
     @field_validator("arguments")
@@ -75,7 +82,9 @@ class AgentActionProposalRequest(BaseModel):
     def validate_compatible_payload(self) -> "AgentActionProposalRequest":
         if self.contact_email is not None:
             if self.action_name != "update_organization_contact_email" or self.arguments:
-                raise ValueError("contact_email is only valid for the contact-email action")
+                raise ValueError(
+                    "contact_email is only valid for the contact-email action"
+                )
         elif not self.arguments:
             raise ValueError("Action arguments are required")
         return self

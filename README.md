@@ -1,186 +1,184 @@
-# DBMR Workplace Agent — Sandbox Backend
+# DBMR Workplace Agent — Nucleus Organization Schema Slice
 
-This repository is a standalone sandbox backend for the DBMR Workplace Agent. It exposes permission-enforced organization reads and approval-gated administrative actions while keeping the existing SARA/chatbot repository unchanged.
+This overlay extends the existing Workplace Agent sandbox at commit
+`1aec2a3bb08f79a8a08782596c59533e42916dfa` with a SQLite-backed mock of the
+supplied Nucleus organization schema.
 
-## Runtime model
+## Runtime boundary
 
 ```text
-X-Mock-User-Id
-→ active backend user
+Chat or Workplace API
+→ authenticated mock user
 → active organization membership
-→ backend-owned resource permission
-→ backend-owned action-management permission
-→ sandbox and organization-status guard
-→ one structured planner call
-→ authorized read execution or immutable action proposal
-→ policy-controlled approval threshold
-→ version-checked execution
-→ verification, audit, reconciliation and optional rollback proposal
+→ backend-owned permission
+→ sandbox organization guard
+→ exact-schema Nucleus repository
+→ SQLite
+→ append-only audit
 ```
 
-Production organizations are blocked. Model output cannot provide organization scope, actor identity, permissions, approval state, proposal IDs, execution commands or idempotency keys.
+Natural-language requests may select allowlisted read tools or create dry-run
+action proposals. They cannot approve, execute, choose organization scope, or
+supply authorization state.
 
-## Read capabilities
+## Exact SQLite tables
 
-- `get_organization_overview`
-- `get_organization_profile`
-- `list_organization_users`
-- `get_organization_seat_summary`
-- `list_organization_reports`
-- `check_organization_report_access`
-- `get_organization_audit_log`
+The migration creates these table and column names exactly as supplied:
 
-The overview contract is the stable backend surface for the Nucleus Overview page. It contains organization identity, renewal date, workspace status, licensed modules, available areas, organization login count and workspace health. The frontend and chat consume the same contract.
+- `OrganizationAccount`
+- `OrganizationCategoryAccess`
+- `OrganizationCompanyProfileAccess`
+- `OrganizationDrugAccess`
+- `OrganizationIndicationAccess`
+- `OrganizationMarketAccess`
+- `OrganizationPermission`
+- `OrganizationReportAccess`
+
+It also creates `nucleus_resource_versions`, an internal Workplace Agent
+sidecar used for optimistic concurrency because the supplied tables do not
+contain version columns.
+
+The existing lowercase Workplace Agent tables remain unchanged.
+
+## Read tools
+
+Existing tools remain available. Four additional chat tools are registered:
+
+- `get_nucleus_organization_account`
+- `get_nucleus_organization_license`
+- `get_nucleus_organization_approval_status`
+- `get_nucleus_organization_entitlements`
+
+The entitlements result contains rows from all seven supplied access and
+permission tables.
+
+## Workplace endpoints
+
+```text
+GET /workplace/organizations/{organization_id}/nucleus/account
+GET /workplace/organizations/{organization_id}/nucleus/license
+GET /workplace/organizations/{organization_id}/nucleus/approval-status
+GET /workplace/organizations/{organization_id}/nucleus/entitlements
+```
+
+All routes require `X-Mock-User-Id`. Account, licence and approval details are
+administrator-only. Entitlement reads are available to active organization
+readers and administrators.
 
 ## Approval-gated actions
 
-- `update_organization_contact_email`
-- `invite_organization_user`
-- `activate_organization_membership`
-- `update_organization_member_role`
-- `remove_organization_user`
-- `assign_organization_seat`
-- `revoke_organization_seat`
-- `grant_organization_report_access`
-- `revoke_organization_report_access`
+The package keeps all existing actions and adds:
 
-Every action follows the same backend-owned lifecycle:
+- `update_nucleus_organization_account_field`
+- `clear_nucleus_organization_account_field`
+- `grant_nucleus_category_access`
+- `revoke_nucleus_category_access`
+- `grant_nucleus_report_access`
+- `revoke_nucleus_report_access`
+- `update_nucleus_organization_permissions`
 
-```text
-dry-run proposal
-→ immutable reviewed change set
-→ distinct approver decisions
-→ approval threshold reached
-→ fingerprint and permission revalidation
-→ optimistic resource-version check
-→ single-use idempotent execution
-→ success, failure, stale or reconciliation-required outcome
-```
+The existing `update_organization_contact_email` action is bridged to the exact
+`OrganizationAccount.Email` field and also synchronizes the legacy Overview
+profile, so the old chat command and the new exact-schema API cannot drift.
 
-Low- and medium-risk actions require one approval. High-risk role changes and member removals require two distinct approvers and disallow requester self-approval. A rejection closes the proposal immediately. Natural-language requests can create proposals but cannot approve or execute them.
-
-## Overview vertical slice
+Every write follows:
 
 ```text
-GET /workplace/organizations/{organization_id}/overview
-→ organization.profile.read authorization
-→ stable OrganizationOverview response
-→ append-only organization.overview.read audit event
+inspect
+→ immutable before/after proposal
+→ approval threshold
+→ permission and fingerprint revalidation
+→ optimistic version check
+→ idempotent execution
+→ exact re-read/reconciliation
+→ audit
+→ optional separately approved rollback proposal
 ```
 
-The existing contact-email action completes the first Cloudflare-style demonstration:
+`update_nucleus_organization_permissions` is high risk and requires two
+distinct non-requester approvals.
+
+## Safe field policy
+
+Allowlisted `OrganizationAccount` fields:
 
 ```text
-read overview
-→ propose contact-email change
-→ approve or reject
-→ execute once
-→ re-read overview
-→ verify exact before/after state
-→ inspect audit history
+OrganizationName
+OrganizationType
+Industry
+Website
+Email
+ContactPersonName
+ContactPersonDesignation
+ContactPhone
+AddressLine1
+AddressLine2
+City
+State
+Country
+PostalCode
 ```
 
-## Adapter boundary
+Protected fields are not chat-editable in this slice:
 
 ```text
-Workplace routes and agent tools
-        ↓
-OrganizationApiGateway
-        ├── MockOrganizationApiAdapter       current sandbox
-        └── NucleusOrganizationApiAdapter    future real integration
+OrganizationAccountId
+OrganizationCode
+UserName
+Password
+MaxUserLimit
+LicenseStartDate
+LicenseEndDate
+Status
+ApprovedBy
+ApprovedDate
+RejectedBy
+RejectedDate
+RejectionReason
+IsActive
+CreatedBy
+CreatedDate
+UpdatedBy
+UpdatedDate
 ```
 
-The future Nucleus adapter maps its real wire schema into the stable domain contracts. Frontend and agent code do not depend on raw Nucleus field names.
+`Password` exists only for schema fidelity. It is never included in domain
+models, HTTP responses, model evidence, action arguments, or audit details.
 
-## Database
+## Access mutation boundary
 
-Alembic is the only schema authority. The current migration head is:
+The supplied Category, Report and Permission tables contain `IsActive`, so
+those resources support controlled activation/deactivation or exact-row update.
+
+The supplied Company Profile, Drug, Indication and Market tables do not contain
+`IsActive`, timestamps, or a stated delete contract. They are intentionally
+read-only in this package rather than inventing destructive behavior.
+
+## Database and seed
+
+Current migration head:
 
 ```text
-0010_add_organization_overview
+0011_nucleus_organization_schema
 ```
 
-The sandbox has 14 application tables: the original organization/user/seat/report/audit tables, four action-lifecycle tables and `organization_overviews`.
-
-```bash
-alembic upgrade head
-python -m app.db.seed
-```
-
-The seed is deterministic and idempotent. It contains one sandbox organization, a complete overview record, three administrators, three active reader members, one invited member, one outsider, five seats, three active assignments, five reports and three report grants.
-
-## Setup
-
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
+The deterministic idempotent seed adds one synthetic exact-schema account and
+representative rows for every supplied access table. No real credentials or
+employee data are used.
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-Copy-Item .env.example .env
+alembic upgrade head
+python -m app.db.seed
+python -m app.db.seed
 ```
-
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-cp .env.example .env
-```
-
-## Run
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Enable the unauthenticated raw mock system-of-record routes only for isolated local contract testing:
-
-```env
-WORKPLACE_ENABLE_RAW_MOCK_API=true
-```
-
-## Main endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | Liveness |
-| GET | `/ready` | Database connectivity |
-| GET | `/ready/details` | Release-readiness checks without secrets |
-| GET | `/workplace/capabilities` | Read tools, action catalogue and approval policies |
-| GET | `/workplace/organizations/{organization_id}/overview` | Complete Overview page contract |
-| GET | `/workplace/organizations/{organization_id}/profile` | Organization profile |
-| GET | `/workplace/organizations/{organization_id}/users` | Users and memberships |
-| GET | `/workplace/organizations/{organization_id}/seats` | Seat summary |
-| GET | `/workplace/organizations/{organization_id}/reports` | Reports with organization access |
-| GET | `/workplace/organizations/{organization_id}/reports/{report_id}/access` | Exact report-access decision |
-| GET | `/workplace/organizations/{organization_id}/audit-log` | Organization audit log |
-| POST | `/workplace/organizations/{organization_id}/agent/query` | Natural-language read or dry-run proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/propose` | Explicit dry-run proposal |
-| GET | `/workplace/organizations/{organization_id}/agent/actions` | Bounded proposal list |
-| GET | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}` | Read a proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve` | Record approval |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject` | Reject proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel` | Cancel proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute` | Threshold-gated execution |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile` | Inspect uncertain outcome |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal` | Prepare inverse proposal |
-| POST | `/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/audit-replay` | Retry audit persistence only |
-
-All organization-scoped Workplace endpoints require `X-Mock-User-Id`.
 
 ## Validation
 
-```bash
+```powershell
 python -m compileall -q app tests alembic
-alembic upgrade head
-python -m app.db.seed
+alembic current
 pytest -q
 ```
 
-The GitHub Actions workflow should run the same backend validation on Python 3.11 and 3.12. Tests use isolated temporary SQLite databases with foreign-key enforcement enabled.
+See `APPLY_AND_VALIDATE.md` for the complete Windows PowerShell application,
+smoke-test, commit and cleanup sequence.

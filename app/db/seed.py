@@ -18,6 +18,17 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.nucleus_models import (
+    NucleusOrganizationAccountORM,
+    NucleusOrganizationCategoryAccessORM,
+    NucleusOrganizationCompanyProfileAccessORM,
+    NucleusOrganizationDrugAccessORM,
+    NucleusOrganizationIndicationAccessORM,
+    NucleusOrganizationMarketAccessORM,
+    NucleusOrganizationPermissionORM,
+    NucleusOrganizationReportAccessORM,
+    NucleusResourceVersionORM,
+)
 from app.db.orm_models import (
     OrganizationMembershipORM,
     OrganizationORM,
@@ -158,6 +169,115 @@ REPORT_ACCESS = [
 ]
 
 
+NUCLEUS_ORGANIZATION_ACCOUNT = {
+    "organization_account_id": 1,
+    "organization_name": "Demo Enterprise Sandbox",
+    "organization_code": ORGANIZATION["id"],
+    "organization_type": "Enterprise",
+    "industry": "Market Research",
+    "website": "https://example.test",
+    "user_name": "sandbox.organization",
+    "password": "$mock$not-a-real-password",
+    "email": "operations@example.test",
+    "contact_person_name": "Sandbox Operations",
+    "contact_person_designation": "Operations Administrator",
+    "contact_phone": "+91-00000-00000",
+    "address_line1": "Synthetic Address Line 1",
+    "address_line2": None,
+    "city": "Jaipur",
+    "state": "Rajasthan",
+    "country": "India",
+    "postal_code": "000000",
+    "max_user_limit": 5,
+    "license_start_date": _EPOCH,
+    "license_end_date": datetime(2026, 11, 26, tzinfo=timezone.utc),
+    "status": "approved",
+    "approved_by": 1001,
+    "approved_date": _EPOCH,
+    "rejected_by": None,
+    "rejected_date": None,
+    "rejection_reason": None,
+    "is_active": True,
+    "created_by": 1001,
+    "created_date": _EPOCH,
+    "updated_by": None,
+    "updated_date": None,
+}
+
+NUCLEUS_CATEGORY_ACCESS = [
+    {
+        "organization_category_access_id": 1,
+        "organization_account_id": 1,
+        "category_id": 101,
+        "category_sample_id": 1001,
+        "created_date": _EPOCH,
+        "is_active": True,
+    }
+]
+
+NUCLEUS_COMPANY_PROFILE_ACCESS = [
+    {
+        "organization_company_profile_access_id": 1,
+        "organization_account_id": 1,
+        "company_id": 201,
+    }
+]
+
+NUCLEUS_DRUG_ACCESS = [
+    {
+        "organization_drug_access_id": 1,
+        "organization_account_id": 1,
+        "drug_id": 301,
+    }
+]
+
+NUCLEUS_INDICATION_ACCESS = [
+    {
+        "organization_indication_access_id": 1,
+        "organization_account_id": 1,
+        "indication_id": 401,
+    }
+]
+
+NUCLEUS_MARKET_ACCESS = [
+    {
+        "organization_market_access_id": 1,
+        "organization_account_id": 1,
+        "market_id": 501,
+        "market_sample_id": 5001,
+    }
+]
+
+NUCLEUS_PERMISSIONS = [
+    {
+        "organization_permission_id": 1,
+        "organization_account_id": 1,
+        "cp_company_master_pharma_id": 601,
+        "hc_theropetic_category_pharma_id": 602,
+        "hc_theropetic_category_epidem_id": 603,
+        "hc_disease_code_epidem_id": 604,
+        "reports_custom_id": 605,
+        "importexport_report_id": 606,
+        "created_date": _EPOCH,
+        "is_active": True,
+    }
+]
+
+NUCLEUS_REPORT_ACCESS = [
+    {
+        "organization_report_access_id": 1,
+        "organization_account_id": 1,
+        "reports_id": 1001,
+        "sample_id": 1101,
+        "sample_toc_id": 1201,
+        "speciality_id": 1301,
+        "is_executive_access": True,
+        "created_date": _EPOCH,
+        "is_active": True,
+    }
+]
+
+
 async def seed(session: AsyncSession) -> None:
     """Idempotently seed all synthetic sandbox rows."""
 
@@ -246,6 +366,90 @@ async def seed(session: AsyncSession) -> None:
                     status=ReportAccessStatus.ACTIVE.value,
                     granted_at=_EPOCH,
                     granted_by_user_id="usr_admin_001",
+                )
+            )
+
+    if await session.get(
+        NucleusOrganizationAccountORM,
+        NUCLEUS_ORGANIZATION_ACCOUNT["organization_account_id"],
+    ) is None:
+        session.add(NucleusOrganizationAccountORM(**NUCLEUS_ORGANIZATION_ACCOUNT))
+
+    await session.flush()
+
+    for values in NUCLEUS_CATEGORY_ACCESS:
+        if await session.get(
+            NucleusOrganizationCategoryAccessORM,
+            values["organization_category_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationCategoryAccessORM(**values))
+
+    for values in NUCLEUS_COMPANY_PROFILE_ACCESS:
+        if await session.get(
+            NucleusOrganizationCompanyProfileAccessORM,
+            values["organization_company_profile_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationCompanyProfileAccessORM(**values))
+
+    for values in NUCLEUS_DRUG_ACCESS:
+        if await session.get(
+            NucleusOrganizationDrugAccessORM,
+            values["organization_drug_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationDrugAccessORM(**values))
+
+    for values in NUCLEUS_INDICATION_ACCESS:
+        if await session.get(
+            NucleusOrganizationIndicationAccessORM,
+            values["organization_indication_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationIndicationAccessORM(**values))
+
+    for values in NUCLEUS_MARKET_ACCESS:
+        if await session.get(
+            NucleusOrganizationMarketAccessORM,
+            values["organization_market_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationMarketAccessORM(**values))
+
+    for values in NUCLEUS_PERMISSIONS:
+        if await session.get(
+            NucleusOrganizationPermissionORM,
+            values["organization_permission_id"],
+        ) is None:
+            session.add(NucleusOrganizationPermissionORM(**values))
+
+    for values in NUCLEUS_REPORT_ACCESS:
+        if await session.get(
+            NucleusOrganizationReportAccessORM,
+            values["organization_report_access_id"],
+        ) is None:
+            session.add(NucleusOrganizationReportAccessORM(**values))
+
+    await session.flush()
+
+    nucleus_versions = [
+        ("nucleus_account", "1"),
+        ("nucleus_category_access", "1"),
+        ("nucleus_company_profile_access", "1"),
+        ("nucleus_drug_access", "1"),
+        ("nucleus_indication_access", "1"),
+        ("nucleus_market_access", "1"),
+        ("nucleus_special_permissions", "1"),
+        ("nucleus_report_access", "1"),
+    ]
+    for resource_type, resource_key in nucleus_versions:
+        version_row = await session.get(
+            NucleusResourceVersionORM,
+            {"resource_type": resource_type, "resource_key": resource_key},
+        )
+        if version_row is None:
+            session.add(
+                NucleusResourceVersionORM(
+                    resource_type=resource_type,
+                    resource_key=resource_key,
+                    version=1,
+                    updated_at=_EPOCH,
                 )
             )
 

@@ -241,7 +241,7 @@ async def test_provider_schema_excludes_execution_and_authorization_state() -> N
         "actor_user_id",
         "permission",
     ):
-        assert forbidden_name not in schema_text
+        assert f'"{forbidden_name}"' not in schema_text
     await gateway._http_client.aclose()
 
 

@@ -14,6 +14,13 @@ ORGANIZATION_ID = "org_sandbox_001"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
 EXPECTED_ACTIONS = {
     "update_organization_contact_email",
+    "update_nucleus_organization_account_field",
+    "clear_nucleus_organization_account_field",
+    "grant_nucleus_category_access",
+    "revoke_nucleus_category_access",
+    "grant_nucleus_report_access",
+    "revoke_nucleus_report_access",
+    "update_nucleus_organization_permissions",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",

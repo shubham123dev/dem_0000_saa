@@ -1,9 +1,5 @@
-"""Shared pytest fixtures.
+"""Shared pytest fixtures."""
 
-Every test runs against an isolated temporary SQLite database. Tests explicitly
-enable the raw mock API before importing the application; runtime defaults keep
-that surface disabled unless configured.
-"""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -21,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.db import action_models, orm_models  # noqa: F401
+from app.db import action_models, nucleus_models, orm_models  # noqa: F401
 from app.db.base import Base
 from app.db.seed import seed
 from app.db.session import get_session

@@ -1,103 +1,234 @@
-# Apply and validate the Organization Overview vertical slice
+# Apply and validate the Nucleus organization schema slice
 
-This pack contains complete replacement/new files relative to repository commit:
+## Baseline
 
-```text
-e0e93cfb2a7192cb221210ba87125f5898bab734
-```
-
-## Apply
-
-Copy the pack contents over the repository root while preserving directories. New files are:
+Apply this pack only to repository `shubham123dev/dem_0000_saa` after commit:
 
 ```text
-alembic/versions/0010_add_organization_overview.py
-app/repositories/organization_overview_repository.py
-tests/test_organization_overview.py
+1aec2a3bb08f79a8a08782596c59533e42916dfa
 ```
 
-All other files in the pack are full replacements.
+The Organization Overview vertical slice must already be committed. Do not
+apply the older `organization_settings_vertical_slice_complete.zip`; this pack
+supersedes it.
 
-## Fresh local validation
+## 1. Verify the checkout
 
-Windows PowerShell:
+From the repository root:
 
 ```powershell
-cd dem_0000_saa
-py -3.12 -m venv .venv
+git branch --show-current
+git rev-parse HEAD
+git status --short
+git remote -v
+```
+
+Expected branch: `main`.
+
+Expected starting commit:
+
+```text
+1aec2a3bb08f79a8a08782596c59533e42916dfa
+```
+
+The only acceptable pre-existing untracked file is a transport archive that
+will not be committed. Commit or remove any other local changes first.
+
+## 2. Extract and overlay
+
+Save `nucleus_organization_schema_vertical_slice_complete.zip` in Downloads,
+then run from the repository root:
+
+```powershell
+$zip = "$env:USERPROFILE\Downloads\nucleus_organization_schema_vertical_slice_complete.zip"
+$temp = "$env:TEMP\nucleus_organization_schema_apply"
+
+Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+Expand-Archive -Path $zip -DestinationPath $temp -Force
+
+$source = Join-Path $temp "nucleus_organization_schema_vertical_slice_complete"
+Copy-Item -Path "$source\*" -Destination "." -Recurse -Force
+
+git status --short
+```
+
+The repository must remain flat. The result must be `app/...`, `alembic/...`
+and `tests/...`, not a nested `nucleus_organization_schema_vertical_slice_complete`
+folder.
+
+## 3. Activate and install
+
+```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-Copy-Item .env.example .env -Force
+python -m pip install -e ".[dev]"
+```
+
+## 4. Compile, migrate and seed
+
+```powershell
 python -m compileall -q app tests alembic
 alembic upgrade head
 alembic current
 python -m app.db.seed
+python -m app.db.seed
+```
+
+Expected migration:
+
+```text
+0011_nucleus_organization_schema (head)
+```
+
+Both seed runs must complete successfully.
+
+## 5. Run the complete suite
+
+```powershell
 pytest -q
 ```
 
-Expected migration head:
+Do not commit if any test fails.
 
-```text
-0010_add_organization_overview (head)
-```
-
-Run the API:
+## 6. Run the API
 
 ```powershell
-uvicorn app.main:app --reload
+.\.venv\Scripts\uvicorn.exe app.main:app --reload
 ```
 
-## Manual endpoint checks
+Open Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## 7. Smoke-test all new reads
+
+In a second PowerShell window:
 
 ```powershell
 $base = "http://127.0.0.1:8000"
 $admin = @{ "X-Mock-User-Id" = "usr_admin_001" }
+$reader = @{ "X-Mock-User-Id" = "usr_member_001" }
+$org = "org_sandbox_001"
 
-Invoke-RestMethod `
-  -Headers $admin `
-  "$base/workplace/organizations/org_sandbox_001/overview" |
-  ConvertTo-Json -Depth 10
+Invoke-RestMethod -Headers $admin "$base/workplace/organizations/$org/nucleus/account" |
+    ConvertTo-Json -Depth 20
+
+Invoke-RestMethod -Headers $admin "$base/workplace/organizations/$org/nucleus/license" |
+    ConvertTo-Json -Depth 20
+
+Invoke-RestMethod -Headers $admin "$base/workplace/organizations/$org/nucleus/approval-status" |
+    ConvertTo-Json -Depth 20
+
+Invoke-RestMethod -Headers $reader "$base/workplace/organizations/$org/nucleus/entitlements" |
+    ConvertTo-Json -Depth 30
 ```
 
-Expected overview metrics:
+Expected seed highlights:
 
 ```text
-licensed_modules          2
-available_areas           9
-organization_logins       1
-workspace_health_percent  98
-renewal_date               2026-11-26
-workspace_status           healthy
+OrganizationAccountId  1
+OrganizationCode       org_sandbox_001
+OrganizationName       Demo Enterprise Sandbox
+OrganizationType       Enterprise
+MaxUserLimit            5
+LicenseEndDate          2026-11-26
+CategoryID              101
+CompanyID               201
+DrugID                  301
+IndicationID            401
+MarketID                501
+ReportsID               1001
+ReportsCustomID         605
 ```
 
-## Chat check
+The account response must not contain `Password` or a `password` property.
 
-Configure the model environment values, then call:
+## 8. Check capabilities
+
+```powershell
+Invoke-RestMethod "$base/workplace/capabilities" |
+    ConvertTo-Json -Depth 20
+```
+
+Expected current surface:
+
+```text
+11 read tools
+16 write actions
+```
+
+## 9. Smoke-test one controlled action
+
+Create a dry-run account-field proposal:
+
+```powershell
+$proposal = Invoke-RestMethod `
+    -Method Post `
+    -Headers $admin `
+    -ContentType "application/json" `
+    -Uri "$base/workplace/organizations/$org/agent/actions/propose" `
+    -Body (@{
+        action_name = "update_nucleus_organization_account_field"
+        arguments = @{
+            field_name = "Industry"
+            value = "Market Intelligence"
+        }
+    } | ConvertTo-Json -Depth 10)
+
+$proposal | ConvertTo-Json -Depth 20
+$proposalId = $proposal.proposal.id
+```
+
+Approve and execute:
 
 ```powershell
 Invoke-RestMethod `
-  -Method Post `
-  -Headers $admin `
-  -ContentType "application/json" `
-  -Body '{"query":"Show my organization overview and workspace health"}' `
-  "$base/workplace/organizations/org_sandbox_001/agent/query" |
-  ConvertTo-Json -Depth 20
+    -Method Post `
+    -Headers $admin `
+    -ContentType "application/json" `
+    -Uri "$base/workplace/organizations/$org/agent/actions/$proposalId/approve" `
+    -Body '{"reason":"Reviewed in local sandbox"}' |
+    ConvertTo-Json -Depth 20
+
+Invoke-RestMethod `
+    -Method Post `
+    -Headers $admin `
+    -ContentType "application/json" `
+    -Uri "$base/workplace/organizations/$org/agent/actions/$proposalId/execute" `
+    -Body '{"idempotency_key":"nucleus-industry-local-001"}' |
+    ConvertTo-Json -Depth 30
 ```
 
-The planner must choose `get_organization_overview`; organization scope and identity must not appear in model arguments.
+Re-read the account and confirm `industry` changed. Repeating execution with
+the same idempotency key must return the same execution. A different key must
+return an idempotency conflict.
 
-## Approval-gated change check
+## 10. Inspect audit and readiness
 
-1. Propose `update_organization_contact_email`.
-2. Approve or reject through the existing action endpoint.
-3. Execute an approved proposal with a unique idempotency key.
-4. Re-read `/overview`.
-5. Confirm approved execution changes the contact email and increments the organization version.
-6. Confirm rejected execution changes nothing.
-7. Confirm `organization.overview.read` and action lifecycle events appear in the audit log.
+```powershell
+Invoke-RestMethod -Headers $admin "$base/workplace/organizations/$org/audit-log" |
+    ConvertTo-Json -Depth 30
 
-## Important
+Invoke-RestMethod "$base/ready/details" |
+    ConvertTo-Json -Depth 20
+```
 
-The pack was statically syntax-checked in the artifact environment. Full repository tests must be run after applying it because the GitHub repository could not be cloned into that isolated environment.
+Readiness must report migration `0011_nucleus_organization_schema` and registry/
+handler parity of 16/16.
+
+## 11. Commit only after validation
+
+Do not add the ZIP archive.
+
+```powershell
+git status --short
+git add app alembic tests docs README.md pyproject.toml APPLY_AND_VALIDATE.md FILE_MANIFEST.md SOURCE_STATE_AUDIT.md VALIDATION_REPORT.md
+git commit -m "add Nucleus organization schema vertical slice"
+git push origin main
+git status --short
+```
+
+After push, the working tree should be clean except for an intentionally
+untracked transport archive outside the repository or excluded by `.gitignore`.

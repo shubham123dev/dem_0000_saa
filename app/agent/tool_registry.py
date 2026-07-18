@@ -17,6 +17,34 @@ class ReadOnlyAgentToolRegistry:
                     "health and dashboard metrics."
                 ),
             ),
+            "get_nucleus_organization_account": AgentToolDefinition(
+                name="get_nucleus_organization_account",
+                description=(
+                    "Read the exact-schema Nucleus OrganizationAccount profile, "
+                    "contact and address state. Password is never returned."
+                ),
+            ),
+            "get_nucleus_organization_license": AgentToolDefinition(
+                name="get_nucleus_organization_license",
+                description=(
+                    "Read MaxUserLimit, LicenseStartDate, LicenseEndDate and "
+                    "the current account status."
+                ),
+            ),
+            "get_nucleus_organization_approval_status": AgentToolDefinition(
+                name="get_nucleus_organization_approval_status",
+                description=(
+                    "Read approved/rejected state, reviewer identifiers, dates "
+                    "and rejection reason for the current organization account."
+                ),
+            ),
+            "get_nucleus_organization_entitlements": AgentToolDefinition(
+                name="get_nucleus_organization_entitlements",
+                description=(
+                    "Read category, company profile, drug, indication, market, "
+                    "report and special-permission access rows."
+                ),
+            ),
             "get_organization_profile": AgentToolDefinition(
                 name="get_organization_profile",
                 description="Read the current organization profile.",

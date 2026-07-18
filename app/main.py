@@ -7,7 +7,7 @@ import uuid
 from fastapi import FastAPI, Request
 
 from app import __version__
-from app.api import action_routes, agent_routes, health_routes, workplace_routes
+from app.api import action_routes, agent_routes, health_routes, nucleus_routes, workplace_routes
 from app.core.config import get_settings
 from app.core.errors import REQUEST_ID_HEADER, register_exception_handlers
 from app.mock_api import routes as mock_api_routes
@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
 
     application.include_router(health_routes.router)
     application.include_router(workplace_routes.router)
+    application.include_router(nucleus_routes.router)
     application.include_router(agent_routes.router)
     application.include_router(action_routes.router)
 

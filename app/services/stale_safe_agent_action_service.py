@@ -11,6 +11,14 @@ from app.services.agent_action_service import AgentActionService
 from app.services.operational_resource_service import OperationalResourceNotFoundError
 
 
+def _argument_value(value) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 class StaleSafeAgentActionService(AgentActionService):
     """Harden resource drift and create rollback proposals through normal lifecycle."""
 
@@ -94,6 +102,115 @@ class StaleSafeAgentActionService(AgentActionService):
         before = dict(result.get("before") or {})
         after = dict(result.get("after") or {})
         arguments = source.arguments
+
+        if source.action_name in {
+            "update_nucleus_organization_account_field",
+            "clear_nucleus_organization_account_field",
+        }:
+            field_name = before.get("field_name") or arguments.get("field_name")
+            previous_value = before.get("value")
+            if not isinstance(field_name, str) or not field_name:
+                raise AgentActionRollbackUnavailableError()
+            if previous_value is None:
+                return AgentActionProposalInput(
+                    action_name="clear_nucleus_organization_account_field",
+                    arguments={"field_name": field_name},
+                )
+            if not isinstance(previous_value, str) or not previous_value:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="update_nucleus_organization_account_field",
+                arguments={"field_name": field_name, "value": previous_value},
+            )
+
+        if source.action_name == "grant_nucleus_category_access":
+            access_id = after.get("access_id")
+            if not isinstance(access_id, int):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="revoke_nucleus_category_access",
+                arguments={"access_id": str(access_id)},
+            )
+
+        if source.action_name == "revoke_nucleus_category_access":
+            category_id = before.get("category_id")
+            if not isinstance(category_id, int):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="grant_nucleus_category_access",
+                arguments={
+                    "category_id": str(category_id),
+                    "category_sample_id": _argument_value(
+                        before.get("category_sample_id")
+                    ),
+                },
+            )
+
+        if source.action_name == "grant_nucleus_report_access":
+            access_id = after.get("access_id")
+            if not isinstance(access_id, int):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="revoke_nucleus_report_access",
+                arguments={"access_id": str(access_id)},
+            )
+
+        if source.action_name == "revoke_nucleus_report_access":
+            return AgentActionProposalInput(
+                action_name="grant_nucleus_report_access",
+                arguments={
+                    "reports_id": _argument_value(before.get("reports_id")),
+                    "sample_id": _argument_value(before.get("sample_id")),
+                    "sample_toc_id": _argument_value(before.get("sample_toc_id")),
+                    "speciality_id": _argument_value(before.get("speciality_id")),
+                    "executive_access": _argument_value(
+                        before.get("is_executive_access")
+                    ),
+                },
+            )
+
+        if source.action_name == "update_nucleus_organization_permissions":
+            previous_permission_id = before.get("permission_id")
+            created_permission_id = after.get("permission_id")
+            if isinstance(previous_permission_id, int):
+                rollback_state = before
+                permission_id = previous_permission_id
+            elif isinstance(created_permission_id, int):
+                # The exact schema has no delete contract. Roll back a newly-created
+                # permission row by retaining its identifiers and deactivating it.
+                rollback_state = after
+                permission_id = created_permission_id
+            else:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="update_nucleus_organization_permissions",
+                arguments={
+                    "permission_id": str(permission_id),
+                    "cp_company_master_pharma_id": _argument_value(
+                        rollback_state.get("cp_company_master_pharma_id")
+                    ),
+                    "hc_theropetic_category_pharma_id": _argument_value(
+                        rollback_state.get("hc_theropetic_category_pharma_id")
+                    ),
+                    "hc_theropetic_category_epidem_id": _argument_value(
+                        rollback_state.get("hc_theropetic_category_epidem_id")
+                    ),
+                    "hc_disease_code_epidem_id": _argument_value(
+                        rollback_state.get("hc_disease_code_epidem_id")
+                    ),
+                    "reports_custom_id": _argument_value(
+                        rollback_state.get("reports_custom_id")
+                    ),
+                    "importexport_report_id": _argument_value(
+                        rollback_state.get("importexport_report_id")
+                    ),
+                    "is_active": _argument_value(
+                        before.get("is_active", False)
+                        if isinstance(previous_permission_id, int)
+                        else False
+                    ),
+                },
+            )
 
         if source.action_name == "update_organization_contact_email":
             previous_email = before.get("contact_email")

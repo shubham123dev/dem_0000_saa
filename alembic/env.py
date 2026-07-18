@@ -1,19 +1,15 @@
-"""Alembic migration environment.
-
-Uses a synchronous SQLite engine (Alembic runs migrations synchronously). The
-target metadata is ``app.db.base.Base.metadata``; importing ORM modules registers
-all tables on that metadata.
-"""
+"""Alembic migration environment."""
 
 from __future__ import annotations
 
 from logging.config import fileConfig
+
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db import action_models, orm_models  # noqa: F401
+from app.db import action_models, nucleus_models, orm_models  # noqa: F401
 
 config = context.config
 

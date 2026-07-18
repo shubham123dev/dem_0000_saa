@@ -12,6 +12,7 @@ from app.api.agent_dependencies import (
     get_agent_model_gateway,
 )
 from app.db.action_models import AgentActionProposalORM
+from app.db.nucleus_models import NucleusOrganizationAccountORM
 from app.db.orm_models import AuditEventORM, OrganizationORM
 from app.main import app
 
@@ -20,6 +21,13 @@ QUERY_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/query"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
 EXPECTED_ACTION_NAMES = {
     "update_organization_contact_email",
+    "update_nucleus_organization_account_field",
+    "clear_nucleus_organization_account_field",
+    "grant_nucleus_category_access",
+    "revoke_nucleus_category_access",
+    "grant_nucleus_report_access",
+    "revoke_nucleus_report_access",
+    "update_nucleus_organization_permissions",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",
@@ -159,6 +167,11 @@ async def test_natural_language_proposal_uses_existing_approval_execution_flow(
     await db_session.refresh(organization)
     assert organization.contact_email == "agent.operations@example.test"
     assert organization.version == 2
+
+    nucleus_account = await db_session.get(NucleusOrganizationAccountORM, 1)
+    assert nucleus_account is not None
+    await db_session.refresh(nucleus_account)
+    assert nucleus_account.email == "agent.operations@example.test"
 
 
 async def test_reader_cannot_create_natural_language_admin_proposal(

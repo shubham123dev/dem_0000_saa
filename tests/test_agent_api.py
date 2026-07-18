@@ -16,6 +16,13 @@ from app.main import app
 AGENT_QUERY_URL = "/workplace/organizations/org_sandbox_001/agent/query"
 EXPECTED_ACTION_NAMES = {
     "update_organization_contact_email",
+    "update_nucleus_organization_account_field",
+    "clear_nucleus_organization_account_field",
+    "grant_nucleus_category_access",
+    "revoke_nucleus_category_access",
+    "grant_nucleus_report_access",
+    "revoke_nucleus_report_access",
+    "update_nucleus_organization_permissions",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",
@@ -27,6 +34,10 @@ EXPECTED_ACTION_NAMES = {
 }
 EXPECTED_TOOL_NAMES = {
     "get_organization_overview",
+    "get_nucleus_organization_account",
+    "get_nucleus_organization_license",
+    "get_nucleus_organization_approval_status",
+    "get_nucleus_organization_entitlements",
     "get_organization_profile",
     "list_organization_users",
     "get_organization_seat_summary",

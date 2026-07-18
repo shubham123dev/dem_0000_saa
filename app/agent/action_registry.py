@@ -24,11 +24,103 @@ class AgentActionRegistry:
             for definition in (
                 self._definition(
                     name="update_organization_contact_email",
-                    description="Propose changing the organization contact email.",
+                    description="Propose changing the canonical contact email and synchronizing the Overview profile.",
                     arguments=("contact_email",),
                     permission=Permission.ORGANIZATION_PROFILE_UPDATE,
                     resource_type="organization",
                     risk_level="low",
+                ),
+                self._definition(
+                    name="update_nucleus_organization_account_field",
+                    description=(
+                        "Propose updating one allowlisted Nucleus OrganizationAccount "
+                        "profile/contact field. Arguments are field_name and value."
+                    ),
+                    arguments=("field_name", "value"),
+                    permission=Permission.ORGANIZATION_ACCOUNT_UPDATE,
+                    resource_type="OrganizationAccount",
+                    risk_level="low",
+                ),
+                self._definition(
+                    name="clear_nucleus_organization_account_field",
+                    description=(
+                        "Propose clearing one nullable allowlisted Nucleus "
+                        "OrganizationAccount profile/contact field."
+                    ),
+                    arguments=("field_name",),
+                    permission=Permission.ORGANIZATION_ACCOUNT_UPDATE,
+                    resource_type="OrganizationAccount",
+                    risk_level="low",
+                ),
+                self._definition(
+                    name="grant_nucleus_category_access",
+                    description=(
+                        "Propose granting or reactivating OrganizationCategoryAccess. "
+                        "Use category_sample_id='null' when no sample is intended."
+                    ),
+                    arguments=("category_id", "category_sample_id"),
+                    permission=Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+                    resource_type="OrganizationCategoryAccess",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="revoke_nucleus_category_access",
+                    description=(
+                        "Propose setting one OrganizationCategoryAccess row inactive "
+                        "by its access_id."
+                    ),
+                    arguments=("access_id",),
+                    permission=Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+                    resource_type="OrganizationCategoryAccess",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="grant_nucleus_report_access",
+                    description=(
+                        "Propose granting or reactivating OrganizationReportAccess. "
+                        "Use 'null' for nullable identifiers or executive_access."
+                    ),
+                    arguments=(
+                        "reports_id",
+                        "sample_id",
+                        "sample_toc_id",
+                        "speciality_id",
+                        "executive_access",
+                    ),
+                    permission=Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+                    resource_type="OrganizationReportAccess",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="revoke_nucleus_report_access",
+                    description=(
+                        "Propose setting one OrganizationReportAccess row inactive "
+                        "by its access_id."
+                    ),
+                    arguments=("access_id",),
+                    permission=Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+                    resource_type="OrganizationReportAccess",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="update_nucleus_organization_permissions",
+                    description=(
+                        "Propose creating or replacing one exact OrganizationPermission "
+                        "row. Use permission_id='null' to create and 'null' for an unset resource ID."
+                    ),
+                    arguments=(
+                        "permission_id",
+                        "cp_company_master_pharma_id",
+                        "hc_theropetic_category_pharma_id",
+                        "hc_theropetic_category_epidem_id",
+                        "hc_disease_code_epidem_id",
+                        "reports_custom_id",
+                        "importexport_report_id",
+                        "is_active",
+                    ),
+                    permission=Permission.ORGANIZATION_ENTITLEMENTS_UPDATE,
+                    resource_type="OrganizationPermission",
+                    risk_level="high",
                 ),
                 self._definition(
                     name="invite_organization_user",
@@ -80,7 +172,7 @@ class AgentActionRegistry:
                 ),
                 self._definition(
                     name="grant_organization_report_access",
-                    description="Propose granting or upgrading organization report access.",
+                    description="Propose granting or upgrading legacy organization report access.",
                     arguments=("report_id", "access_level"),
                     permission=Permission.ORGANIZATION_REPORTS_GRANT,
                     resource_type="organization_report_access",
@@ -88,7 +180,7 @@ class AgentActionRegistry:
                 ),
                 self._definition(
                     name="revoke_organization_report_access",
-                    description="Propose revoking active organization report access.",
+                    description="Propose revoking active legacy organization report access.",
                     arguments=("report_id",),
                     permission=Permission.ORGANIZATION_REPORTS_REVOKE,
                     resource_type="organization_report_access",

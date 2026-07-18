@@ -23,6 +23,7 @@ from app.agent.tool_registry import ReadOnlyAgentToolRegistry
 from app.api.action_dependencies import AgentActionServiceDep, get_agent_action_registry
 from app.api.dependencies import (
     MockOrganizationApiDep,
+    NucleusOrganizationServiceDep,
     OrganizationServiceDep,
     get_user_repository,
 )
@@ -94,6 +95,7 @@ def get_agent_authorization_preflight_service(
 
 def get_read_only_agent_orchestrator(
     organization_service: OrganizationServiceDep,
+    nucleus_organization_service: NucleusOrganizationServiceDep,
     model_gateway: Annotated[AgentModelGateway, Depends(get_agent_model_gateway)],
     tool_registry: Annotated[
         ReadOnlyAgentToolRegistry,
@@ -109,6 +111,7 @@ def get_read_only_agent_orchestrator(
         tool_registry=tool_registry,
         action_registry=action_registry,
         organization_service=organization_service,
+        nucleus_organization_service=nucleus_organization_service,
     )
 
 

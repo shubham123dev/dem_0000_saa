@@ -10,6 +10,7 @@ from app.agent.contracts import (
 )
 from app.agent.tool_registry import InvalidAgentToolCallError, ReadOnlyAgentToolRegistry
 from app.domain.models import User
+from app.services.nucleus_organization_service import NucleusOrganizationService
 from app.services.organization_service import OrganizationService
 
 
@@ -20,12 +21,14 @@ class ReadOnlyAgentOrchestrator:
         model_gateway: AgentModelGateway,
         tool_registry: ReadOnlyAgentToolRegistry,
         organization_service: OrganizationService,
+        nucleus_organization_service: NucleusOrganizationService | None = None,
         action_registry: AgentActionRegistry | None = None,
     ) -> None:
         self._model_gateway = model_gateway
         self._tool_registry = tool_registry
         self._action_registry = action_registry or AgentActionRegistry()
         self._organization_service = organization_service
+        self._nucleus_organization_service = nucleus_organization_service
 
     async def create_plan(self, *, user_request: str) -> AgentPlan:
         return await self._model_gateway.create_plan(
@@ -84,6 +87,42 @@ class ReadOnlyAgentOrchestrator:
                 organization_id=organization_id,
             )
             result_data = overview
+        elif tool_call.tool_name == "get_nucleus_organization_account":
+            if self._nucleus_organization_service is None:
+                raise InvalidAgentToolCallError("Nucleus organization service is unavailable")
+            account, _ = await self._nucleus_organization_service.read_account(
+                user=user,
+                organization_id=organization_id,
+            )
+            result_data = account
+        elif tool_call.tool_name == "get_nucleus_organization_license":
+            if self._nucleus_organization_service is None:
+                raise InvalidAgentToolCallError("Nucleus organization service is unavailable")
+            license_info, _ = await self._nucleus_organization_service.read_license(
+                user=user,
+                organization_id=organization_id,
+            )
+            result_data = license_info
+        elif tool_call.tool_name == "get_nucleus_organization_approval_status":
+            if self._nucleus_organization_service is None:
+                raise InvalidAgentToolCallError("Nucleus organization service is unavailable")
+            approval, _ = (
+                await self._nucleus_organization_service.read_approval_status(
+                    user=user,
+                    organization_id=organization_id,
+                )
+            )
+            result_data = approval
+        elif tool_call.tool_name == "get_nucleus_organization_entitlements":
+            if self._nucleus_organization_service is None:
+                raise InvalidAgentToolCallError("Nucleus organization service is unavailable")
+            entitlements, _ = (
+                await self._nucleus_organization_service.read_entitlements(
+                    user=user,
+                    organization_id=organization_id,
+                )
+            )
+            result_data = entitlements
         elif tool_call.tool_name == "get_organization_profile":
             organization_profile, _ = await self._organization_service.read_profile(
                 user=user,

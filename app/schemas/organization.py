@@ -130,6 +130,10 @@ class CapabilitiesResponse(BaseModel):
     read_tools: tuple[str, ...] = Field(
         default=(
             "get_organization_overview",
+            "get_nucleus_organization_account",
+            "get_nucleus_organization_license",
+            "get_nucleus_organization_approval_status",
+            "get_nucleus_organization_entitlements",
             "get_organization_profile",
             "list_organization_users",
             "get_organization_seat_summary",

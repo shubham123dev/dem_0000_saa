@@ -16,7 +16,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0010_add_organization_overview"
+EXPECTED_MIGRATION_HEAD = "0011_nucleus_organization_schema"
 
 
 @router.get("/health")
