@@ -2,6 +2,28 @@ from __future__ import annotations
 
 from app.agent.contracts import AgentToolCall, AgentToolDefinition
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
+from app.workplace_resources.relationships import WorkplaceRelationRegistry
+
+
+_QUERY_CONTRACT = {
+    "shape": {
+        "all": [{"field": "field_name", "operator": "equals", "value": "value"}],
+        "any": [],
+    },
+    "operators": [
+        "equals",
+        "not_equals",
+        "contains",
+        "starts_with",
+        "in",
+        "greater_than",
+        "less_than",
+        "between",
+        "is_null",
+        "is_not_null",
+    ],
+    "maximum_conditions": 20,
+}
 
 
 class InvalidAgentToolCallError(ValueError):
@@ -11,6 +33,10 @@ class InvalidAgentToolCallError(ValueError):
 class ReadOnlyAgentToolRegistry:
     def __init__(self) -> None:
         resource_catalog = WorkplaceOperationRouter().public_catalog()
+        relationship_catalog = tuple(
+            item.public_dict()
+            for item in WorkplaceRelationRegistry().list_definitions()
+        )
         self._tool_definitions_by_name = {
             "get_organization_overview": AgentToolDefinition(
                 name="get_organization_overview",
@@ -111,6 +137,50 @@ class ReadOnlyAgentToolRegistry:
                     "allowlisted equality-filter JSON object."
                 ),
                 required_argument_names=("resource_type", "filters_json"),
+            ),
+            "list_related_workplace_resources": AgentToolDefinition(
+                name="list_related_workplace_resources",
+                description=(
+                    "Traverse one backend-registered relationship from an "
+                    "organization-scoped source resource."
+                ),
+                required_argument_names=(
+                    "source_resource_type",
+                    "source_resource_id",
+                    "relationship",
+                ),
+                metadata={"relationships": relationship_catalog},
+            ),
+            "summarize_workplace_resources": AgentToolDefinition(
+                name="summarize_workplace_resources",
+                description=(
+                    "Summarize a registered resource using the governed query "
+                    "language and return counts plus a bounded sample."
+                ),
+                required_argument_names=("resource_type", "query_json"),
+                metadata={"query_contract": _QUERY_CONTRACT},
+            ),
+            "compare_workplace_resources": AgentToolDefinition(
+                name="compare_workplace_resources",
+                description=(
+                    "Compare two to ten resources of the same registered type "
+                    "and return only backend-readable field differences."
+                ),
+                required_argument_names=(
+                    "resource_type",
+                    "resource_ids_json",
+                ),
+                metadata={
+                    "resource_ids_json": "JSON array of two to ten resource IDs"
+                },
+            ),
+            "explain_workplace_resource_capabilities": AgentToolDefinition(
+                name="explain_workplace_resource_capabilities",
+                description=(
+                    "Explain safe fields, canonical routes, relationships and "
+                    "query operators for one registered resource."
+                ),
+                required_argument_names=("resource_type",),
             ),
         }
 

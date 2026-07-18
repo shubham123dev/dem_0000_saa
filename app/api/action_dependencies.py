@@ -17,6 +17,13 @@ from app.agent.action_handlers import (
 )
 from app.agent.action_registry import AgentActionRegistry
 from app.agent.workplace_resource_handlers import WorkplaceResourceActionHandler
+from app.agent.workflow_action_handlers import (
+    ApplyOrganizationAccessPackageWorkflowHandler,
+    OffboardOrganizationUserWorkflowHandler,
+    OnboardOrganizationUserWorkflowHandler,
+    QuerySelectedBulkUpdateWorkflowHandler,
+    RestoreWorkplaceResourceSnapshotsHandler,
+)
 from app.agent.nucleus_admin_action_handlers import (
     COMPANY_PROFILE_ACCESS,
     DRUG_ACCESS,
@@ -67,6 +74,7 @@ from app.services.operational_resource_service import OperationalResourceService
 from app.services.release_ready_agent_action_service import ReleaseReadyAgentActionService
 from app.workplace_resources.registry import WorkplaceResourceRegistry
 from app.workplace_resources.service import WorkplaceResourceService
+from app.workplace_resources.workflows import WorkplaceWorkflowService
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
@@ -86,6 +94,9 @@ def get_agent_action_handlers(
     nucleus_admin = NucleusAdministrationRepository(session)
     nucleus_projections = NucleusAdministrationProjectionRepository(session)
     workplace_resources = WorkplaceResourceService(
+        session, WorkplaceResourceRegistry()
+    )
+    workplace_workflows = WorkplaceWorkflowService(
         session, WorkplaceResourceRegistry()
     )
     return {
@@ -178,6 +189,21 @@ def get_agent_action_handlers(
         "delete_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "delete"),
         "restore_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "restore"),
         "bulk_update_workplace_resources": WorkplaceResourceActionHandler(workplace_resources, "bulk_update"),
+        "bulk_update_workplace_resources_by_query": (
+            QuerySelectedBulkUpdateWorkflowHandler(workplace_workflows)
+        ),
+        "onboard_organization_user": (
+            OnboardOrganizationUserWorkflowHandler(workplace_workflows)
+        ),
+        "offboard_organization_user": (
+            OffboardOrganizationUserWorkflowHandler(workplace_workflows)
+        ),
+        "apply_organization_access_package": (
+            ApplyOrganizationAccessPackageWorkflowHandler(workplace_workflows)
+        ),
+        "restore_workplace_resource_snapshots": (
+            RestoreWorkplaceResourceSnapshotsHandler(workplace_workflows)
+        ),
         "invite_organization_user": InviteOrganizationUserHandler(resources),
         "activate_organization_membership": ActivateOrganizationMembershipHandler(
             resources

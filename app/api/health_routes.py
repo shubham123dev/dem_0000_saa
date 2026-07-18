@@ -18,7 +18,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0014_workplace_resources"
+EXPECTED_MIGRATION_HEAD = "0015_workplace_workflows"
 
 
 @router.get("/health")
@@ -110,8 +110,31 @@ async def readiness_details(
     except SQLAlchemyError:
         await session.rollback()
         workplace_resource_runtime_supported = False
+    try:
+        await session.execute(
+            text(
+                "SELECT workflow_name, workflow_version, target_set_hash, "
+                "risk_snapshot_json, compensation_json "
+                "FROM workplace_mutation_plans LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT depends_on_step_index, verification_json, "
+                "compensation_json "
+                "FROM workplace_mutation_step_receipts LIMIT 1"
+            )
+        )
+        workflow_schema_supported = True
+    except SQLAlchemyError:
+        await session.rollback()
+        workflow_schema_supported = False
+    action_registry = AgentActionRegistry()
     registry_names = {
-        definition.name for definition in AgentActionRegistry().list_definitions()
+        definition.name for definition in action_registry.list_definitions()
+    }
+    model_action_names = {
+        definition.name for definition in action_registry.list_model_definitions()
     }
     handler_names = set(action_service._action_handlers)
     read_tool_names = {
@@ -191,6 +214,14 @@ async def readiness_details(
             )
         ).scalars().all()
     )
+    workflow_permission = Permission.WORKPLACE_WORKFLOWS_MANAGE.value
+    configured_workflow_permission = await session.scalar(
+        select(RolePermissionORM.permission).where(
+            RolePermissionORM.role == Role.SANDBOX_ADMIN.value,
+            RolePermissionORM.permission == workflow_permission,
+        )
+    )
+
     audit_pending = int(
         await session.scalar(
             select(func.count())
@@ -209,6 +240,15 @@ async def readiness_details(
         "workplace_resource_runtime_supported": (
             workplace_resource_runtime_supported
         ),
+        "workflow_schema_supported": workflow_schema_supported,
+        "workplace_workflow_permission_seeded": (
+            configured_workflow_permission == workflow_permission
+        ),
+        "internal_rollback_hidden_from_model": (
+            "restore_workplace_resource_snapshots" in registry_names
+            and "restore_workplace_resource_snapshots" not in model_action_names
+            and len(model_action_names) == 42
+        ),
         "workplace_resource_permissions_seeded": (
             configured_workplace_resource_permissions
             == workplace_resource_permissions
@@ -217,7 +257,7 @@ async def readiness_details(
             configured_nucleus_admin_permissions == nucleus_admin_permissions
         ),
         "registry_handler_parity": registry_names == handler_names,
-        "agent_resource_tools_registered": len(read_tool_names) == 16,
+        "agent_resource_tools_registered": len(read_tool_names) == 20,
         "workplace_operation_routes_valid": workplace_operation_routes_valid,
         "action_management_permissions_seeded": (
             configured_management_permissions == management_permissions
@@ -271,6 +311,7 @@ async def capabilities() -> CapabilitiesResponse:
                 supports_dry_run=definition.supports_dry_run,
                 minimum_approvals=definition.approval_policy.minimum_approvals,
                 self_approval_allowed=definition.approval_policy.self_approval_allowed,
+                model_selectable=definition.model_selectable,
             )
             for definition in definitions
         ),

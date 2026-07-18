@@ -96,6 +96,12 @@ class WorkplaceMutationPlanORM(Base):
     __tablename__ = "workplace_mutation_plans"
     __table_args__ = (
         UniqueConstraint("proposal_id", name="uq_workplace_plan_proposal"),
+        Index(
+            "ix_workplace_plan_org_workflow_status",
+            "organization_id",
+            "workflow_name",
+            "status",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -111,6 +117,17 @@ class WorkplaceMutationPlanORM(Base):
     resource_count: Mapped[int] = mapped_column(Integer, nullable=False)
     plan_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
+    workflow_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    workflow_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    target_set_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    risk_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    compensation_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
@@ -147,6 +164,11 @@ class WorkplaceMutationStepReceiptORM(Base):
     outcome: Mapped[str] = mapped_column(String(40), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    depends_on_step_index: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    verification_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    compensation_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

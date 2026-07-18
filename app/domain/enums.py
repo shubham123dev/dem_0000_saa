@@ -114,6 +114,7 @@ class Permission(str, Enum):
     WORKPLACE_RESOURCES_DELETE = "workplace.resources.delete"
     WORKPLACE_RESOURCES_RESTORE = "workplace.resources.restore"
     WORKPLACE_RESOURCES_BULK_MANAGE = "workplace.resources.bulk_manage"
+    WORKPLACE_WORKFLOWS_MANAGE = "workplace.workflows.manage"
 
     AGENT_ACTIONS_READ = "agent.actions.read"
     AGENT_ACTIONS_APPROVE = "agent.actions.approve"
@@ -154,6 +155,7 @@ _ADMIN_ONLY_PERMISSIONS: tuple[Permission, ...] = (
     Permission.WORKPLACE_RESOURCES_DELETE,
     Permission.WORKPLACE_RESOURCES_RESTORE,
     Permission.WORKPLACE_RESOURCES_BULK_MANAGE,
+    Permission.WORKPLACE_WORKFLOWS_MANAGE,
     Permission.AGENT_ACTIONS_READ,
     Permission.AGENT_ACTIONS_APPROVE,
     Permission.AGENT_ACTIONS_EXECUTE,

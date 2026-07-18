@@ -155,8 +155,8 @@ Invoke-RestMethod "$base/workplace/capabilities" |
 Expected current surface:
 
 ```text
-16 read tools
-38 write actions
+20 read tools
+43 write actions
 ```
 
 ## 9. Smoke-test one controlled action
@@ -266,3 +266,22 @@ Invoke-RestMethod "$base/ready/details" | ConvertTo-Json -Depth 30
 Readiness must report `read_tools.registered = 16`, exact action/handler parity
 of `38/38`, `agent_resource_tools_registered = true`, and
 `workplace_operation_routes_valid = true`.
+
+
+## Final workplace-workflow validation
+
+Expected migration and governed surface:
+
+```text
+0015_workplace_workflows
+20 read tools
+43 registered actions
+43 handlers
+42 model-selectable actions
+```
+
+Readiness must report `workflow_schema_supported = true`,
+`workplace_workflow_permission_seeded = true`,
+`internal_rollback_hidden_from_model = true`, exact `43/43` action parity and
+20 registered read tools. Run the seed twice and the complete test suite before
+committing.

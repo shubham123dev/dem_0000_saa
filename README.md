@@ -226,7 +226,20 @@ other required argument is missing instead of guessing.
 Current governed surface:
 
 ```text
-16 read tools
-38 write actions
-38 handlers
+20 read tools
+43 write actions
+43 handlers
 ```
+
+
+## Final governed workflow milestone
+
+Migration `0015_workplace_workflows` completes the mocked backend workplace-agent
+scope with 20 read tools, 43 registered actions/handlers, 42 model-selectable
+actions, structured relationship/query intelligence, atomic onboarding and
+offboarding, exact Nucleus access packages, query-selected bulk updates,
+dynamic risk, durable workflow receipts, reconciliation and separately approved
+rollback. The internal exact-snapshot rollback action is never offered to the
+model.
+
+See `docs/WORKPLACE_WORKFLOWS.md`.

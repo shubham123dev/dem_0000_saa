@@ -327,6 +327,71 @@ class WorkplaceOperationRouter:
                 "deactivate_nucleus_organization_account",
             ),
         ]
+        routes.extend(
+            (
+                WorkplaceOperationRoute(
+                    "organization",
+                    "list_related",
+                    "tool",
+                    "list_related_workplace_resources",
+                ),
+                WorkplaceOperationRoute(
+                    "organization",
+                    "summarize",
+                    "tool",
+                    "summarize_workplace_resources",
+                ),
+                WorkplaceOperationRoute(
+                    "organization",
+                    "explain",
+                    "tool",
+                    "explain_workplace_resource_capabilities",
+                ),
+                WorkplaceOperationRoute(
+                    "workplace_setting",
+                    "summarize",
+                    "tool",
+                    "summarize_workplace_resources",
+                ),
+                WorkplaceOperationRoute(
+                    "workplace_setting",
+                    "compare",
+                    "tool",
+                    "compare_workplace_resources",
+                ),
+                WorkplaceOperationRoute(
+                    "workplace_setting",
+                    "explain",
+                    "tool",
+                    "explain_workplace_resource_capabilities",
+                ),
+                WorkplaceOperationRoute(
+                    "workplace_setting",
+                    "bulk_update_by_query",
+                    "action",
+                    "bulk_update_workplace_resources_by_query",
+                    fields=("value", "description"),
+                ),
+                WorkplaceOperationRoute(
+                    "organization_membership",
+                    "onboard",
+                    "action",
+                    "onboard_organization_user",
+                ),
+                WorkplaceOperationRoute(
+                    "organization_membership",
+                    "offboard",
+                    "action",
+                    "offboard_organization_user",
+                ),
+                WorkplaceOperationRoute(
+                    "nucleus_organization_account",
+                    "apply_access_package",
+                    "action",
+                    "apply_organization_access_package",
+                ),
+            )
+        )
         access_specs = (
             (
                 "nucleus_category_access",

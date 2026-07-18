@@ -6,7 +6,7 @@ from app.domain.enums import Permission, ROLE_PERMISSIONS, Role
 
 def test_full_admin_surface_is_registered_with_scoped_policies() -> None:
     definitions = AgentActionRegistry().list_definitions()
-    assert len(definitions) == 38
+    assert len(definitions) == 43
     by_name = {definition.name: definition for definition in definitions}
     assert by_name["update_nucleus_organization_license"].risk_level == "high"
     assert (
@@ -38,6 +38,7 @@ def test_sensitive_admin_permissions_are_admin_only() -> None:
         Permission.ORGANIZATION_LICENSE_UPDATE,
         Permission.ORGANIZATION_LIFECYCLE_UPDATE,
         Permission.ORGANIZATION_ENTITLEMENTS_DELETE,
+        Permission.WORKPLACE_WORKFLOWS_MANAGE,
     }
     assert expected.issubset(admin_permissions)
     assert expected.isdisjoint(reader_permissions)

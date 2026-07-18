@@ -28,6 +28,11 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             definition = self._action_registry.validate(proposal_input)
         except InvalidAgentActionProposalError as exception:
             raise AgentActionInvalidError() from exception
+        if (
+            not definition.model_selectable
+            and (provenance or {}).get("proposal_source") != "rollback"
+        ):
+            raise AgentActionInvalidError()
         await self._authorize(
             user=user,
             organization_id=organization_id,

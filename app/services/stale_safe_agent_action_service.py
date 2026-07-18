@@ -372,4 +372,134 @@ class StaleSafeAgentActionService(AgentActionService):
                 arguments={"report_id": arguments["report_id"]},
             )
 
+        if source.action_name == "create_workplace_resource":
+            resource_id = result.get("resource_id")
+            if not isinstance(resource_id, str) or not resource_id:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="delete_workplace_resource",
+                arguments={
+                    "resource_type": arguments["resource_type"],
+                    "resource_id": resource_id,
+                },
+            )
+
+        lifecycle_pairs = {
+            "activate_workplace_resource": "deactivate_workplace_resource",
+            "deactivate_workplace_resource": "activate_workplace_resource",
+            "delete_workplace_resource": "restore_workplace_resource",
+            "restore_workplace_resource": "delete_workplace_resource",
+        }
+        if source.action_name in lifecycle_pairs:
+            return AgentActionProposalInput(
+                action_name=lifecycle_pairs[source.action_name],
+                arguments={
+                    "resource_type": arguments["resource_type"],
+                    "resource_id": arguments["resource_id"],
+                },
+            )
+
+        if source.action_name in {
+            "update_workplace_resource",
+            "clear_workplace_resource_fields",
+        }:
+            expected_version = after.get("version")
+            if not isinstance(expected_version, int):
+                raise AgentActionRollbackUnavailableError()
+            snapshots = [
+                {
+                    "resource_id": arguments["resource_id"],
+                    "expected_current_version": expected_version,
+                    "values": before,
+                }
+            ]
+            return AgentActionProposalInput(
+                action_name="restore_workplace_resource_snapshots",
+                arguments={
+                    "resource_type": arguments["resource_type"],
+                    "snapshots_json": __import__("json").dumps(
+                        snapshots, sort_keys=True, separators=(",", ":")
+                    ),
+                },
+            )
+
+        if source.action_name in {
+            "bulk_update_workplace_resources",
+            "bulk_update_workplace_resources_by_query",
+        }:
+            before_rows = before.get("resources")
+            if not isinstance(before_rows, list):
+                raise AgentActionRollbackUnavailableError()
+            preconditions = [
+                item
+                for item in source.resource_preconditions
+                if item.resource_type == arguments["resource_type"]
+            ]
+            if len(preconditions) != len(before_rows):
+                raise AgentActionRollbackUnavailableError()
+            snapshots = [
+                {
+                    "resource_id": precondition.resource_id,
+                    "expected_current_version": (
+                        precondition.observed_version + 1
+                    ),
+                    "values": row,
+                }
+                for precondition, row in zip(
+                    preconditions, before_rows, strict=True
+                )
+            ]
+            return AgentActionProposalInput(
+                action_name="restore_workplace_resource_snapshots",
+                arguments={
+                    "resource_type": arguments["resource_type"],
+                    "snapshots_json": __import__("json").dumps(
+                        snapshots, sort_keys=True, separators=(",", ":")
+                    ),
+                },
+            )
+
+        if source.action_name == "onboard_organization_user":
+            user_id = after.get("user_id")
+            if not isinstance(user_id, str) or not user_id:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="offboard_organization_user",
+                arguments={"user_id": user_id},
+            )
+
+        if source.action_name == "offboard_organization_user":
+            email = before.get("email")
+            display_name = before.get("display_name")
+            role = before.get("role")
+            if not all(
+                isinstance(item, str) and item
+                for item in (email, display_name, role)
+            ):
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="onboard_organization_user",
+                arguments={
+                    "email": email,
+                    "display_name": display_name,
+                    "role": role,
+                    "seat_type": (
+                        "standard" if before.get("active_seats") else "none"
+                    ),
+                },
+            )
+
+        if source.action_name == "apply_organization_access_package":
+            package = before.get("package")
+            if not isinstance(package, dict) or not package:
+                raise AgentActionRollbackUnavailableError()
+            return AgentActionProposalInput(
+                action_name="apply_organization_access_package",
+                arguments={
+                    "package_json": __import__("json").dumps(
+                        package, sort_keys=True, separators=(",", ":")
+                    )
+                },
+            )
+
         raise AgentActionRollbackUnavailableError()

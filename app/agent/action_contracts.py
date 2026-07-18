@@ -29,6 +29,7 @@ class AgentActionDefinition(BaseModel):
     supports_dry_run: bool
     approval_policy: AgentApprovalPolicy
     allow_suspended_organization: bool = False
+    model_selectable: bool = True
 
 
 class AgentActionProposalInput(BaseModel):
@@ -101,6 +102,9 @@ class AgentActionPreparation(BaseModel):
     resource_type: str
     resource_id: str
     resource_preconditions: tuple[AgentActionResourcePrecondition, ...] = ()
+    risk_level: Literal["low", "medium", "high"] | None = None
+    approval_policy: AgentApprovalPolicy | None = None
+    risk_snapshot: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def normalize_resource_preconditions(self) -> "AgentActionPreparation":
@@ -134,7 +138,7 @@ class AgentActionProposal(BaseModel):
     action_name: str
     arguments: dict[str, str]
     action_fingerprint: str
-    fingerprint_version: int = Field(default=2, ge=2, le=3)
+    fingerprint_version: int = Field(default=2, ge=2, le=4)
     risk_level: Literal["low", "medium", "high"]
     resource_type: str
     resource_id: str

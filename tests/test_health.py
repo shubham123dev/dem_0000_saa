@@ -21,6 +21,10 @@ EXPECTED_READ_TOOLS = [
     "search_workplace_resources",
     "get_workplace_resource",
     "count_workplace_resources",
+    "list_related_workplace_resources",
+    "summarize_workplace_resources",
+    "compare_workplace_resources",
+    "explain_workplace_resource_capabilities",
 ]
 
 EXPECTED_WRITE_ACTIONS = {
@@ -62,6 +66,11 @@ EXPECTED_WRITE_ACTIONS = {
     "delete_workplace_resource",
     "restore_workplace_resource",
     "bulk_update_workplace_resources",
+    "bulk_update_workplace_resources_by_query",
+    "onboard_organization_user",
+    "offboard_organization_user",
+    "apply_organization_access_package",
+    "restore_workplace_resource_snapshots",
 }
 
 

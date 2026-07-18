@@ -17,7 +17,9 @@ from app.domain.models import User
 from app.permissions.permission_service import PermissionService
 from app.services.nucleus_organization_service import NucleusOrganizationService
 from app.services.organization_service import OrganizationService
+from app.workplace_resources.advanced_query import WorkplaceAdvancedQueryService
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
+from app.workplace_resources.relationships import WorkplaceRelationshipService
 from app.workplace_resources.service import WorkplaceResourceService
 
 
@@ -32,6 +34,8 @@ class ReadOnlyAgentOrchestrator:
         action_registry: AgentActionRegistry | None = None,
         workplace_resource_service: WorkplaceResourceService | None = None,
         workplace_operation_router: WorkplaceOperationRouter | None = None,
+        advanced_query_service: WorkplaceAdvancedQueryService | None = None,
+        relationship_service: WorkplaceRelationshipService | None = None,
         permission_service: PermissionService | None = None,
     ) -> None:
         self._model_gateway = model_gateway
@@ -41,13 +45,15 @@ class ReadOnlyAgentOrchestrator:
         self._nucleus_organization_service = nucleus_organization_service
         self._workplace_resource_service = workplace_resource_service
         self._workplace_operation_router = workplace_operation_router
+        self._advanced_query_service = advanced_query_service
+        self._relationship_service = relationship_service
         self._permission_service = permission_service
 
     async def create_plan(self, *, user_request: str) -> AgentPlan:
         return await self._model_gateway.create_plan(
             user_request=user_request,
             available_tools=self._tool_registry.list_tool_definitions(),
-            available_actions=self._action_registry.list_definitions(),
+            available_actions=self._action_registry.list_model_definitions(),
         )
 
     async def execute(
@@ -117,6 +123,22 @@ class ReadOnlyAgentOrchestrator:
             )
         return parsed
 
+    @staticmethod
+    def _parse_json_list(raw_value: str, *, field_name: str) -> tuple[str, ...]:
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError as exception:
+            raise InvalidAgentToolCallError(
+                f"{field_name} must be valid JSON"
+            ) from exception
+        if not isinstance(parsed, list) or not all(
+            isinstance(item, str) and item.strip() for item in parsed
+        ):
+            raise InvalidAgentToolCallError(
+                f"{field_name} must be an array of non-empty strings"
+            )
+        return tuple(item.strip() for item in parsed)
+
     async def _execute_resource_tool(
         self,
         *,
@@ -127,6 +149,8 @@ class ReadOnlyAgentOrchestrator:
         if (
             self._workplace_resource_service is None
             or self._workplace_operation_router is None
+            or self._advanced_query_service is None
+            or self._relationship_service is None
         ):
             raise InvalidAgentToolCallError(
                 "Workplace resource service is unavailable"
@@ -136,6 +160,38 @@ class ReadOnlyAgentOrchestrator:
             organization_id=organization_id,
         )
         try:
+            if tool_call.tool_name == "list_related_workplace_resources":
+                return await self._relationship_service.list_related(
+                    organization_id=organization_id,
+                    source_resource_type=tool_call.arguments[
+                        "source_resource_type"
+                    ],
+                    source_resource_id=tool_call.arguments[
+                        "source_resource_id"
+                    ],
+                    relationship=tool_call.arguments["relationship"],
+                )
+            if tool_call.tool_name == "summarize_workplace_resources":
+                return await self._advanced_query_service.summarize(
+                    organization_id=organization_id,
+                    resource_type=tool_call.arguments["resource_type"],
+                    query=self._parse_filter_object(
+                        tool_call.arguments["query_json"]
+                    ),
+                )
+            if tool_call.tool_name == "compare_workplace_resources":
+                return await self._advanced_query_service.compare(
+                    organization_id=organization_id,
+                    resource_type=tool_call.arguments["resource_type"],
+                    resource_ids=self._parse_json_list(
+                        tool_call.arguments["resource_ids_json"],
+                        field_name="resource_ids_json",
+                    ),
+                )
+            if tool_call.tool_name == "explain_workplace_resource_capabilities":
+                return self._relationship_service.explain_capabilities(
+                    tool_call.arguments["resource_type"]
+                )
             if tool_call.tool_name == "list_workplace_resource_types":
                 return {
                     "resources": self._workplace_operation_router.public_catalog(),
@@ -220,7 +276,20 @@ class ReadOnlyAgentOrchestrator:
         organization_id: str,
         tool_call: AgentToolCall,
     ) -> AgentToolResult:
-        if tool_call.tool_name.startswith(("list_workplace_", "describe_workplace_", "search_workplace_", "get_workplace_", "count_workplace_")):
+        if tool_call.tool_name in {
+            "list_related_workplace_resources",
+            "summarize_workplace_resources",
+            "compare_workplace_resources",
+            "explain_workplace_resource_capabilities",
+        } or tool_call.tool_name.startswith(
+            (
+                "list_workplace_",
+                "describe_workplace_",
+                "search_workplace_",
+                "get_workplace_",
+                "count_workplace_",
+            )
+        ):
             result_data = await self._execute_resource_tool(
                 user=user,
                 organization_id=organization_id,

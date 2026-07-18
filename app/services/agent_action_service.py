@@ -88,6 +88,13 @@ class AgentActionService:
             action_definition = self._action_registry.validate(proposal_input)
         except InvalidAgentActionProposalError as exception:
             raise AgentActionInvalidError() from exception
+        if (
+            proposal_input.action_name == "offboard_organization_user"
+            and proposal_input.arguments.get("user_id", "").strip() == user.id
+        ):
+            raise AgentActionInvalidError(
+                "A requester cannot offboard their own membership."
+            )
         await self._authorize(
             user=user,
             organization_id=organization_id,
@@ -104,6 +111,12 @@ class AgentActionService:
             )
         except (KeyError, ValueError) as exception:
             raise AgentActionInvalidError(str(exception)) from exception
+        effective_risk_level = (
+            preparation.risk_level or action_definition.risk_level
+        )
+        effective_approval_policy = (
+            preparation.approval_policy or action_definition.approval_policy
+        )
         expires_at = _utcnow() + timedelta(minutes=15)
         fingerprint = build_action_fingerprint(
             organization_id=organization_id,
@@ -113,8 +126,9 @@ class AgentActionService:
             changes=preparation.changes,
             observed_resource_version=preparation.observed_resource_version,
             resource_preconditions=preparation.resource_preconditions,
-            fingerprint_version=3,
-            approval_policy=action_definition.approval_policy,
+            risk_level=effective_risk_level,
+            fingerprint_version=4,
+            approval_policy=effective_approval_policy,
             resource_type=preparation.resource_type,
             resource_id=preparation.resource_id,
             expires_at=expires_at,
@@ -126,13 +140,13 @@ class AgentActionService:
             arguments=preparation.normalized_arguments,
             changes=preparation.changes,
             action_fingerprint=fingerprint,
-            risk_level=action_definition.risk_level,
+            risk_level=effective_risk_level,
             resource_type=preparation.resource_type,
             resource_id=preparation.resource_id,
             observed_resource_version=preparation.observed_resource_version,
             resource_preconditions=preparation.resource_preconditions,
-            fingerprint_version=3,
-            approval_policy=action_definition.approval_policy,
+            fingerprint_version=4,
+            approval_policy=effective_approval_policy,
             expires_at=expires_at,
         )
         details = {"risk_level": proposal.risk_level}
@@ -323,6 +337,15 @@ class AgentActionService:
             current_preparation.resource_preconditions
             != proposal.resource_preconditions
             or current_preparation.changes != proposal.changes
+            or (
+                current_preparation.risk_level is not None
+                and current_preparation.risk_level != proposal.risk_level
+            )
+            or (
+                current_preparation.approval_policy is not None
+                and current_preparation.approval_policy
+                != proposal.approval_policy
+            )
         ):
             await self._action_repository.transition_status(
                 proposal_id=proposal.id,
@@ -499,6 +522,7 @@ class AgentActionService:
             changes=proposal.changes,
             observed_resource_version=proposal.observed_resource_version,
             resource_preconditions=proposal.resource_preconditions,
+            risk_level=proposal.risk_level,
             fingerprint_version=proposal.fingerprint_version,
             approval_policy=proposal.approval_policy,
             resource_type=proposal.resource_type,

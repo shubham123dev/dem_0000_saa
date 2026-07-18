@@ -51,6 +51,11 @@ EXPECTED_ACTIONS = {
     "delete_workplace_resource",
     "restore_workplace_resource",
     "bulk_update_workplace_resources",
+    "bulk_update_workplace_resources_by_query",
+    "onboard_organization_user",
+    "offboard_organization_user",
+    "apply_organization_access_package",
+    "restore_workplace_resource_snapshots",
 }
 
 

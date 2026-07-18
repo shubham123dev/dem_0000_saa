@@ -123,6 +123,7 @@ class CapabilityActionOut(BaseModel):
     supports_dry_run: bool
     minimum_approvals: int
     self_approval_allowed: bool
+    model_selectable: bool = True
 
 
 class CapabilitiesResponse(BaseModel):
@@ -145,6 +146,10 @@ class CapabilitiesResponse(BaseModel):
             "search_workplace_resources",
             "get_workplace_resource",
             "count_workplace_resources",
+            "list_related_workplace_resources",
+            "summarize_workplace_resources",
+            "compare_workplace_resources",
+            "explain_workplace_resource_capabilities",
         )
     )
     write_tools: tuple[str, ...] = ()

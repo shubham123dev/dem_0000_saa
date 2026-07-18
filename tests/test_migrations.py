@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0014_workplace_resources"
+EXPECTED_HEAD = "0015_workplace_workflows"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -209,6 +209,25 @@ def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
         "attempt_count",
         "reconciliation_status",
     }.issubset(execution_columns)
+
+    workflow_plan_columns = read_column_names(
+        connection, "workplace_mutation_plans"
+    )
+    assert {
+        "workflow_name",
+        "workflow_version",
+        "target_set_hash",
+        "risk_snapshot_json",
+        "compensation_json",
+    }.issubset(workflow_plan_columns)
+    workflow_receipt_columns = read_column_names(
+        connection, "workplace_mutation_step_receipts"
+    )
+    assert {
+        "depends_on_step_index",
+        "verification_json",
+        "compensation_json",
+    }.issubset(workflow_receipt_columns)
 
     proposal_columns = read_column_names(connection, "agent_action_proposals")
     assert {

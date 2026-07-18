@@ -367,6 +367,65 @@ class AgentActionRegistry:
                     resource_type="organization_report_access",
                     risk_level="medium",
                 ),
+                self._definition(
+                    name="bulk_update_workplace_resources_by_query",
+                    description=(
+                        "Resolve query_json shaped as all/any arrays of field, "
+                        "operator and value conditions; freeze the exact target "
+                        "set; then atomically apply the field/value changes_json."
+                    ),
+                    arguments=("resource_type", "query_json", "changes_json"),
+                    permission=Permission.WORKPLACE_WORKFLOWS_MANAGE,
+                    resource_type="workplace_resource_query_batch",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="onboard_organization_user",
+                    description=(
+                        "Atomically create or reactivate a user membership. role "
+                        "must be sandbox_reader or sandbox_admin; seat_type must "
+                        "be none or standard."
+                    ),
+                    arguments=("email", "display_name", "role", "seat_type"),
+                    permission=Permission.WORKPLACE_WORKFLOWS_MANAGE,
+                    resource_type="organization_user_onboarding",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="offboard_organization_user",
+                    description=(
+                        "Atomically revoke active seats and remove one organization "
+                        "membership after last-admin and self-removal checks."
+                    ),
+                    arguments=("user_id",),
+                    permission=Permission.WORKPLACE_WORKFLOWS_MANAGE,
+                    resource_type="organization_user_offboarding",
+                    risk_level="high",
+                ),
+                self._definition(
+                    name="apply_organization_access_package",
+                    description=(
+                        "Atomically apply package_json groups categories, "
+                        "company_profiles, drugs, indications, markets and reports; "
+                        "every entry contains its identifiers plus active boolean."
+                    ),
+                    arguments=("package_json",),
+                    permission=Permission.WORKPLACE_WORKFLOWS_MANAGE,
+                    resource_type="organization_access_package",
+                    risk_level="medium",
+                ),
+                self._definition(
+                    name="restore_workplace_resource_snapshots",
+                    description=(
+                        "Backend-only rollback action that restores exact reviewed "
+                        "resource snapshots."
+                    ),
+                    arguments=("resource_type", "snapshots_json"),
+                    permission=Permission.WORKPLACE_WORKFLOWS_MANAGE,
+                    resource_type="workplace_resource_snapshot_restore",
+                    risk_level="high",
+                    model_selectable=False,
+                ),
             )
         }
 
@@ -380,6 +439,7 @@ class AgentActionRegistry:
         resource_type: str,
         risk_level: str,
         allow_suspended_organization: bool = False,
+        model_selectable: bool = True,
     ) -> AgentActionDefinition:
         permission_value = permission.value
         high_risk = risk_level == "high"
@@ -398,10 +458,19 @@ class AgentActionRegistry:
                 minimum_approvals=2 if high_risk else 1,
             ),
             allow_suspended_organization=allow_suspended_organization,
+            model_selectable=model_selectable,
         )
 
     def list_definitions(self) -> tuple[AgentActionDefinition, ...]:
         return tuple(self._definitions.values())
+
+    def list_model_definitions(self) -> tuple[AgentActionDefinition, ...]:
+        return tuple(
+            item for item in self._definitions.values() if item.model_selectable
+        )
+
+    def is_internal_action(self, action_name: str) -> bool:
+        return not self.get_definition(action_name).model_selectable
 
     def get_definition(self, action_name: str) -> AgentActionDefinition:
         definition = self._definitions.get(action_name)
@@ -459,6 +528,7 @@ def build_action_fingerprint(
     resource_id: str,
     expires_at: datetime,
     resource_preconditions: tuple[AgentActionResourcePrecondition, ...] = (),
+    risk_level: str | None = None,
     fingerprint_version: int = 3,
 ) -> str:
     payload = {
@@ -475,7 +545,7 @@ def build_action_fingerprint(
     }
     if fingerprint_version == 2:
         payload["version"] = 2
-    elif fingerprint_version == 3:
+    elif fingerprint_version in {3, 4}:
         if not resource_preconditions:
             resource_preconditions = (
                 AgentActionResourcePrecondition(
@@ -491,7 +561,11 @@ def build_action_fingerprint(
                 key=lambda item: (item.resource_type, item.resource_id),
             )
         ]
-        payload["version"] = 3
+        if fingerprint_version == 4:
+            if risk_level not in {"low", "medium", "high"}:
+                raise ValueError("Fingerprint version 4 requires a risk level")
+            payload["risk_level"] = risk_level
+        payload["version"] = fingerprint_version
     else:
         raise ValueError("Unsupported action fingerprint version")
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))

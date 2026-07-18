@@ -25,7 +25,7 @@ def build_gateway(transport: httpx.AsyncBaseTransport, *, maximum_attempts: int 
 
 
 def available_actions():
-    return AgentActionRegistry().list_definitions()
+    return AgentActionRegistry().list_model_definitions()
 
 
 def all_action_argument_names() -> tuple[str, ...]:

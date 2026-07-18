@@ -23,7 +23,7 @@ async def test_single_resource_action_persists_one_precondition(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-    assert proposal["fingerprint_version"] == 3
+    assert proposal["fingerprint_version"] == 4
     assert proposal["resource_preconditions"] == [
         {
             "resource_type": "OrganizationAccount",
@@ -47,7 +47,7 @@ async def test_contact_email_action_persists_both_reviewed_resources(
     )
     assert response.status_code == 200
     proposal = response.json()["proposal"]
-    assert proposal["fingerprint_version"] == 3
+    assert proposal["fingerprint_version"] == 4
     assert {
         (item["resource_type"], item["resource_id"])
         for item in proposal["resource_preconditions"]

@@ -29,7 +29,7 @@ def _override(plan: AgentPlan) -> None:
 
 def test_agent_tool_registry_publishes_safe_resource_catalog() -> None:
     definitions = ReadOnlyAgentToolRegistry().list_tool_definitions()
-    assert len(definitions) == 16
+    assert len(definitions) == 20
     by_name = {item.name: item for item in definitions}
     catalog = by_name["list_workplace_resource_types"].metadata["resource_catalog"]
     by_resource = {item["resource_type"]: item for item in catalog}
@@ -37,6 +37,12 @@ def test_agent_tool_registry_publishes_safe_resource_catalog() -> None:
     assert "user" in by_resource
     assert "report" in by_resource
     assert "role_permission" in by_resource
+    assert "relationships" in by_name["list_related_workplace_resources"].metadata
+    query_contract = by_name["summarize_workplace_resources"].metadata[
+        "query_contract"
+    ]
+    assert "between" in query_contract["operators"]
+    assert query_contract["maximum_conditions"] == 20
     organization_fields = {
         item["name"]: item for item in by_resource["organization"]["fields"]
     }

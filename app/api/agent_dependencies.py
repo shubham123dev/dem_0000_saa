@@ -32,7 +32,9 @@ from app.core.config import get_settings
 from app.permissions.permission_service import PermissionService
 from app.repositories.user_repository import UserRepository
 from app.services.agent_preflight_service import AgentAuthorizationPreflightService
+from app.workplace_resources.advanced_query import WorkplaceAdvancedQueryService
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
+from app.workplace_resources.relationships import WorkplaceRelationshipService
 from app.workplace_resources.registry import WorkplaceResourceRegistry
 from app.workplace_resources.service import WorkplaceResourceService
 
@@ -113,6 +115,16 @@ def get_read_only_agent_orchestrator(
     ],
 ) -> ReadOnlyAgentOrchestrator:
     resource_registry = WorkplaceResourceRegistry()
+    operation_router = WorkplaceOperationRouter(resource_registry)
+    advanced_query_service = WorkplaceAdvancedQueryService(
+        session,
+        resource_registry,
+    )
+    relationship_service = WorkplaceRelationshipService(
+        session,
+        resource_registry,
+        operation_router,
+    )
     return ReadOnlyAgentOrchestrator(
         model_gateway=model_gateway,
         tool_registry=tool_registry,
@@ -123,7 +135,9 @@ def get_read_only_agent_orchestrator(
             session,
             resource_registry,
         ),
-        workplace_operation_router=WorkplaceOperationRouter(resource_registry),
+        workplace_operation_router=operation_router,
+        advanced_query_service=advanced_query_service,
+        relationship_service=relationship_service,
         permission_service=PermissionService(user_repository),
     )
 
