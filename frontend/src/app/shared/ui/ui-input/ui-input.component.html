@@ -10,12 +10,13 @@
       [type]="type"
       [value]="value"
       [placeholder]="placeholder"
-      [disabled]="disabled"
+      [disabled]="isDisabled"
       [required]="required"
       [autocomplete]="autocomplete"
       [attr.aria-invalid]="error ? true : null"
       [attr.aria-describedby]="error ? inputId + '-error' : description ? inputId + '-description' : null"
       (input)="update($event)"
+      (blur)="markTouched()"
     >
     <ng-content select="[uiInputSuffix]" />
   </div>

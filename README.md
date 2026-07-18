@@ -280,3 +280,8 @@ npm run validate:phase1
 ## Angular frontend Phase 2 design system
 
 The Angular workspace now includes semantic light/dark themes, ten accessible UI primitives, and a tested design-system showcase. See `frontend/docs/DESIGN_SYSTEM.md`.
+
+<!-- ANGULAR_FRONTEND_PHASE_3_SHELL -->
+## Angular frontend Phase 3 shell
+
+The design system is hardened for contrast, pre-bootstrap theming, Angular forms, and native interactive semantics. The frontend now presents a responsive workplace shell with searchable navigation, a functional workspace, and a collapsible/resizable Ask AI panel. See `frontend/docs/PHASE_3_SHELL.md`.

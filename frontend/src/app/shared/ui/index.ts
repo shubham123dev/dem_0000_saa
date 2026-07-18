@@ -1,3 +1,4 @@
+export * from './ui-action-surface/ui-action-surface.component';
 export * from './ui-badge/ui-badge.component';
 export * from './ui-button/ui-button.component';
 export * from './ui-callout/ui-callout.component';

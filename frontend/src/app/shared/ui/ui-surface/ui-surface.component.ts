@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
-export type UiSurfaceVariant = 'base' | 'subtle' | 'muted' | 'raised' | 'interactive';
+export type UiSurfaceVariant = 'base' | 'subtle' | 'muted' | 'raised';
 
 @Component({
   selector: 'app-ui-surface',

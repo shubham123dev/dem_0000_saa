@@ -340,3 +340,18 @@ npx playwright test
 Set-Location ..
 git diff --check
 ```
+
+<!-- ANGULAR_FRONTEND_PHASE_3_VALIDATION -->
+## Angular frontend Phase 3 validation
+
+```powershell
+python scripts/validate_angular_phase2.py --repo .
+python scripts/validate_angular_phase3.py --repo .
+pytest -q tests/test_angular_phase2.py tests/test_angular_phase3.py
+Set-Location frontend
+npm run validate:phase3
+npm run e2e
+Set-Location ..
+pytest -q
+git diff --check
+```

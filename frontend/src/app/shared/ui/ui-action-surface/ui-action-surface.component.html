@@ -1,0 +1,16 @@
+<button
+  type="button"
+  class="action-surface"
+  [class.action-surface--selected]="selected"
+  [disabled]="disabled"
+  [attr.aria-pressed]="selected ? true : null"
+  (click)="activated.emit()"
+>
+  <span class="action-surface__icon" aria-hidden="true">{{ icon }}</span>
+  <span class="action-surface__body">
+    <strong>{{ heading }}</strong>
+    @if (description) { <span>{{ description }}</span> }
+    @if (meta) { <small>{{ meta }}</small> }
+  </span>
+  <span class="action-surface__arrow" aria-hidden="true">›</span>
+</button>

@@ -1,0 +1,23 @@
+:host { display: block; min-height: 100%; }
+.workspace-home, .workspace-page { width: min(100%, 62rem); margin: 0 auto; padding: clamp(2rem, 5vw, 4.5rem) clamp(1.25rem, 4vw, 3.5rem); }
+.workspace-hero { display: grid; justify-items: center; gap: var(--ui-space-4); margin-bottom: var(--ui-space-12); text-align: center; }
+.workspace-hero h1, .workspace-page h1 { margin: 0; color: var(--ui-text-primary); font-size: var(--ui-text-2xl); line-height: var(--ui-leading-tight); }
+.workspace-hero > p { max-width: 38rem; margin: 0; color: var(--ui-text-secondary); line-height: var(--ui-leading-relaxed); }
+.workspace-search { position: relative; width: min(100%, 38rem); margin-top: var(--ui-space-3); border: 6px solid color-mix(in srgb, var(--ui-border-subtle) 38%, transparent); border-radius: var(--ui-radius-xl); }
+.workspace-search app-ui-input { display: block; }
+.workspace-search kbd { position: absolute; right: var(--ui-space-3); bottom: var(--ui-space-3); border: 1px solid var(--ui-border-subtle); border-radius: var(--ui-radius-xs); background: var(--ui-surface-muted); color: var(--ui-text-muted); padding: 0.1rem 0.35rem; font: inherit; font-size: var(--ui-text-xs); }
+.workspace-section { margin-top: var(--ui-space-10); }
+.workspace-section__heading { display: flex; align-items: end; justify-content: space-between; margin-bottom: var(--ui-space-4); }
+.workspace-section__heading span, .workspace-eyebrow { color: var(--ui-text-muted); font-size: var(--ui-text-xs); font-weight: var(--ui-weight-semibold); letter-spacing: 0.06em; text-transform: uppercase; }
+.workspace-section h2 { margin: var(--ui-space-1) 0 0; font-size: var(--ui-text-xl); }
+.resource-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-3); }
+.workspace-empty { grid-column: 1 / -1; color: var(--ui-text-secondary); text-align: center; }
+.workspace-page > nav { display: flex; align-items: center; gap: var(--ui-space-2); color: var(--ui-text-muted); font-size: var(--ui-text-sm); }
+.workspace-page > nav button { border: 0; background: transparent; color: var(--ui-text-link); padding: 0; cursor: pointer; }
+.workspace-page > header { display: flex; align-items: start; justify-content: space-between; gap: var(--ui-space-6); margin: var(--ui-space-8) 0; }
+.workspace-page > header p { max-width: 34rem; margin: var(--ui-space-3) 0 0; color: var(--ui-text-secondary); line-height: var(--ui-leading-relaxed); }
+@media (max-width: 47.99rem) {
+  .workspace-home, .workspace-page { padding: var(--ui-space-8) var(--ui-space-4); }
+  .resource-grid { grid-template-columns: 1fr; }
+  .workspace-page > header { flex-direction: column; }
+}

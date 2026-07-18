@@ -1,18 +1,25 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, forwardRef, inject, Input, Output } from '@angular/core';
+import { type ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 let nextTextareaId = 0;
 
 @Component({
   selector: 'app-ui-textarea',
   standalone: true,
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => UiTextareaComponent), multi: true }],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-textarea.component.html',
   styleUrl: './ui-textarea.component.scss'
 })
-export class UiTextareaComponent {
+export class UiTextareaComponent implements ControlValueAccessor {
+  private modelValue = '';
+  private formDisabled = false;
+  private onChange: (value: string) => void = () => undefined;
+  private onTouched: () => void = () => undefined;
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
   @Input({ required: true }) label = '';
   @Input() textareaId = `ui-textarea-${++nextTextareaId}`;
-  @Input() value = '';
   @Input() placeholder = '';
   @Input() description = '';
   @Input() error = '';
@@ -22,7 +29,21 @@ export class UiTextareaComponent {
   @Input() maxLength: number | null = null;
   @Output() readonly valueChange = new EventEmitter<string>();
 
+  @Input()
+  set value(value: string | null | undefined) { this.modelValue = value ?? ''; }
+  get value(): string { return this.modelValue; }
+  get isDisabled(): boolean { return this.disabled || this.formDisabled; }
+
   update(event: Event): void {
-    this.valueChange.emit((event.target as HTMLTextAreaElement).value);
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.modelValue = value;
+    this.valueChange.emit(value);
+    this.onChange(value);
   }
+
+  markTouched(): void { this.onTouched(); }
+  writeValue(value: string | null): void { this.modelValue = value ?? ''; this.changeDetector.markForCheck(); }
+  registerOnChange(fn: (value: string) => void): void { this.onChange = fn; }
+  registerOnTouched(fn: () => void): void { this.onTouched = fn; }
+  setDisabledState(disabled: boolean): void { this.formDisabled = disabled; this.changeDetector.markForCheck(); }
 }

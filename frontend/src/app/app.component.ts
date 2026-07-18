@@ -1,44 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { CurrentUserStore } from './core/auth/current-user.store';
-import { APP_RUNTIME_CONFIG } from './core/config/app-config.token';
-import { UiThemeService } from './shared/theme/ui-theme.service';
-import { UiThemeToggleComponent } from './shared/theme/ui-theme-toggle.component';
-import {
-  UiBadgeComponent,
-  UiButtonComponent,
-  UiCalloutComponent,
-  UiIconButtonComponent,
-  UiInputComponent,
-  UiSkeletonComponent,
-  UiStatusIndicatorComponent,
-  UiSurfaceComponent,
-  UiTextareaComponent
-} from './shared/ui';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { AppShellComponent } from './layout/app-shell/app-shell.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [
-    UiBadgeComponent,
-    UiButtonComponent,
-    UiCalloutComponent,
-    UiIconButtonComponent,
-    UiInputComponent,
-    UiSkeletonComponent,
-    UiStatusIndicatorComponent,
-    UiSurfaceComponent,
-    UiTextareaComponent,
-    UiThemeToggleComponent
-  ],
+  imports: [AppShellComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './app.component.html',
-  styleUrl: './app.component.scss'
+  template: '<app-shell />'
 })
-export class AppComponent {
-  private readonly runtimeConfig = inject(APP_RUNTIME_CONFIG);
-  readonly currentUser = inject(CurrentUserStore);
-  readonly theme = inject(UiThemeService);
-  readonly organizationId = this.runtimeConfig.defaultOrganizationId;
-  searchValue = '';
-  messageValue = '';
-}
+export class AppComponent {}

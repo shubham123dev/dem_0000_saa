@@ -7,6 +7,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="Governed workplace-agent interface">
+    <script>
+      (() => {
+        const storageKey = 'dbmr-workplace-theme';
+        const root = document.documentElement;
+        let preference = 'system';
+        try {
+          const stored = localStorage.getItem(storageKey);
+          if (stored === 'light' || stored === 'dark' || stored === 'system') {
+            preference = stored;
+          }
+        } catch {
+          preference = 'system';
+        }
+        const systemDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+        const resolved = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
+        root.dataset['theme'] = resolved;
+        root.dataset['themePreference'] = preference;
+        root.style.colorScheme = resolved;
+      })();
+    </script>
   </head>
   <body>
     <app-root></app-root>

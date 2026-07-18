@@ -20,7 +20,8 @@
     "quality:boundaries": "node scripts/check-architecture-boundaries.mjs",
     "validate:phase1": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
     "validate:phase2": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
-    "validate:full": "npm run validate:phase2 && npm run e2e"
+    "validate:full": "npm run validate:phase3 && npm run e2e",
+    "validate:phase3": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list"
   },
   "dependencies": {
     "@angular/cdk": "21.2.14",

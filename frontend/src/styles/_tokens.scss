@@ -64,6 +64,7 @@
   --ui-blue-600: #2563d9;
   --ui-green-50: #edf9f3;
   --ui-green-600: #16845a;
+  --ui-green-700: #0f704a;
   --ui-amber-50: #fff7e5;
   --ui-amber-700: #9d6100;
   --ui-red-50: #fff0f0;
@@ -92,7 +93,7 @@
   --ui-status-info-bg: var(--ui-blue-50);
   --ui-status-info-fg: var(--ui-blue-600);
   --ui-status-success-bg: var(--ui-green-50);
-  --ui-status-success-fg: var(--ui-green-600);
+  --ui-status-success-fg: var(--ui-green-700);
   --ui-status-warning-bg: var(--ui-amber-50);
   --ui-status-warning-fg: var(--ui-amber-700);
   --ui-status-danger-bg: var(--ui-red-50);
@@ -113,4 +114,10 @@
   --ui-z-overlay: 40;
   --ui-z-dialog: 60;
   --ui-z-toast: 80;
+
+  --ui-shell-header-height: 3.75rem;
+  --ui-shell-sidebar-width: 16.25rem;
+  --ui-shell-assistant-width: 28rem;
+  --ui-shell-assistant-min: 22rem;
+  --ui-shell-assistant-max: 38rem;
 }

@@ -7,13 +7,14 @@
     [id]="textareaId"
     [value]="value"
     [placeholder]="placeholder"
-    [disabled]="disabled"
+    [disabled]="isDisabled"
     [required]="required"
     [rows]="rows"
     [attr.maxlength]="maxLength"
     [attr.aria-invalid]="error ? true : null"
     [attr.aria-describedby]="error ? textareaId + '-error' : description ? textareaId + '-description' : null"
     (input)="update($event)"
+    (blur)="markTouched()"
   ></textarea>
   @if (error) {
     <p class="field__message field__message--error" [id]="textareaId + '-error'">{{ error }}</p>

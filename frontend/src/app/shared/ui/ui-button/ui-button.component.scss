@@ -40,7 +40,7 @@
 .ui-button--full { width: 100%; }
 
 .ui-button--primary { background: var(--ui-brand-500); color: var(--ui-neutral-950); }
-.ui-button--primary:hover:not(:disabled) { background: var(--ui-brand-600); color: var(--ui-neutral-0); }
+.ui-button--primary:hover:not(:disabled) { background: var(--ui-brand-600); color: var(--ui-neutral-950); }
 .ui-button--secondary { background: var(--ui-surface-inverse); color: var(--ui-text-inverse); }
 .ui-button--outline { border-color: var(--ui-border-default); background: var(--ui-surface-base); color: var(--ui-text-primary); }
 .ui-button--outline:hover:not(:disabled),

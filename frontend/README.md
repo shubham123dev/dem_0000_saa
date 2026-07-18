@@ -50,3 +50,8 @@ non-technical UI and avoids cross-origin custom-header failures.
 ## Phase 2 design system
 
 The Angular frontend now has semantic light/dark themes, ten accessible UI primitives, a visual showcase, and automated token/component validation. See `frontend/docs/DESIGN_SYSTEM.md`.
+
+<!-- ANGULAR_FRONTEND_PHASE_3_SHELL -->
+## Phase 3 workplace shell
+
+The Angular app now uses the production-shaped three-panel workplace shell. Phase 2 hardening adds contrast validation, pre-bootstrap theming, ControlValueAccessor form controls, and native action surfaces.

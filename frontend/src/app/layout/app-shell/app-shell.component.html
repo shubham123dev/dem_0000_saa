@@ -1,0 +1,45 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div
+  class="app-shell"
+  [class.app-shell--assistant-open]="state.assistantOpen()"
+  [class.app-shell--assistant-overlay]="state.assistantOverlay()"
+  [style.--shell-assistant-current.px]="state.assistantOpen() && !state.assistantOverlay() ? state.assistantWidth() : 0"
+>
+  <div class="brand-strip" aria-hidden="true"></div>
+  <app-global-header
+    class="shell-header"
+    [sectionTitle]="sectionTitle"
+    [compact]="state.isCompact()"
+    [assistantOpen]="state.assistantOpen()"
+    (navigationPressed)="state.openSidebar()"
+    (assistantPressed)="state.toggleAssistant()"
+  />
+
+  @if (state.isCompact() && state.sidebarOpen()) {
+    <button type="button" class="shell-backdrop shell-backdrop--sidebar" aria-label="Close navigation" (click)="state.closeSidebar()"></button>
+  }
+  <app-primary-sidebar
+    class="shell-sidebar"
+    [activeSection]="state.activeSection()"
+    [compact]="state.isCompact()"
+    [open]="state.sidebarOpen()"
+    (sectionSelected)="navigate($event)"
+    (closePressed)="state.closeSidebar()"
+  />
+
+  <main id="main-content" class="shell-workspace" tabindex="-1">
+    <app-workspace-dashboard [section]="state.activeSection()" (navigate)="navigate($event)" (askAi)="askAboutCurrentSection()" />
+  </main>
+
+  @if (state.assistantOpen()) {
+    @if (state.assistantOverlay()) {
+      <button type="button" class="shell-backdrop shell-backdrop--assistant" aria-label="Close Ask AI" (click)="state.closeAssistant()"></button>
+    }
+    <section class="shell-assistant" aria-label="Ask AI panel">
+      @if (!state.assistantOverlay()) {
+        <app-assistant-resize-handle [width]="state.assistantWidth()" (widthChange)="state.setAssistantWidth($event)" />
+      }
+      <app-assistant-panel [overlay]="state.assistantOverlay()" (closePressed)="state.closeAssistant()" (sectionSelected)="navigate($event)" />
+    </section>
+  }
+</div>

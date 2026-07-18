@@ -1,0 +1,33 @@
+<aside class="sidebar" [class.sidebar--open]="open" aria-label="Primary navigation">
+  <div class="sidebar__top">
+    @if (compact) {
+      <button type="button" class="sidebar__close" aria-label="Close navigation" (click)="closePressed.emit()">×</button>
+    }
+    <label class="sidebar-search">
+      <span aria-hidden="true">⌕</span>
+      <span class="sr-only">Search navigation</span>
+      <input #searchInput type="search" placeholder="Quick search…" [value]="query" (input)="updateQuery($event)">
+      <kbd>Ctrl K</kbd>
+    </label>
+  </div>
+  <nav aria-label="Primary">
+    @for (group of groups; track group) {
+      <section>
+        <h2>{{ group }}</h2>
+        @for (item of items(group); track item.id) {
+          <button type="button" class="nav-item" [class.nav-item--active]="activeSection === item.id" [attr.aria-current]="activeSection === item.id ? 'page' : null" (click)="sectionSelected.emit(item.id)">
+            <span class="nav-item__icon" aria-hidden="true">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+            <span class="nav-item__arrow" aria-hidden="true">›</span>
+          </button>
+        } @empty {
+          <p class="sidebar__empty">No matching sections.</p>
+        }
+      </section>
+    }
+  </nav>
+  <footer>
+    <span class="status-dot" aria-hidden="true"></span>
+    <span><strong>Sandbox ready</strong><small>Governed actions enabled</small></span>
+  </footer>
+</aside>
