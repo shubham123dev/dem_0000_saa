@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.adapters.nucleus.contract import NucleusOrganizationGateway
 from app.adapters.organization.contract import OrganizationApiGateway
 from app.core.errors import (
     OrganizationNotFoundError,
@@ -18,7 +19,6 @@ from app.domain.nucleus_models import (
 )
 from app.permissions.permission_service import PermissionService
 from app.repositories.audit_repository import AuditRepository
-from app.repositories.nucleus_organization_repository import NucleusOrganizationRepository
 from app.schemas.permission import AccessContext
 
 
@@ -28,12 +28,12 @@ class NucleusOrganizationService:
         *,
         organization_gateway: OrganizationApiGateway,
         permission_service: PermissionService,
-        repository: NucleusOrganizationRepository,
+        nucleus_gateway: NucleusOrganizationGateway,
         audit_repository: AuditRepository,
     ) -> None:
         self._organization_gateway = organization_gateway
         self._permission_service = permission_service
-        self._repository = repository
+        self._nucleus_gateway = nucleus_gateway
         self._audit_repository = audit_repository
 
     async def _authorize(
@@ -66,7 +66,7 @@ class NucleusOrganizationService:
             organization_id=organization_id,
             required_permission=permission,
         )
-        account = await self._repository.get_account(organization_id)
+        account = await self._nucleus_gateway.get_account(organization_id)
         if account is None:
             raise OrganizationNotFoundError()
         await self._audit_repository.append(
@@ -96,7 +96,7 @@ class NucleusOrganizationService:
             organization_id=organization_id,
             required_permission=permission,
         )
-        license_info = await self._repository.get_license(organization_id)
+        license_info = await self._nucleus_gateway.get_license(organization_id)
         if license_info is None:
             raise OrganizationNotFoundError()
         await self._audit_repository.append(
@@ -126,7 +126,7 @@ class NucleusOrganizationService:
             organization_id=organization_id,
             required_permission=permission,
         )
-        approval = await self._repository.get_approval_status(organization_id)
+        approval = await self._nucleus_gateway.get_approval_status(organization_id)
         if approval is None:
             raise OrganizationNotFoundError()
         await self._audit_repository.append(
@@ -156,7 +156,7 @@ class NucleusOrganizationService:
             organization_id=organization_id,
             required_permission=permission,
         )
-        entitlements = await self._repository.get_entitlements(organization_id)
+        entitlements = await self._nucleus_gateway.get_entitlements(organization_id)
         if entitlements is None:
             raise OrganizationNotFoundError()
         await self._audit_repository.append(

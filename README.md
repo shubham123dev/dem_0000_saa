@@ -21,6 +21,14 @@ Natural-language requests may select allowlisted read tools or create dry-run
 action proposals. They cannot approve, execute, choose organization scope, or
 supply authorization state.
 
+## Nucleus adapter boundary
+
+Nucleus reads and mutations consume the framework-neutral
+`NucleusOrganizationGateway` protocol. The current SQLite repository satisfies
+that port structurally. A future real Nucleus adapter can replace the dependency
+without changing routes, services, action handlers, approval policy, or model
+tool contracts. No production endpoint or credential behavior is invented here.
+
 ## Exact SQLite tables
 
 The migration creates these table and column names exactly as supplied:

@@ -12,34 +12,21 @@ from app.agent.action_contracts import (
     AgentActionProposal,
 )
 from app.agent.action_handlers import StaleActionResourceError, normalize_email
-from app.repositories.nucleus_organization_repository import (
-    ACCOUNT_FIELD_ATTRIBUTES,
-    NucleusOrganizationRepository,
+from app.adapters.nucleus.contract import NucleusOrganizationGateway
+from app.domain.nucleus_policy import (
+    CLEARABLE_NUCLEUS_ACCOUNT_FIELDS,
+    EDITABLE_NUCLEUS_ACCOUNT_FIELDS,
+    NUCLEUS_ACCOUNT_FIELD_MAX_LENGTHS,
 )
 
 _NULL_SENTINELS = {"null", "none", "-"}
-_FIELD_MAX_LENGTHS = {
-    "OrganizationName": 250,
-    "OrganizationType": 100,
-    "Industry": 150,
-    "Website": 250,
-    "Email": 150,
-    "ContactPersonName": 150,
-    "ContactPersonDesignation": 150,
-    "ContactPhone": 50,
-    "AddressLine1": 250,
-    "AddressLine2": 250,
-    "City": 100,
-    "State": 100,
-    "Country": 100,
-    "PostalCode": 30,
-}
-_CLEARABLE_FIELDS = set(ACCOUNT_FIELD_ATTRIBUTES) - {"OrganizationName"}
+_FIELD_MAX_LENGTHS = NUCLEUS_ACCOUNT_FIELD_MAX_LENGTHS
+_CLEARABLE_FIELDS = CLEARABLE_NUCLEUS_ACCOUNT_FIELDS
 
 
 def _normalize_field_name(value: str) -> str:
     normalized = value.strip()
-    for allowed in ACCOUNT_FIELD_ATTRIBUTES:
+    for allowed in EDITABLE_NUCLEUS_ACCOUNT_FIELDS:
         if allowed.lower() == normalized.lower():
             return allowed
     raise ValueError("Organization account field is not editable")
@@ -111,8 +98,8 @@ def _sentinel(value: int | bool | None) -> str:
 class UpdateOrganizationContactEmailBridgeHandler:
     """Keep the legacy Overview profile and exact OrganizationAccount in sync."""
 
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(
         self,
@@ -121,7 +108,7 @@ class UpdateOrganizationContactEmailBridgeHandler:
         arguments: dict[str, str],
     ) -> AgentActionPreparation:
         contact_email = normalize_email(arguments["contact_email"])
-        state = await self._repository.get_contact_email_bridge_state(organization_id)
+        state = await self._gateway.get_contact_email_bridge_state(organization_id)
         if state is None:
             raise ValueError("Nucleus organization account was not found")
         account, legacy_version = state
@@ -147,7 +134,7 @@ class UpdateOrganizationContactEmailBridgeHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
-        updated = await self._repository.update_contact_email_bridge_if_version(
+        updated = await self._gateway.update_contact_email_bridge_if_version(
             organization_code=proposal.organization_id,
             value=proposal.arguments["contact_email"],
             expected_legacy_version=proposal.observed_resource_version,
@@ -174,7 +161,7 @@ class UpdateOrganizationContactEmailBridgeHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
-        state = await self._repository.get_contact_email_bridge_state(
+        state = await self._gateway.get_contact_email_bridge_state(
             proposal.organization_id
         )
         if state is None:
@@ -198,8 +185,8 @@ class UpdateOrganizationContactEmailBridgeHandler:
 
 
 class UpdateNucleusOrganizationAccountFieldHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(
         self,
@@ -209,7 +196,7 @@ class UpdateNucleusOrganizationAccountFieldHandler:
     ) -> AgentActionPreparation:
         field_name = _normalize_field_name(arguments["field_name"])
         value = _normalize_account_value(field_name, arguments["value"])
-        state = await self._repository.get_account_field_state(
+        state = await self._gateway.get_account_field_state(
             organization_id,
             field_name,
         )
@@ -231,7 +218,7 @@ class UpdateNucleusOrganizationAccountFieldHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
-        updated = await self._repository.update_account_field_if_version(
+        updated = await self._gateway.update_account_field_if_version(
             organization_code=proposal.organization_id,
             field_name=proposal.arguments["field_name"],
             value=proposal.arguments["value"],
@@ -260,7 +247,7 @@ class UpdateNucleusOrganizationAccountFieldHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
-        state = await self._repository.get_account_field_state(
+        state = await self._gateway.get_account_field_state(
             proposal.organization_id,
             proposal.arguments["field_name"],
         )
@@ -286,8 +273,8 @@ class UpdateNucleusOrganizationAccountFieldHandler:
 
 
 class ClearNucleusOrganizationAccountFieldHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(
         self,
@@ -298,7 +285,7 @@ class ClearNucleusOrganizationAccountFieldHandler:
         field_name = _normalize_field_name(arguments["field_name"])
         if field_name not in _CLEARABLE_FIELDS:
             raise ValueError("This organization account field cannot be cleared")
-        state = await self._repository.get_account_field_state(
+        state = await self._gateway.get_account_field_state(
             organization_id,
             field_name,
         )
@@ -320,7 +307,7 @@ class ClearNucleusOrganizationAccountFieldHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
-        updated = await self._repository.update_account_field_if_version(
+        updated = await self._gateway.update_account_field_if_version(
             organization_code=proposal.organization_id,
             field_name=proposal.arguments["field_name"],
             value=None,
@@ -349,7 +336,7 @@ class ClearNucleusOrganizationAccountFieldHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
-        state = await self._repository.get_account_field_state(
+        state = await self._gateway.get_account_field_state(
             proposal.organization_id,
             proposal.arguments["field_name"],
         )
@@ -375,8 +362,8 @@ class ClearNucleusOrganizationAccountFieldHandler:
 
 
 class GrantNucleusCategoryAccessHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(self, *, organization_id: str, arguments: dict[str, str]) -> AgentActionPreparation:
         category_id = _required_int(arguments["category_id"], field_name="category_id")
@@ -384,7 +371,7 @@ class GrantNucleusCategoryAccessHandler:
             arguments["category_sample_id"],
             field_name="category_sample_id",
         )
-        inspected = await self._repository.inspect_category_grant(
+        inspected = await self._gateway.inspect_category_grant(
             organization_code=organization_id,
             category_id=category_id,
             category_sample_id=category_sample_id,
@@ -418,7 +405,7 @@ class GrantNucleusCategoryAccessHandler:
         )
 
     async def execute(self, *, proposal: AgentActionProposal) -> AgentActionHandlerResult:
-        result = await self._repository.grant_category_access_if_version(
+        result = await self._gateway.grant_category_access_if_version(
             organization_code=proposal.organization_id,
             category_id=_required_int(proposal.arguments["category_id"], field_name="category_id"),
             category_sample_id=_nullable_int(proposal.arguments["category_sample_id"], field_name="category_sample_id"),
@@ -440,7 +427,7 @@ class GrantNucleusCategoryAccessHandler:
         )
 
     async def reconcile(self, *, proposal: AgentActionProposal, execution: AgentActionExecutionResult) -> AgentActionHandlerResult | None:
-        inspected = await self._repository.inspect_category_grant(
+        inspected = await self._gateway.inspect_category_grant(
             organization_code=proposal.organization_id,
             category_id=_required_int(proposal.arguments["category_id"], field_name="category_id"),
             category_sample_id=_nullable_int(proposal.arguments["category_sample_id"], field_name="category_sample_id"),
@@ -463,12 +450,12 @@ class GrantNucleusCategoryAccessHandler:
 
 
 class RevokeNucleusCategoryAccessHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(self, *, organization_id: str, arguments: dict[str, str]) -> AgentActionPreparation:
         access_id = _required_int(arguments["access_id"], field_name="access_id")
-        current = await self._repository.get_category_access(
+        current = await self._gateway.get_category_access(
             organization_code=organization_id,
             access_id=access_id,
         )
@@ -493,7 +480,7 @@ class RevokeNucleusCategoryAccessHandler:
         )
 
     async def execute(self, *, proposal: AgentActionProposal) -> AgentActionHandlerResult:
-        result = await self._repository.revoke_category_access_if_version(
+        result = await self._gateway.revoke_category_access_if_version(
             organization_code=proposal.organization_id,
             access_id=_required_int(proposal.arguments["access_id"], field_name="access_id"),
             expected_version=proposal.observed_resource_version,
@@ -514,7 +501,7 @@ class RevokeNucleusCategoryAccessHandler:
         )
 
     async def reconcile(self, *, proposal: AgentActionProposal, execution: AgentActionExecutionResult) -> AgentActionHandlerResult | None:
-        result = await self._repository.get_category_access(
+        result = await self._gateway.get_category_access(
             organization_code=proposal.organization_id,
             access_id=_required_int(proposal.arguments["access_id"], field_name="access_id"),
         )
@@ -535,8 +522,8 @@ class RevokeNucleusCategoryAccessHandler:
 
 
 class GrantNucleusReportAccessHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     @staticmethod
     def _values(arguments: dict[str, str]) -> dict[str, int | bool | None]:
@@ -553,7 +540,7 @@ class GrantNucleusReportAccessHandler:
 
     async def prepare(self, *, organization_id: str, arguments: dict[str, str]) -> AgentActionPreparation:
         values = self._values(arguments)
-        inspected = await self._repository.inspect_report_grant(
+        inspected = await self._gateway.inspect_report_grant(
             organization_code=organization_id,
             **values,
         )
@@ -589,7 +576,7 @@ class GrantNucleusReportAccessHandler:
 
     async def execute(self, *, proposal: AgentActionProposal) -> AgentActionHandlerResult:
         values = self._values(proposal.arguments)
-        result = await self._repository.grant_report_access_if_version(
+        result = await self._gateway.grant_report_access_if_version(
             organization_code=proposal.organization_id,
             expected_version=proposal.observed_resource_version,
             **values,
@@ -614,7 +601,7 @@ class GrantNucleusReportAccessHandler:
 
     async def reconcile(self, *, proposal: AgentActionProposal, execution: AgentActionExecutionResult) -> AgentActionHandlerResult | None:
         values = self._values(proposal.arguments)
-        inspected = await self._repository.inspect_report_grant(
+        inspected = await self._gateway.inspect_report_grant(
             organization_code=proposal.organization_id,
             **values,
         )
@@ -639,12 +626,12 @@ class GrantNucleusReportAccessHandler:
 
 
 class RevokeNucleusReportAccessHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     async def prepare(self, *, organization_id: str, arguments: dict[str, str]) -> AgentActionPreparation:
         access_id = _required_int(arguments["access_id"], field_name="access_id")
-        current = await self._repository.get_report_access(
+        current = await self._gateway.get_report_access(
             organization_code=organization_id,
             access_id=access_id,
         )
@@ -671,7 +658,7 @@ class RevokeNucleusReportAccessHandler:
         )
 
     async def execute(self, *, proposal: AgentActionProposal) -> AgentActionHandlerResult:
-        result = await self._repository.revoke_report_access_if_version(
+        result = await self._gateway.revoke_report_access_if_version(
             organization_code=proposal.organization_id,
             access_id=_required_int(proposal.arguments["access_id"], field_name="access_id"),
             expected_version=proposal.observed_resource_version,
@@ -695,7 +682,7 @@ class RevokeNucleusReportAccessHandler:
         )
 
     async def reconcile(self, *, proposal: AgentActionProposal, execution: AgentActionExecutionResult) -> AgentActionHandlerResult | None:
-        result = await self._repository.get_report_access(
+        result = await self._gateway.get_report_access(
             organization_code=proposal.organization_id,
             access_id=_required_int(proposal.arguments["access_id"], field_name="access_id"),
         )
@@ -729,8 +716,8 @@ _PERMISSION_ARGUMENT_TO_ATTRIBUTE = {
 
 
 class UpdateNucleusOrganizationPermissionsHandler:
-    def __init__(self, repository: NucleusOrganizationRepository) -> None:
-        self._repository = repository
+    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+        self._gateway = gateway
 
     @staticmethod
     def _values(arguments: dict[str, str]) -> dict[str, int | bool | None]:
@@ -763,7 +750,7 @@ class UpdateNucleusOrganizationPermissionsHandler:
             version = 0
             resource_id = "new"
         else:
-            current = await self._repository.get_permission(
+            current = await self._gateway.get_permission(
                 organization_code=organization_id,
                 permission_id=permission_id,
             )
@@ -814,7 +801,7 @@ class UpdateNucleusOrganizationPermissionsHandler:
             field_name="permission_id",
         )
         values = self._values(proposal.arguments)
-        result = await self._repository.set_permission_if_version(
+        result = await self._gateway.set_permission_if_version(
             organization_code=proposal.organization_id,
             permission_id=permission_id,
             values=values,
@@ -856,7 +843,7 @@ class UpdateNucleusOrganizationPermissionsHandler:
             if not isinstance(created_id, int):
                 return None
             permission_id = created_id
-        result = await self._repository.get_permission(
+        result = await self._gateway.get_permission(
             organization_code=proposal.organization_id,
             permission_id=permission_id,
         )

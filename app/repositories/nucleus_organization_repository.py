@@ -33,6 +33,7 @@ from app.domain.nucleus_models import (
     NucleusReportAccess,
     NucleusSpecialPermissions,
 )
+from app.domain.nucleus_policy import EDITABLE_NUCLEUS_ACCOUNT_FIELDS
 
 
 ACCOUNT_FIELD_ATTRIBUTES: dict[str, str] = {
@@ -51,6 +52,9 @@ ACCOUNT_FIELD_ATTRIBUTES: dict[str, str] = {
     "Country": "country",
     "PostalCode": "postal_code",
 }
+
+if frozenset(ACCOUNT_FIELD_ATTRIBUTES) != EDITABLE_NUCLEUS_ACCOUNT_FIELDS:
+    raise RuntimeError("Nucleus editable-field policy and SQLite mapping diverged")
 
 
 def _utcnow() -> datetime:

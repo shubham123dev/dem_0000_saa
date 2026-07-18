@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.nucleus.contract import NucleusOrganizationGateway
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.core.errors import UnauthenticatedError, UserDisabledError
 from app.db.session import get_session
@@ -37,6 +38,24 @@ def get_nucleus_organization_repository(
     return NucleusOrganizationRepository(session)
 
 
+NucleusOrganizationRepositoryDep = Annotated[
+    NucleusOrganizationRepository,
+    Depends(get_nucleus_organization_repository),
+]
+
+
+def get_nucleus_organization_gateway(
+    repository: NucleusOrganizationRepositoryDep,
+) -> NucleusOrganizationGateway:
+    return repository
+
+
+NucleusOrganizationGatewayDep = Annotated[
+    NucleusOrganizationGateway,
+    Depends(get_nucleus_organization_gateway),
+]
+
+
 def get_mock_organization_api(session: SessionDep) -> MockOrganizationApi:
     return MockOrganizationApi(session)
 
@@ -62,15 +81,12 @@ def get_nucleus_organization_service(
     api: MockOrganizationApiDep,
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
-    repository: Annotated[
-        NucleusOrganizationRepository,
-        Depends(get_nucleus_organization_repository),
-    ],
+    nucleus_gateway: NucleusOrganizationGatewayDep,
 ) -> NucleusOrganizationService:
     return NucleusOrganizationService(
         organization_gateway=MockOrganizationApiAdapter(api),
         permission_service=PermissionService(user_repo),
-        repository=repository,
+        nucleus_gateway=nucleus_gateway,
         audit_repository=audit_repo,
     )
 

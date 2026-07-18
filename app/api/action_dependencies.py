@@ -29,6 +29,7 @@ from app.agent.nucleus_action_handlers import (
 )
 from app.api.dependencies import (
     MockOrganizationApiDep,
+    NucleusOrganizationGatewayDep,
     SessionDep,
     get_audit_repository,
     get_user_repository,
@@ -39,7 +40,6 @@ from app.repositories.audit_repository import AuditRepository
 from app.repositories.hardened_agent_action_repository import (
     HardenedAgentActionRepository,
 )
-from app.repositories.nucleus_organization_repository import NucleusOrganizationRepository
 from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
 from app.services.operational_resource_service import OperationalResourceService
@@ -57,9 +57,9 @@ def get_agent_action_registry() -> AgentActionRegistry:
 def get_agent_action_handlers(
     api: MockOrganizationApiDep,
     session: SessionDep,
+    nucleus: NucleusOrganizationGatewayDep,
 ) -> dict[str, AgentActionHandler]:
     resources = OperationalResourceService(session)
-    nucleus = NucleusOrganizationRepository(session)
     return {
         "update_organization_contact_email": (
             UpdateOrganizationContactEmailBridgeHandler(nucleus)

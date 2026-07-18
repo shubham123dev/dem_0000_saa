@@ -15,7 +15,8 @@ Workplace route or chat tool
 → active organization membership
 → backend-owned permission
 → sandbox/active organization guard
-→ NucleusOrganizationRepository
+→ NucleusOrganizationGateway port
+→ NucleusOrganizationRepository SQLite adapter
 → exact PascalCase SQLite tables
 → stable domain/HTTP contract
 → append-only audit
@@ -58,8 +59,8 @@ sync.
 ## Future replacement
 
 ```text
-Current: NucleusOrganizationRepository → SQLite exact-schema mock
-Future:  NucleusOrganizationApiAdapter → real Nucleus API/database mapping
+Current: NucleusOrganizationGateway → NucleusOrganizationRepository → SQLite exact-schema mock
+Future:  NucleusOrganizationGateway → NucleusOrganizationApiAdapter → real Nucleus API/database mapping
 ```
 
 Routes and chat tools consume stable domain contracts, so the future adapter can
