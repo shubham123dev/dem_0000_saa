@@ -2473,8 +2473,9 @@ def sha256_file(path: Path) -> str:
 
 
 def verify_node(repo: Path) -> None:
+    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
     node = run(repo, "node", "--version", check=False)
-    npm = run(repo, "npm", "--version", check=False)
+    npm = run(repo, npm_cmd, "--version", check=False)
     if node.returncode != 0 or npm.returncode != 0:
         raise RuntimeError("Node.js and npm are required for Angular Phase 1.")
     match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", node.stdout.strip())
@@ -2608,11 +2609,12 @@ def validate_static(repo: Path) -> None:
 
 
 def validate_npm(repo: Path) -> None:
+    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
     frontend = repo / "frontend"
-    install = run(repo, "npm", "install", check=False, cwd=frontend)
+    install = run(repo, npm_cmd, "install", check=False, cwd=frontend)
     if install.returncode != 0:
         raise RuntimeError("npm install failed:\n" + install.stdout)
-    validate = run(repo, "npm", "run", "validate:phase1", check=False, cwd=frontend)
+    validate = run(repo, npm_cmd, "run", "validate:phase1", check=False, cwd=frontend)
     if validate.returncode != 0:
         raise RuntimeError("Angular Phase 1 validation failed:\n" + validate.stdout)
 
