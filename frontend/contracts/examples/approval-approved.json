@@ -1,0 +1,10 @@
+{
+  "approval": {
+    "proposal_id": "proposal_demo_001",
+    "decision": "approved",
+    "decided_by_user_id": "usr_admin_002",
+    "decision_reason": "Reviewed scope and impact.",
+    "decided_at": "2026-07-18T17:05:00Z",
+    "consumed_at": null
+  }
+}

@@ -243,3 +243,18 @@ rollback. The internal exact-snapshot rollback action is never offered to the
 model.
 
 See `docs/WORKPLACE_WORKFLOWS.md`.
+
+<!-- ANGULAR_FRONTEND_PHASE_0_CONTRACTS -->
+## Angular frontend Phase 0 contracts
+
+The current FastAPI surface is now captured as an executable, commit-pinned
+contract inventory for the planned Angular workplace-agent UI. Phase 0 adds no
+visual frontend and does not pretend that conversation persistence or streaming
+already exists.
+
+See `frontend/README.md` and validate with:
+
+```bash
+python scripts/validate_frontend_contracts.py --repo .
+pytest -q tests/test_frontend_contracts.py
+```

@@ -285,3 +285,18 @@ Readiness must report `workflow_schema_supported = true`,
 `internal_rollback_hidden_from_model = true`, exact `43/43` action parity and
 20 registered read tools. Run the seed twice and the complete test suite before
 committing.
+
+<!-- ANGULAR_FRONTEND_PHASE_0_VALIDATION -->
+## Angular frontend Phase 0 validation
+
+```powershell
+python scripts/validate_frontend_contracts.py --repo .
+pytest -q tests/test_frontend_contracts.py
+python -m compileall -q scripts tests
+pytest -q
+git diff --check
+```
+
+Expected contract surface: 31 unique public endpoint method/path pairs and 13
+validated synthetic examples. No Angular runtime or fake streaming behavior is
+introduced in this phase.

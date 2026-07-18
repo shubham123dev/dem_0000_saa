@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "id": "setting_demo_001",
+      "organization_id": "org_demo_001",
+      "namespace": "notifications",
+      "setting_key": "daily_digest",
+      "value_json": {
+        "enabled": true
+      },
+      "version": 3
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}

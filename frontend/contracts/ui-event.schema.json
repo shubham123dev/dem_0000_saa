@@ -1,0 +1,568 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/workplace-agent/ui-events.schema.json",
+  "title": "Workplace Agent normalized UI events",
+  "description": "Planned Angular-facing event contract. These events are safe operational summaries, not private model chain-of-thought. The current backend does not yet stream this envelope.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/assistant_message"
+    },
+    {
+      "$ref": "#/$defs/clarification"
+    },
+    {
+      "$ref": "#/$defs/activity_update"
+    },
+    {
+      "$ref": "#/$defs/proposal"
+    },
+    {
+      "$ref": "#/$defs/approval_update"
+    },
+    {
+      "$ref": "#/$defs/execution_update"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    },
+    {
+      "$ref": "#/$defs/reconciliation"
+    },
+    {
+      "$ref": "#/$defs/error"
+    }
+  ],
+  "$defs": {
+    "assistant_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "assistant_message"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_id",
+            "text",
+            "final"
+          ],
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "final": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "description": "Streamed or final assistant text."
+    },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "clarification"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message",
+            "missing_fields"
+          ],
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "missing_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      },
+      "description": "A backend-requested clarification."
+    },
+    "activity_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "activity_update"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "status",
+            "title",
+            "sequence"
+          ],
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "running",
+                "completed",
+                "warning",
+                "failed",
+                "skipped"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "description": "A safe backend-generated planning or execution activity summary."
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "proposal"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal"
+          ],
+          "properties": {
+            "proposal": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "description": "A governed action proposal."
+    },
+    "approval_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "approval_update"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_id",
+            "status",
+            "approvals_received",
+            "approvals_required"
+          ],
+          "properties": {
+            "proposal_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "approvals_received": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "approvals_required": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "description": "Current proposal approval progress."
+    },
+    "execution_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "execution_update"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_id",
+            "outcome",
+            "steps"
+          ],
+          "properties": {
+            "proposal_id": {
+              "type": "string"
+            },
+            "outcome": {
+              "enum": [
+                "executing",
+                "succeeded",
+                "failed",
+                "reconciliation_required"
+              ]
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "description": "Workflow execution progress derived from durable receipts."
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "receipt"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_id",
+            "outcome",
+            "completed_at"
+          ],
+          "properties": {
+            "proposal_id": {
+              "type": "string"
+            },
+            "outcome": {
+              "type": "string"
+            },
+            "completed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "audit_pending": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "description": "Verified execution receipt."
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "reconciliation"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposal_id",
+            "status"
+          ],
+          "properties": {
+            "proposal_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "summary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Uncertain external-state reconciliation update."
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "event_id",
+        "conversation_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "error"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "suggested_action": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Safe UI error projection."
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "environment": "sandbox",
+  "read_tools": [
+    "get_organization_overview",
+    "search_workplace_resources"
+  ],
+  "write_tools": [
+    "onboard_organization_user"
+  ],
+  "write_actions": [
+    {
+      "name": "onboard_organization_user",
+      "required_arguments": [
+        "email",
+        "display_name",
+        "role",
+        "seat_type"
+      ],
+      "risk_level": "medium",
+      "requires_approval": true,
+      "supports_dry_run": true,
+      "minimum_approvals": 1,
+      "self_approval_allowed": true,
+      "model_selectable": true
+    }
+  ],
+  "approval_required": true,
+  "production_access": false
+}

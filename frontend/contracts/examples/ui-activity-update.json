@@ -1,0 +1,14 @@
+{
+  "type": "activity_update",
+  "event_id": "evt_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-07-18T17:00:01Z",
+  "request_id": "req_phase0_001",
+  "payload": {
+    "stage": "permission_check",
+    "status": "completed",
+    "title": "Checking permissions",
+    "summary": "You can propose this operation.",
+    "sequence": 2
+  }
+}

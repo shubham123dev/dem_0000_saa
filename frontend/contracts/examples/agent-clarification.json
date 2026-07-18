@@ -1,0 +1,12 @@
+{
+  "mode": "clarification_required",
+  "organization_id": "org_demo_001",
+  "answer": "Which report should receive access?",
+  "evidence_ids": [],
+  "answer_source": "deterministic",
+  "results": [],
+  "action_proposal": null,
+  "missing_fields": [
+    "report_id"
+  ]
+}

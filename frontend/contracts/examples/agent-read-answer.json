@@ -1,0 +1,19 @@
+{
+  "mode": "read",
+  "organization_id": "org_demo_001",
+  "answer": "The organization has 12 active members.",
+  "evidence_ids": [
+    "organization_users:org_demo_001"
+  ],
+  "answer_source": "model",
+  "results": [
+    {
+      "tool_name": "list_organization_users",
+      "data": {
+        "count": 12
+      }
+    }
+  ],
+  "action_proposal": null,
+  "missing_fields": []
+}

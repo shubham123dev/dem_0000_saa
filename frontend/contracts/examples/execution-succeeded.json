@@ -1,0 +1,22 @@
+{
+  "execution": {
+    "proposal_id": "proposal_demo_001",
+    "idempotency_key": "phase0-demo-exec-001",
+    "executed_by_user_id": "usr_admin_001",
+    "nucleus_actor_id": null,
+    "outcome": "succeeded",
+    "result": {
+      "resource_type": "organization_membership",
+      "resource_id": "membership_demo_001",
+      "verified": true
+    },
+    "error_code": null,
+    "attempt_count": 1,
+    "last_attempt_at": "2026-07-18T17:06:00Z",
+    "provider_operation_id": null,
+    "reconciliation_status": null,
+    "audit_pending": false,
+    "started_at": "2026-07-18T17:05:30Z",
+    "completed_at": "2026-07-18T17:06:00Z"
+  }
+}

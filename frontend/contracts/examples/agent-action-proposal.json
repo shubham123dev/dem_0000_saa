@@ -1,0 +1,26 @@
+{
+  "mode": "action_proposal",
+  "organization_id": "org_demo_001",
+  "answer": "I prepared an approval-gated proposal.",
+  "evidence_ids": [],
+  "answer_source": "deterministic",
+  "results": [],
+  "action_proposal": {
+    "id": "proposal_demo_001",
+    "action_name": "onboard_organization_user",
+    "risk_level": "medium",
+    "status": "pending_approval",
+    "changes": [
+      {
+        "field": "membership",
+        "before": null,
+        "after": {
+          "email": "reader@example.test",
+          "role": "sandbox_reader"
+        }
+      }
+    ],
+    "expires_at": "2026-07-18T18:00:00Z"
+  },
+  "missing_fields": []
+}

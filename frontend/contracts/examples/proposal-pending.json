@@ -1,0 +1,49 @@
+{
+  "proposal": {
+    "id": "proposal_demo_001",
+    "organization_id": "org_demo_001",
+    "requested_by_user_id": "usr_admin_001",
+    "action_name": "onboard_organization_user",
+    "arguments": {
+      "email": "reader@example.test",
+      "display_name": "Demo Reader",
+      "role": "sandbox_reader",
+      "seat_type": "standard"
+    },
+    "action_fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "fingerprint_version": 4,
+    "risk_level": "medium",
+    "resource_type": "organization_user_onboarding",
+    "resource_id": "reader@example.test",
+    "status": "pending_approval",
+    "changes": [
+      {
+        "field": "membership",
+        "before": null,
+        "after": {
+          "email": "reader@example.test",
+          "role": "sandbox_reader"
+        }
+      }
+    ],
+    "observed_resource_version": 0,
+    "resource_preconditions": [
+      {
+        "resource_type": "organization_user_onboarding",
+        "resource_id": "reader@example.test",
+        "observed_version": 0
+      }
+    ],
+    "approval_policy": {
+      "self_approval_allowed": true,
+      "required_approver_permission": "agent.actions.approve",
+      "minimum_approvals": 1
+    },
+    "expires_at": "2026-07-18T18:00:00Z",
+    "cancelled_at": null,
+    "stale_at": null,
+    "created_at": "2026-07-18T17:00:00Z"
+  },
+  "requires_approval": true,
+  "dry_run": true
+}

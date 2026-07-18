@@ -1,0 +1,23 @@
+{
+  "type": "execution_update",
+  "event_id": "evt_003",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-07-18T17:06:00Z",
+  "request_id": "req_phase0_001",
+  "payload": {
+    "proposal_id": "proposal_demo_001",
+    "outcome": "executing",
+    "steps": [
+      {
+        "step_index": 0,
+        "title": "Validate current versions",
+        "status": "completed"
+      },
+      {
+        "step_index": 1,
+        "title": "Create membership",
+        "status": "running"
+      }
+    ]
+  }
+}

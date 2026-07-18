@@ -1,0 +1,18 @@
+{
+  "execution": {
+    "proposal_id": "proposal_demo_002",
+    "idempotency_key": "phase0-demo-exec-002",
+    "executed_by_user_id": "usr_admin_001",
+    "nucleus_actor_id": null,
+    "outcome": "reconciliation_required",
+    "result": null,
+    "error_code": "provider_state_unknown",
+    "attempt_count": 1,
+    "last_attempt_at": "2026-07-18T17:06:00Z",
+    "provider_operation_id": "provider-op-001",
+    "reconciliation_status": "pending",
+    "audit_pending": false,
+    "started_at": "2026-07-18T17:05:30Z",
+    "completed_at": null
+  }
+}

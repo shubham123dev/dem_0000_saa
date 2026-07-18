@@ -1,0 +1,346 @@
+{
+  "contract_version": "0.1.0",
+  "baseline_commit": "1863fc0ec62b148dc1976c154afa1f91e3375c16",
+  "scope": "Angular frontend Phase 0 contract inventory",
+  "authentication": {
+    "mode": "sandbox_header",
+    "header": "X-Mock-User-Id",
+    "browser_rule": "The Angular auth interceptor owns this header; components never provide user IDs."
+  },
+  "request_correlation": {
+    "header": "X-Request-Id",
+    "response_header": "X-Request-Id",
+    "error_field": "error.request_id"
+  },
+  "error_envelope": {
+    "shape": {
+      "error": {
+        "code": "string",
+        "message": "string",
+        "request_id": "string"
+      }
+    },
+    "validation_status": 422,
+    "validation_code": "internal_error"
+  },
+  "endpoint_count": 31,
+  "endpoints": [
+    {
+      "group": "health",
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "request_model": null,
+      "response_model": null,
+      "source": "app/api/health_routes.py",
+      "purpose": "Liveness probe."
+    },
+    {
+      "group": "health",
+      "method": "GET",
+      "path": "/ready",
+      "auth": false,
+      "request_model": null,
+      "response_model": null,
+      "source": "app/api/health_routes.py",
+      "purpose": "Database and environment readiness."
+    },
+    {
+      "group": "health",
+      "method": "GET",
+      "path": "/ready/details",
+      "auth": false,
+      "request_model": null,
+      "response_model": null,
+      "source": "app/api/health_routes.py",
+      "purpose": "Detailed migration, permission, registry, handler, tool and model readiness."
+    },
+    {
+      "group": "capabilities",
+      "method": "GET",
+      "path": "/workplace/capabilities",
+      "auth": false,
+      "request_model": null,
+      "response_model": "CapabilitiesResponse",
+      "source": "app/api/health_routes.py",
+      "purpose": "Read-tool and governed-action discovery."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/overview",
+      "auth": true,
+      "request_model": null,
+      "response_model": "OrganizationOverviewResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Dashboard organization overview."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/profile",
+      "auth": true,
+      "request_model": null,
+      "response_model": "OrganizationProfileResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Organization profile."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/users",
+      "auth": true,
+      "request_model": null,
+      "response_model": "OrganizationUsersResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Organization members."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/seats",
+      "auth": true,
+      "request_model": null,
+      "response_model": "OrganizationSeatsResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Seat summary."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/reports",
+      "auth": true,
+      "request_model": null,
+      "response_model": "OrganizationReportsResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Organization reports and access state."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/reports/{report_id}/access",
+      "auth": true,
+      "request_model": null,
+      "response_model": "ReportAccessResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Exact report-access decision."
+    },
+    {
+      "group": "organization",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/audit-log",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AuditLogResponse",
+      "source": "app/api/workplace_routes.py",
+      "purpose": "Organization-scoped append-only audit log."
+    },
+    {
+      "group": "nucleus",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/nucleus/account",
+      "auth": true,
+      "request_model": null,
+      "response_model": "NucleusAccountResponse",
+      "source": "app/api/nucleus_routes.py",
+      "purpose": "Nucleus account projection."
+    },
+    {
+      "group": "nucleus",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/nucleus/license",
+      "auth": true,
+      "request_model": null,
+      "response_model": "NucleusLicenseResponse",
+      "source": "app/api/nucleus_routes.py",
+      "purpose": "Nucleus license projection."
+    },
+    {
+      "group": "nucleus",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/nucleus/approval-status",
+      "auth": true,
+      "request_model": null,
+      "response_model": "NucleusApprovalStatusResponse",
+      "source": "app/api/nucleus_routes.py",
+      "purpose": "Nucleus approval state."
+    },
+    {
+      "group": "nucleus",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/nucleus/entitlements",
+      "auth": true,
+      "request_model": null,
+      "response_model": "NucleusEntitlementsResponse",
+      "source": "app/api/nucleus_routes.py",
+      "purpose": "Nucleus entitlement projection."
+    },
+    {
+      "group": "resources",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/resources",
+      "auth": true,
+      "request_model": null,
+      "response_model": "WorkplaceResourceTypeListResponse",
+      "source": "app/api/workplace_resource_routes.py",
+      "purpose": "List backend-owned resource types."
+    },
+    {
+      "group": "resources",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/resources/{resource_type}/schema",
+      "auth": true,
+      "request_model": null,
+      "response_model": "WorkplaceResourceSchemaResponse",
+      "source": "app/api/workplace_resource_routes.py",
+      "purpose": "Describe one resource type."
+    },
+    {
+      "group": "resources",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/resources/{resource_type}/search",
+      "auth": true,
+      "request_model": "WorkplaceResourceSearchRequest",
+      "response_model": "WorkplaceResourceSearchResponse",
+      "source": "app/api/workplace_resource_routes.py",
+      "purpose": "Search one resource type using backend-owned fields."
+    },
+    {
+      "group": "resources",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/resources/{resource_type}/count",
+      "auth": true,
+      "request_model": "WorkplaceResourceSearchRequest",
+      "response_model": "WorkplaceResourceCountResponse",
+      "source": "app/api/workplace_resource_routes.py",
+      "purpose": "Count resources matching backend-owned filters."
+    },
+    {
+      "group": "resources",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/resources/{resource_type}/{resource_id}",
+      "auth": true,
+      "request_model": null,
+      "response_model": "WorkplaceResourceResponse",
+      "source": "app/api/workplace_resource_routes.py",
+      "purpose": "Get one exact resource."
+    },
+    {
+      "group": "agent",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/query",
+      "auth": true,
+      "request_model": "AgentQueryRequest",
+      "response_model": "AgentQueryResponse",
+      "source": "app/api/agent_routes.py",
+      "purpose": "Natural-language read, clarification or governed proposal entrypoint."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/propose",
+      "auth": true,
+      "request_model": "AgentActionProposalRequest",
+      "response_model": "AgentActionProposalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Direct governed dry-run proposal creation."
+    },
+    {
+      "group": "actions",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/agent/actions",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentActionProposalListResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Paginated proposal list.",
+      "query_parameters": [
+        "status",
+        "action_name",
+        "requested_by",
+        "limit",
+        "cursor"
+      ]
+    },
+    {
+      "group": "actions",
+      "method": "GET",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentActionProposalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Get one proposal."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/approve",
+      "auth": true,
+      "request_model": "AgentActionDecisionRequest",
+      "response_model": "AgentActionApprovalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Record an approval decision."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reject",
+      "auth": true,
+      "request_model": "AgentActionDecisionRequest",
+      "response_model": "AgentActionApprovalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Record a rejection decision."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/cancel",
+      "auth": true,
+      "request_model": "AgentActionDecisionRequest",
+      "response_model": "AgentActionProposalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Cancel a proposal before execution."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/rollback-proposal",
+      "auth": true,
+      "request_model": "AgentActionDecisionRequest",
+      "response_model": "AgentActionProposalResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Create a separately governed rollback proposal."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/execute",
+      "auth": true,
+      "request_model": "AgentActionExecutionRequest",
+      "response_model": "AgentActionExecutionResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Execute an approved proposal with an idempotency key."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/reconcile",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentActionExecutionResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Reconcile uncertain external state."
+    },
+    {
+      "group": "actions",
+      "method": "POST",
+      "path": "/workplace/organizations/{organization_id}/agent/actions/{proposal_id}/audit-replay",
+      "auth": true,
+      "request_model": null,
+      "response_model": "AgentActionExecutionResponse",
+      "source": "app/api/action_routes.py",
+      "purpose": "Replay a pending audit write."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "agent_action_stale",
+    "message": "The reviewed resource state changed before execution.",
+    "request_id": "req_phase0_001"
+  }
+}
