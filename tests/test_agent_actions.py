@@ -43,11 +43,17 @@ async def test_proposal_is_dry_run_and_does_not_mutate(
     }
     assert proposal["changes"] == [
         {
-            "field": "contact_email",
+            "field": "nucleus.Email",
             "before": "operations@example.test",
             "after": "new.operations@example.test",
-        }
+        },
+        {
+            "field": "organization.contact_email",
+            "before": "operations@example.test",
+            "after": "new.operations@example.test",
+        },
     ]
+    assert len(proposal["resource_preconditions"]) == 2
     assert response.json()["requires_approval"] is True
     assert response.json()["dry_run"] is True
 
@@ -130,8 +136,16 @@ async def test_approved_action_executes_idempotently_and_is_audited(
     assert execution["result"] == {
         "resource_type": "organization",
         "resource_id": ORGANIZATION_ID,
-        "before": {"contact_email": "operations@example.test", "version": 1},
-        "after": {"contact_email": "new.operations@example.test", "version": 2},
+        "before": {
+            "contact_email": "operations@example.test",
+            "version": 1,
+            "nucleus_version": 1,
+        },
+        "after": {
+            "contact_email": "new.operations@example.test",
+            "version": 2,
+            "nucleus_version": 2,
+        },
         "external_operation_id": None,
     }
     assert execution["attempt_count"] == 1

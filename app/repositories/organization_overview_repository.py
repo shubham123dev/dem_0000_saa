@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.orm_models import OrganizationOverviewORM
@@ -11,6 +14,10 @@ from app.domain.models import (
     OrganizationOverviewMetrics,
     OrganizationProfile,
 )
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class OrganizationOverviewRepository:
@@ -37,7 +44,40 @@ class OrganizationOverviewRepository:
                 version=1,
                 updated_at=profile.updated_at,
             )
+        return self._to_domain(row, profile)
 
+    async def update_organization_type_if_version(
+        self,
+        *,
+        profile: OrganizationProfile,
+        organization_type: str,
+        expected_version: int,
+    ) -> OrganizationOverview | None:
+        statement = (
+            update(OrganizationOverviewORM)
+            .where(
+                OrganizationOverviewORM.organization_id == profile.id,
+                OrganizationOverviewORM.version == expected_version,
+            )
+            .values(
+                organization_type=organization_type,
+                version=expected_version + 1,
+                updated_at=_utcnow(),
+            )
+        )
+        result = await self._session.execute(statement)
+        if result.rowcount != 1:
+            await self._session.rollback()
+            return None
+        await self._session.commit()
+        row = await self._session.get(OrganizationOverviewORM, profile.id)
+        return self._to_domain(row, profile) if row is not None else None
+
+    @staticmethod
+    def _to_domain(
+        row: OrganizationOverviewORM,
+        profile: OrganizationProfile,
+    ) -> OrganizationOverview:
         return OrganizationOverview(
             organization=profile,
             organization_type=row.organization_type,

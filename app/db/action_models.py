@@ -48,6 +48,10 @@ class AgentActionProposalORM(Base):
     resource_id: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     observed_resource_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    resource_preconditions_json: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    fingerprint_version: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     approval_policy_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

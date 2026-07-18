@@ -8,6 +8,7 @@ from app.agent.action_contracts import (
     AgentActionChange,
     AgentActionDefinition,
     AgentActionProposalInput,
+    AgentActionResourcePrecondition,
     AgentApprovalPolicy,
 )
 from app.domain.enums import Permission
@@ -268,6 +269,8 @@ def build_action_fingerprint(
     resource_type: str,
     resource_id: str,
     expires_at: datetime,
+    resource_preconditions: tuple[AgentActionResourcePrecondition, ...] = (),
+    fingerprint_version: int = 3,
 ) -> str:
     payload = {
         "organization_id": organization_id,
@@ -280,7 +283,27 @@ def build_action_fingerprint(
         "resource_type": resource_type,
         "resource_id": resource_id,
         "expires_at": _canonical_utc_datetime(expires_at),
-        "version": 2,
     }
+    if fingerprint_version == 2:
+        payload["version"] = 2
+    elif fingerprint_version == 3:
+        if not resource_preconditions:
+            resource_preconditions = (
+                AgentActionResourcePrecondition(
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                    observed_version=observed_resource_version,
+                ),
+            )
+        payload["resource_preconditions"] = [
+            item.model_dump(mode="json")
+            for item in sorted(
+                resource_preconditions,
+                key=lambda item: (item.resource_type, item.resource_id),
+            )
+        ]
+        payload["version"] = 3
+    else:
+        raise ValueError("Unsupported action fingerprint version")
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

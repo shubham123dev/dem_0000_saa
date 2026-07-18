@@ -39,3 +39,11 @@ Category and Report revocation set `IsActive = false`. Permission rollback of a
 newly created row deactivates it because no physical-delete contract was
 provided. Company, Drug, Indication and Market access remain read-only until a
 safe lifecycle contract is supplied.
+## Multi-resource review binding
+
+New action proposals persist a canonical list of every reviewed resource and
+observed version. Fingerprint version 3 covers that complete list, while
+migrated version-2 proposals retain their original verification semantics.
+Execution re-prepares and compares all preconditions before consuming the
+approval. Cross-store reconciliation repairs only an unchanged reviewed
+projection and never overwrites a conflicting newer value.

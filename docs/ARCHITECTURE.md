@@ -34,7 +34,7 @@ allowlisted action request
 → immutable before/after proposal
 → approval policy
 → final authorization recheck
-→ proposal fingerprint recheck
+→ proposal fingerprint and all resource-precondition recheck
 → sidecar version compare-and-advance
 → exact row mutation
 → deterministic result
@@ -52,9 +52,11 @@ frontend compatibility surface. Updates to `OrganizationAccount.OrganizationName
 `Email` and `OrganizationType` synchronize their overlapping legacy values in
 the same SQLite transaction.
 
-The existing `update_organization_contact_email` action now uses the exact
-Nucleus account as canonical storage and keeps the legacy Overview profile in
-sync.
+The existing `update_organization_contact_email` action uses the exact Nucleus
+account as canonical storage and coordinates the legacy Overview projection at
+the action layer. OrganizationName, Email and OrganizationType proposals bind
+approval to both reviewed resource versions. A partial cross-store outcome is
+reconciled without silently overwriting an unexpected concurrent value.
 
 ## Future replacement
 

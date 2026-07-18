@@ -181,10 +181,15 @@ async def test_successful_contact_change_creates_separate_rollback_proposal(
     assert rollback["status"] == "pending_approval"
     assert rollback["changes"] == [
         {
-            "field": "contact_email",
+            "field": "nucleus.Email",
             "before": "changed@example.test",
             "after": "operations@example.test",
-        }
+        },
+        {
+            "field": "organization.contact_email",
+            "before": "changed@example.test",
+            "after": "operations@example.test",
+        },
     ]
 
     organization = await db_session.get(OrganizationORM, ORGANIZATION_ID)

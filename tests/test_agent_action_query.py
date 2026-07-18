@@ -102,10 +102,15 @@ async def test_natural_language_action_creates_pending_dry_run_only(
     assert proposal["status"] == "pending_approval"
     assert proposal["changes"] == [
         {
-            "field": "contact_email",
+            "field": "nucleus.Email",
             "before": "operations@example.test",
             "after": "agent.operations@example.test",
-        }
+        },
+        {
+            "field": "organization.contact_email",
+            "before": "operations@example.test",
+            "after": "agent.operations@example.test",
+        },
     ]
 
     organization = await db_session.get(OrganizationORM, ORGANIZATION_ID)

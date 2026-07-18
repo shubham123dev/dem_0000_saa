@@ -95,7 +95,7 @@ Every write follows:
 inspect
 → immutable before/after proposal
 → approval threshold
-→ permission and fingerprint revalidation
+→ permission, fingerprint and all resource-precondition revalidation
 → optimistic version check
 → idempotent execution
 → exact re-read/reconciliation
@@ -167,7 +167,7 @@ read-only in this package rather than inventing destructive behavior.
 Current migration head:
 
 ```text
-0011_nucleus_organization_schema
+0012_resource_preconditions
 ```
 
 The deterministic idempotent seed adds one synthetic exact-schema account and

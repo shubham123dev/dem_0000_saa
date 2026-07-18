@@ -5,7 +5,11 @@ from datetime import datetime, timezone
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.action_contracts import AgentActionChange, AgentApprovalPolicy
+from app.agent.action_contracts import (
+    AgentActionChange,
+    AgentActionResourcePrecondition,
+    AgentApprovalPolicy,
+)
 from app.agent.action_registry import build_action_fingerprint
 from app.db.action_models import AgentActionProposalORM
 from app.db.orm_models import OrganizationORM
@@ -35,6 +39,14 @@ def build_fingerprint(**overrides) -> str:
         ),
         "resource_type": "organization",
         "resource_id": "org_001",
+        "resource_preconditions": (
+            AgentActionResourcePrecondition(
+                resource_type="organization",
+                resource_id="org_001",
+                observed_version=1,
+            ),
+        ),
+        "fingerprint_version": 3,
         "expires_at": datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc),
     }
     values.update(overrides)
@@ -66,11 +78,20 @@ def test_action_fingerprint_changes_with_reviewed_scope_and_state() -> None:
         ),
         build_fingerprint(resource_id="org_002"),
         build_fingerprint(
+            resource_preconditions=(
+                AgentActionResourcePrecondition(
+                    resource_type="organization",
+                    resource_id="org_001",
+                    observed_version=2,
+                ),
+            )
+        ),
+        build_fingerprint(
             expires_at=datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc)
         ),
     }
     assert baseline not in variants
-    assert len(variants) == 8
+    assert len(variants) == 9
 
 
 def test_action_fingerprint_treats_naive_sqlite_datetime_as_utc() -> None:
@@ -78,6 +99,12 @@ def test_action_fingerprint_treats_naive_sqlite_datetime_as_utc() -> None:
     naive = aware.replace(tzinfo=None)
 
     assert build_fingerprint(expires_at=aware) == build_fingerprint(expires_at=naive)
+
+
+def test_version_two_fingerprint_remains_backward_compatible() -> None:
+    assert build_fingerprint(fingerprint_version=2) == (
+        "2f612e8430834954193e3046d794074bccf5f483ce59887399cb9b0ceb7c0a86"
+    )
 
 
 async def test_modified_approved_proposal_cannot_execute(

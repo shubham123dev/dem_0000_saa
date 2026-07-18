@@ -4,7 +4,6 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.agent.action_contracts import AgentActionHandler
 from app.agent.action_handlers import (
     ActivateOrganizationMembershipHandler,
@@ -28,9 +27,10 @@ from app.agent.nucleus_action_handlers import (
     UpdateOrganizationContactEmailBridgeHandler,
 )
 from app.api.dependencies import (
-    MockOrganizationApiDep,
     NucleusOrganizationGatewayDep,
+    OrganizationGatewayDep,
     SessionDep,
+    VersionedOrganizationMutationGatewayDep,
     get_audit_repository,
     get_user_repository,
 )
@@ -55,20 +55,29 @@ def get_agent_action_registry() -> AgentActionRegistry:
 
 
 def get_agent_action_handlers(
-    api: MockOrganizationApiDep,
     session: SessionDep,
     nucleus: NucleusOrganizationGatewayDep,
+    organization_mutations: VersionedOrganizationMutationGatewayDep,
 ) -> dict[str, AgentActionHandler]:
     resources = OperationalResourceService(session)
     return {
         "update_organization_contact_email": (
-            UpdateOrganizationContactEmailBridgeHandler(nucleus)
+            UpdateOrganizationContactEmailBridgeHandler(
+                nucleus,
+                organization_mutations,
+            )
         ),
         "update_nucleus_organization_account_field": (
-            UpdateNucleusOrganizationAccountFieldHandler(nucleus)
+            UpdateNucleusOrganizationAccountFieldHandler(
+                nucleus,
+                organization_mutations,
+            )
         ),
         "clear_nucleus_organization_account_field": (
-            ClearNucleusOrganizationAccountFieldHandler(nucleus)
+            ClearNucleusOrganizationAccountFieldHandler(
+                nucleus,
+                organization_mutations,
+            )
         ),
         "grant_nucleus_category_access": GrantNucleusCategoryAccessHandler(nucleus),
         "revoke_nucleus_category_access": RevokeNucleusCategoryAccessHandler(nucleus),
@@ -97,7 +106,7 @@ def get_agent_action_handlers(
 
 
 def get_agent_action_service(
-    api: MockOrganizationApiDep,
+    organization_gateway: OrganizationGatewayDep,
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repository: Annotated[AuditRepository, Depends(get_audit_repository)],
     action_repository: Annotated[
@@ -114,7 +123,7 @@ def get_agent_action_service(
     ],
 ) -> ReleaseReadyAgentActionService:
     return ReleaseReadyAgentActionService(
-        organization_gateway=MockOrganizationApiAdapter(api),
+        organization_gateway=organization_gateway,
         permission_service=PermissionService(user_repository),
         action_repository=action_repository,
         audit_repository=audit_repository,

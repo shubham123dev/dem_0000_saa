@@ -101,6 +101,8 @@ class AgentActionService:
             arguments=preparation.normalized_arguments,
             changes=preparation.changes,
             observed_resource_version=preparation.observed_resource_version,
+            resource_preconditions=preparation.resource_preconditions,
+            fingerprint_version=3,
             approval_policy=action_definition.approval_policy,
             resource_type=preparation.resource_type,
             resource_id=preparation.resource_id,
@@ -117,6 +119,8 @@ class AgentActionService:
             resource_type=preparation.resource_type,
             resource_id=preparation.resource_id,
             observed_resource_version=preparation.observed_resource_version,
+            resource_preconditions=preparation.resource_preconditions,
+            fingerprint_version=3,
             approval_policy=action_definition.approval_policy,
             expires_at=expires_at,
         )
@@ -301,8 +305,8 @@ class AgentActionService:
             arguments=proposal.arguments,
         )
         if (
-            current_preparation.observed_resource_version
-            != proposal.observed_resource_version
+            current_preparation.resource_preconditions
+            != proposal.resource_preconditions
             or current_preparation.changes != proposal.changes
         ):
             await self._action_repository.transition_status(
@@ -442,6 +446,8 @@ class AgentActionService:
             arguments=proposal.arguments,
             changes=proposal.changes,
             observed_resource_version=proposal.observed_resource_version,
+            resource_preconditions=proposal.resource_preconditions,
+            fingerprint_version=proposal.fingerprint_version,
             approval_policy=proposal.approval_policy,
             resource_type=proposal.resource_type,
             resource_id=proposal.resource_id,

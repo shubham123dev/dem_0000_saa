@@ -16,7 +16,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0011_nucleus_organization_schema"
+EXPECTED_MIGRATION_HEAD = "0012_resource_preconditions"
 
 
 @router.get("/health")
@@ -48,6 +48,18 @@ async def readiness_details(
     except SQLAlchemyError:
         await session.rollback()
         migration_head = None
+
+    try:
+        await session.execute(
+            text(
+                "SELECT resource_preconditions_json, fingerprint_version "
+                "FROM agent_action_proposals LIMIT 1"
+            )
+        )
+        proposal_preconditions_supported = True
+    except SQLAlchemyError:
+        await session.rollback()
+        proposal_preconditions_supported = False
 
     registry_names = {
         definition.name for definition in AgentActionRegistry().list_definitions()
@@ -83,6 +95,7 @@ async def readiness_details(
         "database_connected": True,
         "sandbox_environment": settings.is_sandbox,
         "migration_at_expected_head": migration_head == EXPECTED_MIGRATION_HEAD,
+        "proposal_resource_preconditions_supported": proposal_preconditions_supported,
         "registry_handler_parity": registry_names == handler_names,
         "action_management_permissions_seeded": (
             configured_management_permissions == management_permissions

@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.nucleus.contract import NucleusOrganizationGateway
+from app.agent.action_contracts import VersionedOrganizationMutationGateway
 from app.agent.nucleus_action_handlers import (
     ClearNucleusOrganizationAccountFieldHandler,
     GrantNucleusCategoryAccessHandler,
@@ -54,3 +55,21 @@ def test_nucleus_read_service_depends_on_gateway_port() -> None:
 def test_nucleus_action_handler_depends_on_gateway_port(handler_type: type) -> None:
     hints = get_type_hints(handler_type.__init__)
     assert hints["gateway"] is NucleusOrganizationGateway
+
+
+@pytest.mark.parametrize(
+    "handler_type",
+    (
+        UpdateOrganizationContactEmailBridgeHandler,
+        UpdateNucleusOrganizationAccountFieldHandler,
+        ClearNucleusOrganizationAccountFieldHandler,
+    ),
+)
+def test_projected_account_handlers_depend_on_organization_mutation_port(
+    handler_type: type,
+) -> None:
+    hints = get_type_hints(handler_type.__init__)
+    assert (
+        hints["organization_gateway"]
+        is VersionedOrganizationMutationGateway
+    )

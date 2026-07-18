@@ -69,7 +69,7 @@ class MockOrganizationApi:
     async def update_contact_email_if_version(
         self,
         organization_id: str,
-        contact_email: str,
+        contact_email: str | None,
         expected_version: int,
     ) -> OrganizationProfile | None:
         await self._require_organization_profile(organization_id)
@@ -77,6 +77,32 @@ class MockOrganizationApi:
             organization_id,
             contact_email,
             expected_version,
+        )
+
+    async def update_display_name_if_version(
+        self,
+        organization_id: str,
+        display_name: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        await self._require_organization_profile(organization_id)
+        return await self._organization_repository.update_display_name_if_version(
+            organization_id,
+            display_name,
+            expected_version,
+        )
+
+    async def update_organization_type_if_version(
+        self,
+        organization_id: str,
+        organization_type: str,
+        expected_version: int,
+    ) -> OrganizationOverview | None:
+        profile = await self._require_organization_profile(organization_id)
+        return await self._overview_repository.update_organization_type_if_version(
+            profile=profile,
+            organization_type=organization_type,
+            expected_version=expected_version,
         )
 
     async def list_users(self, organization_id: str) -> list[OrganizationMember]:

@@ -77,7 +77,7 @@ python -m app.db.seed
 Expected migration:
 
 ```text
-0011_nucleus_organization_schema (head)
+0012_resource_preconditions (head)
 ```
 
 Both seed runs must complete successfully.
@@ -215,7 +215,7 @@ Invoke-RestMethod "$base/ready/details" |
     ConvertTo-Json -Depth 20
 ```
 
-Readiness must report migration `0011_nucleus_organization_schema` and registry/
+Readiness must report migration `0012_resource_preconditions` and registry/
 handler parity of 16/16.
 
 ## 11. Commit only after validation
@@ -225,7 +225,7 @@ Do not add the ZIP archive.
 ```powershell
 git status --short
 git add app alembic tests docs README.md pyproject.toml APPLY_AND_VALIDATE.md FILE_MANIFEST.md SOURCE_STATE_AUDIT.md VALIDATION_REPORT.md
-git commit -m "add Nucleus organization schema vertical slice"
+git commit -m "add multi-resource preconditions and projection synchronization"
 git push origin main
 git status --short
 ```

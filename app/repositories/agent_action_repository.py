@@ -12,6 +12,7 @@ from app.agent.action_contracts import (
     AgentActionChange,
     AgentActionExecutionResult,
     AgentActionProposal,
+    AgentActionResourcePrecondition,
     AgentApprovalPolicy,
 )
 from app.agent.action_state import require_transition
@@ -47,6 +48,8 @@ class AgentActionRepository:
         resource_type: str,
         resource_id: str,
         observed_resource_version: int,
+        resource_preconditions: tuple[AgentActionResourcePrecondition, ...],
+        fingerprint_version: int,
         approval_policy: AgentApprovalPolicy,
         expires_at: datetime,
     ) -> AgentActionProposal:
@@ -63,6 +66,10 @@ class AgentActionRepository:
             resource_id=resource_id,
             status="pending_approval",
             observed_resource_version=observed_resource_version,
+            resource_preconditions_json=[
+                item.model_dump(mode="json") for item in resource_preconditions
+            ],
+            fingerprint_version=fingerprint_version,
             approval_policy_json=approval_policy.model_dump(mode="json"),
             expires_at=expires_at,
         )
@@ -413,11 +420,16 @@ class AgentActionRepository:
                 AgentActionChange.model_validate(item) for item in row.changes_json
             ),
             action_fingerprint=row.action_fingerprint,
+            fingerprint_version=row.fingerprint_version,
             risk_level=row.risk_level,
             resource_type=row.resource_type,
             resource_id=row.resource_id,
             status=row.status,
             observed_resource_version=row.observed_resource_version,
+            resource_preconditions=tuple(
+                AgentActionResourcePrecondition.model_validate(item)
+                for item in (row.resource_preconditions_json or [])
+            ),
             approval_policy=AgentApprovalPolicy.model_validate(policy_payload),
             expires_at=row.expires_at,
             cancelled_at=row.cancelled_at,

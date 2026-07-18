@@ -58,8 +58,14 @@ async def test_update_account_field_is_proposed_executed_and_reflected_in_legacy
             "field": "OrganizationName",
             "before": "Demo Enterprise Sandbox",
             "after": "Updated Nucleus Sandbox",
-        }
+        },
+        {
+            "field": "organization.display_name",
+            "before": "Demo Enterprise Sandbox",
+            "after": "Updated Nucleus Sandbox",
+        },
     ]
+    assert len(proposal["resource_preconditions"]) == 2
     execution = await _approve_execute(
         client,
         admin_headers,

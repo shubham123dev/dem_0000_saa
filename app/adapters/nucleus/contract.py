@@ -53,21 +53,6 @@ class NucleusOrganizationGateway(Protocol):
     ) -> tuple[NucleusOrganizationAccount, Any] | None:
         ...
 
-    async def get_contact_email_bridge_state(
-        self,
-        organization_code: str,
-    ) -> tuple[NucleusOrganizationAccount, int] | None:
-        ...
-
-    async def update_contact_email_bridge_if_version(
-        self,
-        *,
-        organization_code: str,
-        value: str,
-        expected_legacy_version: int,
-        expected_nucleus_email: str | None,
-    ) -> NucleusOrganizationAccount | None:
-        ...
 
     async def update_account_field_if_version(
         self,

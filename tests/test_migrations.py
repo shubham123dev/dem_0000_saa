@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -7,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0011_nucleus_organization_schema"
+EXPECTED_HEAD = "0012_resource_preconditions"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -202,6 +203,12 @@ def assert_head_and_hardening_schema(connection: sqlite3.Connection) -> None:
         "reconciliation_status",
     }.issubset(execution_columns)
 
+    proposal_columns = read_column_names(connection, "agent_action_proposals")
+    assert {
+        "resource_preconditions_json",
+        "fingerprint_version",
+    }.issubset(proposal_columns)
+
     proposal_indexes = read_index_names(connection, "agent_action_proposals")
     assert {
         "ix_agent_action_proposal_org_created",
@@ -357,6 +364,20 @@ def test_0008_execution_is_preserved_by_upgrade_to_latest_head(
 
     with sqlite3.connect(database_file_path) as connection:
         assert_head_and_hardening_schema(connection)
+        proposal = connection.execute(
+            "SELECT resource_preconditions_json, fingerprint_version "
+            "FROM agent_action_proposals WHERE id = 'proposal_upgrade_001'"
+        ).fetchone()
+        assert proposal is not None
+        assert json.loads(proposal[0]) == [
+            {
+                "resource_type": "organization",
+                "resource_id": "org_upgrade_001",
+                "observed_version": 1,
+            }
+        ]
+        assert proposal[1] == 2
+
         execution = connection.execute(
             "SELECT id, outcome, audit_pending, audit_replay_attempts, "
             "audit_last_attempt_at, audit_last_error FROM agent_action_executions"

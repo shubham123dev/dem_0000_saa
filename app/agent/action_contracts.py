@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.models import OrganizationProfile
+from app.domain.models import OrganizationOverview, OrganizationProfile
 
 
 class AgentApprovalPolicy(BaseModel):
@@ -45,6 +45,52 @@ class AgentActionChange(BaseModel):
     after: Any
 
 
+class AgentActionResourcePrecondition(BaseModel):
+    """One immutable resource version reviewed by an approver."""
+
+    model_config = ConfigDict(frozen=True)
+
+    resource_type: str = Field(min_length=1, max_length=120)
+    resource_id: str = Field(min_length=1, max_length=250)
+    observed_version: int = Field(ge=0)
+
+
+def _canonical_resource_preconditions(
+    *,
+    resource_type: str,
+    resource_id: str,
+    observed_resource_version: int,
+    resource_preconditions: tuple[AgentActionResourcePrecondition, ...],
+) -> tuple[AgentActionResourcePrecondition, ...]:
+    primary = AgentActionResourcePrecondition(
+        resource_type=resource_type,
+        resource_id=resource_id,
+        observed_version=observed_resource_version,
+    )
+    by_key: dict[tuple[str, str], AgentActionResourcePrecondition] = {}
+    for item in resource_preconditions:
+        key = (item.resource_type, item.resource_id)
+        previous = by_key.get(key)
+        if previous is not None and previous.observed_version != item.observed_version:
+            raise ValueError("Conflicting action resource preconditions")
+        by_key[key] = item
+
+    primary_key = (primary.resource_type, primary.resource_id)
+    previous_primary = by_key.get(primary_key)
+    if (
+        previous_primary is not None
+        and previous_primary.observed_version != primary.observed_version
+    ):
+        raise ValueError("Primary resource precondition does not match proposal")
+    by_key[primary_key] = primary
+    return tuple(
+        sorted(
+            by_key.values(),
+            key=lambda item: (item.resource_type, item.resource_id),
+        )
+    )
+
+
 class AgentActionPreparation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -53,6 +99,19 @@ class AgentActionPreparation(BaseModel):
     observed_resource_version: int
     resource_type: str
     resource_id: str
+    resource_preconditions: tuple[AgentActionResourcePrecondition, ...] = ()
+
+    @model_validator(mode="after")
+    def normalize_resource_preconditions(self) -> "AgentActionPreparation":
+        normalized = _canonical_resource_preconditions(
+            resource_type=self.resource_type,
+            resource_id=self.resource_id,
+            observed_resource_version=self.observed_resource_version,
+            resource_preconditions=self.resource_preconditions,
+        )
+        if normalized != self.resource_preconditions:
+            object.__setattr__(self, "resource_preconditions", normalized)
+        return self
 
 
 class AgentActionHandlerResult(BaseModel):
@@ -74,6 +133,7 @@ class AgentActionProposal(BaseModel):
     action_name: str
     arguments: dict[str, str]
     action_fingerprint: str
+    fingerprint_version: int = Field(default=2, ge=2, le=3)
     risk_level: Literal["low", "medium", "high"]
     resource_type: str
     resource_id: str
@@ -91,11 +151,24 @@ class AgentActionProposal(BaseModel):
     ]
     changes: tuple[AgentActionChange, ...]
     observed_resource_version: int
+    resource_preconditions: tuple[AgentActionResourcePrecondition, ...] = ()
     approval_policy: AgentApprovalPolicy
     expires_at: datetime
     cancelled_at: datetime | None = None
     stale_at: datetime | None = None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def normalize_resource_preconditions(self) -> "AgentActionProposal":
+        normalized = _canonical_resource_preconditions(
+            resource_type=self.resource_type,
+            resource_id=self.resource_id,
+            observed_resource_version=self.observed_resource_version,
+            resource_preconditions=self.resource_preconditions,
+        )
+        if normalized != self.resource_preconditions:
+            object.__setattr__(self, "resource_preconditions", normalized)
+        return self
 
 
 class AgentActionApproval(BaseModel):
@@ -160,10 +233,29 @@ class VersionedOrganizationMutationGateway(Protocol):
     async def get_profile(self, organization_id: str) -> OrganizationProfile:
         ...
 
+    async def get_overview(self, organization_id: str) -> OrganizationOverview:
+        ...
+
     async def update_contact_email_if_version(
         self,
         organization_id: str,
-        contact_email: str,
+        contact_email: str | None,
         expected_version: int,
     ) -> OrganizationProfile | None:
+        ...
+
+    async def update_display_name_if_version(
+        self,
+        organization_id: str,
+        display_name: str,
+        expected_version: int,
+    ) -> OrganizationProfile | None:
+        ...
+
+    async def update_organization_type_if_version(
+        self,
+        organization_id: str,
+        organization_type: str,
+        expected_version: int,
+    ) -> OrganizationOverview | None:
         ...

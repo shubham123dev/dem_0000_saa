@@ -8,7 +8,9 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.nucleus.contract import NucleusOrganizationGateway
+from app.adapters.organization.contract import OrganizationApiGateway
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
+from app.agent.action_contracts import VersionedOrganizationMutationGateway
 from app.core.errors import UnauthenticatedError, UserDisabledError
 from app.db.session import get_session
 from app.domain.models import User
@@ -65,26 +67,42 @@ MockOrganizationApiDep = Annotated[
 ]
 
 
-def get_organization_service(
+def get_organization_gateway(
     api: MockOrganizationApiDep,
+) -> MockOrganizationApiAdapter:
+    return MockOrganizationApiAdapter(api)
+
+
+OrganizationGatewayDep = Annotated[
+    OrganizationApiGateway,
+    Depends(get_organization_gateway),
+]
+VersionedOrganizationMutationGatewayDep = Annotated[
+    VersionedOrganizationMutationGateway,
+    Depends(get_organization_gateway),
+]
+
+
+def get_organization_service(
+    organization_gateway: OrganizationGatewayDep,
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
 ) -> OrganizationService:
     return OrganizationService(
-        organization_gateway=MockOrganizationApiAdapter(api),
+        organization_gateway=organization_gateway,
         permission_service=PermissionService(user_repo),
         audit_repository=audit_repo,
     )
 
 
 def get_nucleus_organization_service(
-    api: MockOrganizationApiDep,
+    organization_gateway: OrganizationGatewayDep,
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     audit_repo: Annotated[AuditRepository, Depends(get_audit_repository)],
     nucleus_gateway: NucleusOrganizationGatewayDep,
 ) -> NucleusOrganizationService:
     return NucleusOrganizationService(
-        organization_gateway=MockOrganizationApiAdapter(api),
+        organization_gateway=organization_gateway,
         permission_service=PermissionService(user_repo),
         nucleus_gateway=nucleus_gateway,
         audit_repository=audit_repo,

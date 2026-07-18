@@ -19,7 +19,6 @@ from app.db.nucleus_models import (
     NucleusOrganizationReportAccessORM,
     NucleusResourceVersionORM,
 )
-from app.db.orm_models import OrganizationORM, OrganizationOverviewORM
 from app.domain.nucleus_models import (
     NucleusCategoryAccess,
     NucleusCompanyProfileAccess,
@@ -194,76 +193,6 @@ class NucleusOrganizationRepository:
         )
         return self._account_to_domain(row, version), getattr(row, attribute_name)
 
-    async def get_contact_email_bridge_state(
-        self,
-        organization_code: str,
-    ) -> tuple[NucleusOrganizationAccount, int] | None:
-        """Return the Nucleus account with the legacy profile version.
-
-        The legacy contact-email action keeps its established organization-version
-        concurrency contract while synchronizing the Nucleus account.
-        """
-
-        row = await self._account_row_by_code(organization_code)
-        organization = await self._session.get(OrganizationORM, organization_code)
-        if row is None or organization is None:
-            return None
-        version = await self._version(
-            "nucleus_account",
-            str(row.organization_account_id),
-        )
-        return self._account_to_domain(row, version), organization.version
-
-    async def update_contact_email_bridge_if_version(
-        self,
-        *,
-        organization_code: str,
-        value: str,
-        expected_legacy_version: int,
-        expected_nucleus_email: str | None,
-    ) -> NucleusOrganizationAccount | None:
-        """Atomically update both contact-email representations."""
-
-        row = await self._account_row_by_code(organization_code)
-        if row is None or row.email != expected_nucleus_email:
-            await self._session.rollback()
-            return None
-
-        legacy_update = (
-            update(OrganizationORM)
-            .where(
-                OrganizationORM.id == organization_code,
-                OrganizationORM.version == expected_legacy_version,
-            )
-            .values(
-                contact_email=value,
-                version=expected_legacy_version + 1,
-                updated_at=_utcnow(),
-            )
-        )
-        legacy_result = await self._session.execute(legacy_update)
-        if legacy_result.rowcount != 1:
-            await self._session.rollback()
-            return None
-
-        resource_key = str(row.organization_account_id)
-        current_nucleus_version = await self._version(
-            "nucleus_account",
-            resource_key,
-        )
-        next_nucleus_version = await self._advance_existing_version(
-            "nucleus_account",
-            resource_key,
-            current_nucleus_version,
-        )
-        if next_nucleus_version is None:
-            return None
-
-        row.email = value
-        row.updated_date = _utcnow()
-        await self._session.commit()
-        await self._session.refresh(row)
-        return self._account_to_domain(row, next_nucleus_version)
 
     async def update_account_field_if_version(
         self,
@@ -290,39 +219,10 @@ class NucleusOrganizationRepository:
 
         setattr(row, attribute_name, value)
         row.updated_date = _utcnow()
-        await self._synchronize_legacy_overview(
-            organization_code=organization_code,
-            field_name=field_name,
-            value=value,
-        )
         await self._session.commit()
         await self._session.refresh(row)
         return self._account_to_domain(row, next_version)
 
-    async def _synchronize_legacy_overview(
-        self,
-        *,
-        organization_code: str,
-        field_name: str,
-        value: str | None,
-    ) -> None:
-        organization = await self._session.get(OrganizationORM, organization_code)
-        if organization is None:
-            return
-        if field_name == "OrganizationName" and value is not None:
-            organization.display_name = value
-            organization.version += 1
-        elif field_name == "Email":
-            organization.contact_email = value
-            organization.version += 1
-        elif field_name == "OrganizationType":
-            overview = await self._session.get(
-                OrganizationOverviewORM,
-                organization_code,
-            )
-            if overview is not None:
-                overview.organization_type = value or "organization"
-                overview.version += 1
 
     async def get_entitlements(
         self,

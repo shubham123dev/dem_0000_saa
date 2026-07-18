@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
+from app.adapters.nucleus.contract import NucleusOrganizationGateway
 from app.agent.action_contracts import (
     AgentActionChange,
     AgentActionExecutionResult,
     AgentActionHandlerResult,
     AgentActionPreparation,
     AgentActionProposal,
+    AgentActionResourcePrecondition,
+    VersionedOrganizationMutationGateway,
 )
 from app.agent.action_handlers import StaleActionResourceError, normalize_email
-from app.adapters.nucleus.contract import NucleusOrganizationGateway
 from app.domain.nucleus_policy import (
     CLEARABLE_NUCLEUS_ACCOUNT_FIELDS,
     EDITABLE_NUCLEUS_ACCOUNT_FIELDS,
@@ -22,6 +25,16 @@ from app.domain.nucleus_policy import (
 _NULL_SENTINELS = {"null", "none", "-"}
 _FIELD_MAX_LENGTHS = NUCLEUS_ACCOUNT_FIELD_MAX_LENGTHS
 _CLEARABLE_FIELDS = CLEARABLE_NUCLEUS_ACCOUNT_FIELDS
+_PROJECTED_FIELDS = frozenset({"OrganizationName", "OrganizationType", "Email"})
+
+
+@dataclass(frozen=True)
+class _ProjectionState:
+    field: str
+    resource_type: str
+    resource_id: str
+    value: Any
+    version: int
 
 
 def _normalize_field_name(value: str) -> str:
@@ -93,13 +106,180 @@ def _sentinel(value: int | bool | None) -> str:
     return str(value)
 
 
+def _projection_target(field_name: str, value: str | None) -> str | None:
+    if field_name == "OrganizationType" and value is None:
+        return "organization"
+    return value
+
+
+async def _read_projection(
+    gateway: VersionedOrganizationMutationGateway,
+    *,
+    organization_id: str,
+    field_name: str,
+) -> _ProjectionState | None:
+    if field_name == "OrganizationName":
+        profile = await gateway.get_profile(organization_id)
+        return _ProjectionState(
+            field="organization.display_name",
+            resource_type="organization",
+            resource_id=organization_id,
+            value=profile.display_name,
+            version=profile.version,
+        )
+    if field_name == "Email":
+        profile = await gateway.get_profile(organization_id)
+        return _ProjectionState(
+            field="organization.contact_email",
+            resource_type="organization",
+            resource_id=organization_id,
+            value=profile.contact_email,
+            version=profile.version,
+        )
+    if field_name == "OrganizationType":
+        overview = await gateway.get_overview(organization_id)
+        return _ProjectionState(
+            field="organization_overview.organization_type",
+            resource_type="organization_overview",
+            resource_id=organization_id,
+            value=overview.organization_type,
+            version=overview.version,
+        )
+    return None
+
+
+async def _update_projection_if_version(
+    gateway: VersionedOrganizationMutationGateway,
+    *,
+    organization_id: str,
+    field_name: str,
+    value: str | None,
+    expected_version: int,
+) -> _ProjectionState | None:
+    target = _projection_target(field_name, value)
+    if field_name == "OrganizationName":
+        if target is None:
+            raise ValueError("Organization name cannot be cleared")
+        profile = await gateway.update_display_name_if_version(
+            organization_id,
+            target,
+            expected_version,
+        )
+        if profile is None:
+            return None
+        return _ProjectionState(
+            field="organization.display_name",
+            resource_type="organization",
+            resource_id=organization_id,
+            value=profile.display_name,
+            version=profile.version,
+        )
+    if field_name == "Email":
+        profile = await gateway.update_contact_email_if_version(
+            organization_id,
+            target,
+            expected_version,
+        )
+        if profile is None:
+            return None
+        return _ProjectionState(
+            field="organization.contact_email",
+            resource_type="organization",
+            resource_id=organization_id,
+            value=profile.contact_email,
+            version=profile.version,
+        )
+    if field_name == "OrganizationType":
+        if target is None:
+            target = "organization"
+        overview = await gateway.update_organization_type_if_version(
+            organization_id,
+            target,
+            expected_version,
+        )
+        if overview is None:
+            return None
+        return _ProjectionState(
+            field="organization_overview.organization_type",
+            resource_type="organization_overview",
+            resource_id=organization_id,
+            value=overview.organization_type,
+            version=overview.version,
+        )
+    return None
+
+
+def _find_precondition(
+    proposal: AgentActionProposal,
+    *,
+    resource_type: str,
+    resource_id: str | None = None,
+) -> AgentActionResourcePrecondition:
+    matches = [
+        item
+        for item in proposal.resource_preconditions
+        if item.resource_type == resource_type
+        and (resource_id is None or item.resource_id == resource_id)
+    ]
+    if len(matches) != 1:
+        raise ValueError("Action resource precondition is missing or ambiguous")
+    return matches[0]
+
+
+def _change_by_field(proposal: AgentActionProposal, field: str) -> AgentActionChange:
+    matches = [item for item in proposal.changes if item.field == field]
+    if len(matches) != 1:
+        raise ValueError("Reviewed action change is missing or ambiguous")
+    return matches[0]
+
+
+async def _apply_projection_after_nucleus(
+    gateway: VersionedOrganizationMutationGateway,
+    *,
+    proposal: AgentActionProposal,
+    field_name: str,
+    value: str | None,
+) -> _ProjectionState | None:
+    current = await _read_projection(
+        gateway,
+        organization_id=proposal.organization_id,
+        field_name=field_name,
+    )
+    if current is None:
+        return None
+    target = _projection_target(field_name, value)
+    approved_change = _change_by_field(proposal, current.field)
+    precondition = _find_precondition(
+        proposal,
+        resource_type=current.resource_type,
+        resource_id=current.resource_id,
+    )
+    if current.value == target:
+        return current
+    if (
+        current.version != precondition.observed_version
+        or current.value != approved_change.before
+    ):
+        return None
+    return await _update_projection_if_version(
+        gateway,
+        organization_id=proposal.organization_id,
+        field_name=field_name,
+        value=value,
+        expected_version=current.version,
+    )
 
 
 class UpdateOrganizationContactEmailBridgeHandler:
-    """Keep the legacy Overview profile and exact OrganizationAccount in sync."""
+    """Coordinate canonical Nucleus email with the legacy Overview projection."""
 
-    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+    def __init__(
+        self,
+        gateway: NucleusOrganizationGateway,
+        organization_gateway: VersionedOrganizationMutationGateway,
+    ) -> None:
         self._gateway = gateway
+        self._organization_gateway = organization_gateway
 
     async def prepare(
         self,
@@ -108,25 +288,51 @@ class UpdateOrganizationContactEmailBridgeHandler:
         arguments: dict[str, str],
     ) -> AgentActionPreparation:
         contact_email = normalize_email(arguments["contact_email"])
-        state = await self._gateway.get_contact_email_bridge_state(organization_id)
+        state = await self._gateway.get_account_field_state(
+            organization_id,
+            "Email",
+        )
         if state is None:
             raise ValueError("Nucleus organization account was not found")
-        account, legacy_version = state
-        before = account.email
-        if before == contact_email:
+        account, nucleus_before = state
+        projection = await _read_projection(
+            self._organization_gateway,
+            organization_id=organization_id,
+            field_name="Email",
+        )
+        if projection is None:
+            raise ValueError("Organization contact projection was not found")
+        if nucleus_before == contact_email and projection.value == contact_email:
             raise ValueError("Organization contact email already has this value")
         return AgentActionPreparation(
             normalized_arguments={"contact_email": contact_email},
             changes=(
                 AgentActionChange(
-                    field="contact_email",
-                    before=before,
+                    field="nucleus.Email",
+                    before=nucleus_before,
+                    after=contact_email,
+                ),
+                AgentActionChange(
+                    field=projection.field,
+                    before=projection.value,
                     after=contact_email,
                 ),
             ),
-            observed_resource_version=legacy_version,
+            observed_resource_version=projection.version,
             resource_type="organization",
             resource_id=organization_id,
+            resource_preconditions=(
+                AgentActionResourcePrecondition(
+                    resource_type="OrganizationAccount",
+                    resource_id=str(account.organization_account_id),
+                    observed_version=account.version,
+                ),
+                AgentActionResourcePrecondition(
+                    resource_type=projection.resource_type,
+                    resource_id=projection.resource_id,
+                    observed_version=projection.version,
+                ),
+            ),
         )
 
     async def execute(
@@ -134,24 +340,42 @@ class UpdateOrganizationContactEmailBridgeHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
-        updated = await self._gateway.update_contact_email_bridge_if_version(
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
+        target = proposal.arguments["contact_email"]
+        updated = await self._gateway.update_account_field_if_version(
             organization_code=proposal.organization_id,
-            value=proposal.arguments["contact_email"],
-            expected_legacy_version=proposal.observed_resource_version,
-            expected_nucleus_email=proposal.changes[0].before,
+            field_name="Email",
+            value=target,
+            expected_version=nucleus_precondition.observed_version,
         )
         if updated is None:
             raise StaleActionResourceError()
+        projection = await _apply_projection_after_nucleus(
+            self._organization_gateway,
+            proposal=proposal,
+            field_name="Email",
+            value=target,
+        )
+        if projection is None:
+            raise RuntimeError("Contact-email projection requires reconciliation")
         return AgentActionHandlerResult(
             resource_type="organization",
             resource_id=proposal.organization_id,
             before={
-                "contact_email": proposal.changes[0].before,
+                "contact_email": _change_by_field(
+                    proposal,
+                    "nucleus.Email",
+                ).before,
                 "version": proposal.observed_resource_version,
+                "nucleus_version": nucleus_precondition.observed_version,
             },
             after={
-                "contact_email": updated.email,
-                "version": updated.version,
+                "contact_email": target,
+                "version": projection.version,
+                "nucleus_version": updated.version,
             },
         )
 
@@ -161,32 +385,55 @@ class UpdateOrganizationContactEmailBridgeHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
-        state = await self._gateway.get_contact_email_bridge_state(
-            proposal.organization_id
+        target = proposal.arguments["contact_email"]
+        state = await self._gateway.get_account_field_state(
+            proposal.organization_id,
+            "Email",
         )
         if state is None:
             return None
-        account, legacy_version = state
-        value = account.email
-        if value != proposal.arguments["contact_email"]:
+        account, value = state
+        if value != target:
             return None
+        projection = await _apply_projection_after_nucleus(
+            self._organization_gateway,
+            proposal=proposal,
+            field_name="Email",
+            value=target,
+        )
+        if projection is None:
+            return None
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
         return AgentActionHandlerResult(
             resource_type="organization",
             resource_id=proposal.organization_id,
             before={
-                "contact_email": proposal.changes[0].before,
+                "contact_email": _change_by_field(
+                    proposal,
+                    "nucleus.Email",
+                ).before,
                 "version": proposal.observed_resource_version,
+                "nucleus_version": nucleus_precondition.observed_version,
             },
             after={
-                "contact_email": value,
-                "version": legacy_version,
+                "contact_email": target,
+                "version": projection.version,
+                "nucleus_version": account.version,
             },
         )
 
 
 class UpdateNucleusOrganizationAccountFieldHandler:
-    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+    def __init__(
+        self,
+        gateway: NucleusOrganizationGateway,
+        organization_gateway: VersionedOrganizationMutationGateway,
+    ) -> None:
         self._gateway = gateway
+        self._organization_gateway = organization_gateway
 
     async def prepare(
         self,
@@ -203,14 +450,52 @@ class UpdateNucleusOrganizationAccountFieldHandler:
         if state is None:
             raise ValueError("Nucleus organization account was not found")
         account, before = state
-        if before == value:
+        projection = (
+            await _read_projection(
+                self._organization_gateway,
+                organization_id=organization_id,
+                field_name=field_name,
+            )
+            if field_name in _PROJECTED_FIELDS
+            else None
+        )
+        target_projection = _projection_target(field_name, value)
+        if before == value and (
+            projection is None or projection.value == target_projection
+        ):
             raise ValueError("Organization account field already has this value")
+        changes = [
+            AgentActionChange(field=field_name, before=before, after=value)
+        ]
+        preconditions = [
+            AgentActionResourcePrecondition(
+                resource_type="OrganizationAccount",
+                resource_id=str(account.organization_account_id),
+                observed_version=account.version,
+            )
+        ]
+        if projection is not None:
+            changes.append(
+                AgentActionChange(
+                    field=projection.field,
+                    before=projection.value,
+                    after=target_projection,
+                )
+            )
+            preconditions.append(
+                AgentActionResourcePrecondition(
+                    resource_type=projection.resource_type,
+                    resource_id=projection.resource_id,
+                    observed_version=projection.version,
+                )
+            )
         return AgentActionPreparation(
             normalized_arguments={"field_name": field_name, "value": value},
-            changes=(AgentActionChange(field=field_name, before=before, after=value),),
+            changes=tuple(changes),
             observed_resource_version=account.version,
             resource_type="OrganizationAccount",
             resource_id=str(account.organization_account_id),
+            resource_preconditions=tuple(preconditions),
         )
 
     async def execute(
@@ -218,26 +503,44 @@ class UpdateNucleusOrganizationAccountFieldHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
+        field_name = proposal.arguments["field_name"]
+        value = proposal.arguments["value"]
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
         updated = await self._gateway.update_account_field_if_version(
             organization_code=proposal.organization_id,
-            field_name=proposal.arguments["field_name"],
-            value=proposal.arguments["value"],
-            expected_version=proposal.observed_resource_version,
+            field_name=field_name,
+            value=value,
+            expected_version=nucleus_precondition.observed_version,
         )
         if updated is None:
             raise StaleActionResourceError()
+        projection_version = None
+        if field_name in _PROJECTED_FIELDS:
+            projection = await _apply_projection_after_nucleus(
+                self._organization_gateway,
+                proposal=proposal,
+                field_name=field_name,
+                value=value,
+            )
+            if projection is None:
+                raise RuntimeError("Organization projection requires reconciliation")
+            projection_version = projection.version
         return AgentActionHandlerResult(
             resource_type="OrganizationAccount",
             resource_id=str(updated.organization_account_id),
             before={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": proposal.changes[0].before,
-                "version": proposal.observed_resource_version,
+                "version": nucleus_precondition.observed_version,
             },
             after={
-                "field_name": proposal.arguments["field_name"],
-                "value": proposal.changes[0].after,
+                "field_name": field_name,
+                "value": value,
                 "version": updated.version,
+                "projection_version": projection_version,
             },
         )
 
@@ -247,34 +550,57 @@ class UpdateNucleusOrganizationAccountFieldHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
+        field_name = proposal.arguments["field_name"]
+        target = proposal.arguments["value"]
         state = await self._gateway.get_account_field_state(
             proposal.organization_id,
-            proposal.arguments["field_name"],
+            field_name,
         )
         if state is None:
             return None
         account, value = state
-        if value != proposal.arguments["value"]:
+        if value != target:
             return None
+        projection_version = None
+        if field_name in _PROJECTED_FIELDS:
+            projection = await _apply_projection_after_nucleus(
+                self._organization_gateway,
+                proposal=proposal,
+                field_name=field_name,
+                value=target,
+            )
+            if projection is None:
+                return None
+            projection_version = projection.version
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
         return AgentActionHandlerResult(
             resource_type="OrganizationAccount",
             resource_id=str(account.organization_account_id),
             before={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": proposal.changes[0].before,
-                "version": proposal.observed_resource_version,
+                "version": nucleus_precondition.observed_version,
             },
             after={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": value,
                 "version": account.version,
+                "projection_version": projection_version,
             },
         )
 
 
 class ClearNucleusOrganizationAccountFieldHandler:
-    def __init__(self, gateway: NucleusOrganizationGateway) -> None:
+    def __init__(
+        self,
+        gateway: NucleusOrganizationGateway,
+        organization_gateway: VersionedOrganizationMutationGateway,
+    ) -> None:
         self._gateway = gateway
+        self._organization_gateway = organization_gateway
 
     async def prepare(
         self,
@@ -292,14 +618,52 @@ class ClearNucleusOrganizationAccountFieldHandler:
         if state is None:
             raise ValueError("Nucleus organization account was not found")
         account, before = state
-        if before is None:
+        projection = (
+            await _read_projection(
+                self._organization_gateway,
+                organization_id=organization_id,
+                field_name=field_name,
+            )
+            if field_name in _PROJECTED_FIELDS
+            else None
+        )
+        target_projection = _projection_target(field_name, None)
+        if before is None and (
+            projection is None or projection.value == target_projection
+        ):
             raise ValueError("Organization account field is already empty")
+        changes = [
+            AgentActionChange(field=field_name, before=before, after=None)
+        ]
+        preconditions = [
+            AgentActionResourcePrecondition(
+                resource_type="OrganizationAccount",
+                resource_id=str(account.organization_account_id),
+                observed_version=account.version,
+            )
+        ]
+        if projection is not None:
+            changes.append(
+                AgentActionChange(
+                    field=projection.field,
+                    before=projection.value,
+                    after=target_projection,
+                )
+            )
+            preconditions.append(
+                AgentActionResourcePrecondition(
+                    resource_type=projection.resource_type,
+                    resource_id=projection.resource_id,
+                    observed_version=projection.version,
+                )
+            )
         return AgentActionPreparation(
             normalized_arguments={"field_name": field_name},
-            changes=(AgentActionChange(field=field_name, before=before, after=None),),
+            changes=tuple(changes),
             observed_resource_version=account.version,
             resource_type="OrganizationAccount",
             resource_id=str(account.organization_account_id),
+            resource_preconditions=tuple(preconditions),
         )
 
     async def execute(
@@ -307,26 +671,43 @@ class ClearNucleusOrganizationAccountFieldHandler:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult:
+        field_name = proposal.arguments["field_name"]
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
         updated = await self._gateway.update_account_field_if_version(
             organization_code=proposal.organization_id,
-            field_name=proposal.arguments["field_name"],
+            field_name=field_name,
             value=None,
-            expected_version=proposal.observed_resource_version,
+            expected_version=nucleus_precondition.observed_version,
         )
         if updated is None:
             raise StaleActionResourceError()
+        projection_version = None
+        if field_name in _PROJECTED_FIELDS:
+            projection = await _apply_projection_after_nucleus(
+                self._organization_gateway,
+                proposal=proposal,
+                field_name=field_name,
+                value=None,
+            )
+            if projection is None:
+                raise RuntimeError("Organization projection requires reconciliation")
+            projection_version = projection.version
         return AgentActionHandlerResult(
             resource_type="OrganizationAccount",
             resource_id=str(updated.organization_account_id),
             before={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": proposal.changes[0].before,
-                "version": proposal.observed_resource_version,
+                "version": nucleus_precondition.observed_version,
             },
             after={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": None,
                 "version": updated.version,
+                "projection_version": projection_version,
             },
         )
 
@@ -336,31 +717,46 @@ class ClearNucleusOrganizationAccountFieldHandler:
         proposal: AgentActionProposal,
         execution: AgentActionExecutionResult,
     ) -> AgentActionHandlerResult | None:
+        field_name = proposal.arguments["field_name"]
         state = await self._gateway.get_account_field_state(
             proposal.organization_id,
-            proposal.arguments["field_name"],
+            field_name,
         )
         if state is None:
             return None
         account, value = state
         if value is not None:
             return None
+        projection_version = None
+        if field_name in _PROJECTED_FIELDS:
+            projection = await _apply_projection_after_nucleus(
+                self._organization_gateway,
+                proposal=proposal,
+                field_name=field_name,
+                value=None,
+            )
+            if projection is None:
+                return None
+            projection_version = projection.version
+        nucleus_precondition = _find_precondition(
+            proposal,
+            resource_type="OrganizationAccount",
+        )
         return AgentActionHandlerResult(
             resource_type="OrganizationAccount",
             resource_id=str(account.organization_account_id),
             before={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": proposal.changes[0].before,
-                "version": proposal.observed_resource_version,
+                "version": nucleus_precondition.observed_version,
             },
             after={
-                "field_name": proposal.arguments["field_name"],
+                "field_name": field_name,
                 "value": None,
                 "version": account.version,
+                "projection_version": projection_version,
             },
         )
-
-
 class GrantNucleusCategoryAccessHandler:
     def __init__(self, gateway: NucleusOrganizationGateway) -> None:
         self._gateway = gateway
