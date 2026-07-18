@@ -39,7 +39,12 @@
       @if (!state.assistantOverlay()) {
         <app-assistant-resize-handle [width]="state.assistantWidth()" (widthChange)="state.setAssistantWidth($event)" />
       }
-      <app-assistant-panel [overlay]="state.assistantOverlay()" (closePressed)="state.closeAssistant()" (sectionSelected)="navigate($event)" />
+      <app-assistant-panel
+        [overlay]="state.assistantOverlay()"
+        [currentSection]="state.activeSection()"
+        (closePressed)="state.closeAssistant()"
+        (sectionSelected)="navigate($event)"
+      />
     </section>
   }
 </div>

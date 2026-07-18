@@ -55,3 +55,8 @@ The Angular frontend now has semantic light/dark themes, ten accessible UI primi
 ## Phase 3 workplace shell
 
 The Angular app now uses the production-shaped three-panel workplace shell. Phase 2 hardening adds contrast validation, pre-bootstrap theming, ControlValueAccessor form controls, and native action surfaces.
+
+<!-- ANGULAR_FRONTEND_PHASE_4_CONVERSATION -->
+## Phase 4 Ask AI conversation
+
+The responsive Ask AI panel is connected to `WorkplaceAgentApiService.query`. It renders all three current backend response modes, keeps only normalized current-tab history, and never invents streaming or hidden reasoning.

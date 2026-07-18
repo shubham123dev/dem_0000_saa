@@ -1,0 +1,30 @@
+<div class="composer" [class.composer--disabled]="disabled">
+  @if (clarificationActive) {
+    <div class="composer__context">
+      <span><strong>Clarification mode</strong>Your reply will include the original request context.</span>
+      <button type="button" (click)="clarificationCancelled.emit()">Start a new request</button>
+    </div>
+  }
+  <label class="sr-only" for="assistant-composer-input">Ask the workplace agent</label>
+  <textarea
+    #editor
+    id="assistant-composer-input"
+    rows="3"
+    [value]="draft()"
+    [disabled]="disabled || pending"
+    [attr.maxlength]="maxLength"
+    [attr.aria-describedby]="'assistant-composer-help assistant-composer-count'"
+    placeholder="Ask about users, reports, access, settings, approvals, or audit activity…"
+    (input)="update($event)"
+    (keydown)="keydown($event)"
+  ></textarea>
+  <div class="composer__footer">
+    <span id="assistant-composer-help">Enter to send · Shift+Enter for a new line</span>
+    <span id="assistant-composer-count" [class.composer__count--warning]="remaining < 200">{{ remaining }} remaining</span>
+    @if (pending) {
+      <app-ui-button variant="outline" size="small" (pressed)="stopRequested.emit()">Stop waiting</app-ui-button>
+    } @else {
+      <app-ui-button size="small" [disabled]="!canSend" (pressed)="submit()">Send</app-ui-button>
+    }
+  </div>
+</div>

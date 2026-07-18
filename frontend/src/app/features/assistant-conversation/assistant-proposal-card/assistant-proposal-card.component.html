@@ -1,0 +1,29 @@
+<section class="proposal-card" aria-label="Governed action proposal">
+  <div class="proposal-card__heading">
+    <div>
+      <p>Review required</p>
+      <h3>{{ proposal.actionLabel }}</h3>
+    </div>
+    <app-ui-badge [tone]="riskTone()">{{ proposal.riskLevel }} risk</app-ui-badge>
+  </div>
+
+  <div class="proposal-card__meta">
+    <span>Status: {{ proposal.statusLabel }}</span>
+    <span>Expires {{ proposal.expiresAt | date:'medium' }}</span>
+  </div>
+
+  @if (proposal.changes.length) {
+    <div class="proposal-card__changes">
+      @for (change of proposal.changes; track change.fieldLabel + $index) {
+        <div class="proposal-change">
+          <strong>{{ change.fieldLabel }}</strong>
+          <span><small>Current</small>{{ change.beforeSummary }}</span>
+          <span><small>Proposed</small>{{ change.afterSummary }}</span>
+        </div>
+      }
+    </div>
+  }
+
+  <p class="proposal-card__notice">This screen has not executed the change. Review and approval remain separate governed steps.</p>
+  <app-ui-button variant="outline" [fullWidth]="true" (pressed)="reviewRequested.emit()">Review pending approvals</app-ui-button>
+</section>

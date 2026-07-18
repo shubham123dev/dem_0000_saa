@@ -355,3 +355,17 @@ Set-Location ..
 pytest -q
 git diff --check
 ```
+
+<!-- ANGULAR_FRONTEND_PHASE_4_VALIDATION -->
+## Angular frontend Phase 4 validation
+
+```powershell
+python scripts/validate_angular_phase4.py --repo .
+pytest -q tests/test_angular_phase4.py
+Set-Location frontend
+npm run validate:phase4
+npm run e2e
+Set-Location ..
+pytest -q
+git diff --check
+```

@@ -1,0 +1,15 @@
+:host { display: block; }
+.message { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: var(--ui-space-3); padding: var(--ui-space-3) 0; }
+.message__avatar { display: inline-grid; width: 2rem; height: 2rem; place-items: center; border-radius: var(--ui-radius-pill); background: var(--ui-surface-muted); color: var(--ui-text-secondary); font-size: var(--ui-text-xs); font-weight: var(--ui-weight-bold); }
+.message--assistant .message__avatar { background: var(--ui-brand-soft); color: var(--ui-neutral-900); }
+.message--error .message__avatar { background: var(--ui-status-danger-bg); color: var(--ui-status-danger-fg); }
+.message__content { display: grid; min-width: 0; gap: var(--ui-space-2); }
+.message__meta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--ui-space-3); font-size: var(--ui-text-xs); }
+.message__meta time { color: var(--ui-text-muted); }
+.message__text { margin: 0; color: var(--ui-text-primary); line-height: var(--ui-leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; }
+.message__context { margin: 0; color: var(--ui-text-muted); font-size: var(--ui-text-xs); }
+.message__actions { display: grid; justify-items: start; gap: var(--ui-space-2); }
+.message__actions small { color: var(--ui-text-muted); line-height: var(--ui-leading-normal); }
+.clarification-card { display: grid; gap: var(--ui-space-2); border: 1px solid var(--ui-status-warning-fg); border-radius: var(--ui-radius-md); background: var(--ui-status-warning-bg); padding: var(--ui-space-3); }
+.clarification-card p { margin: 0; color: var(--ui-text-secondary); font-size: var(--ui-text-xs); }
+.clarification-card__fields { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }

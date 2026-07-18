@@ -285,3 +285,8 @@ The Angular workspace now includes semantic light/dark themes, ten accessible UI
 ## Angular frontend Phase 3 shell
 
 The design system is hardened for contrast, pre-bootstrap theming, Angular forms, and native interactive semantics. The frontend now presents a responsive workplace shell with searchable navigation, a functional workspace, and a collapsible/resizable Ask AI panel. See `frontend/docs/PHASE_3_SHELL.md`.
+
+<!-- ANGULAR_FRONTEND_PHASE_4_CONVERSATION -->
+## Angular frontend Phase 4 conversation
+
+Ask AI now submits real requests through the existing governed REST agent endpoint and renders read answers, clarification requests, and reviewable action proposals. Current-tab history is normalized and session-scoped; no streaming or server-side conversation persistence is claimed. See `frontend/docs/PHASE_4_CONVERSATION.md`.
