@@ -26,6 +26,7 @@ EXPECTED_PACKAGES = {
 REQUIRED_FILES = (
     "frontend/package.json",
     "frontend/angular.json",
+    "frontend/proxy.conf.json",
     "frontend/tsconfig.json",
     "frontend/tsconfig.app.json",
     "frontend/tsconfig.spec.json",
@@ -85,12 +86,26 @@ def validate(repo: Path) -> None:
     project = angular["projects"]["workplace-agent-ui"]
     if project["architect"]["build"]["builder"] != "@angular/build:application":
         raise RuntimeError("Angular application builder is not configured.")
+    build_options = project["architect"]["build"]["options"]
+    if build_options.get("index") != "src/index.html":
+        raise RuntimeError("Angular index document is not configured.")
+    if build_options.get("outputPath") != "dist/workplace-agent-ui":
+        raise RuntimeError("Angular output path is not deterministic.")
     if project["architect"]["test"]["builder"] != "@angular/build:unit-test":
         raise RuntimeError("Angular Vitest unit-test builder is not configured.")
+    if "--proxy-config proxy.conf.json" not in scripts.get("start", ""):
+        raise RuntimeError("Angular development proxy is not configured in npm start.")
+    proxy = json.loads((frontend / "proxy.conf.json").read_text(encoding="utf-8"))
+    if proxy.get("/api", {}).get("target") != "http://127.0.0.1:8000":
+        raise RuntimeError("FastAPI development proxy target is invalid.")
+    if proxy.get("/api", {}).get("pathRewrite", {}).get("^/api") != "":
+        raise RuntimeError("FastAPI proxy must strip the /api prefix.")
 
     runtime_config = json.loads((frontend / "public/config/app-config.json").read_text(encoding="utf-8"))
     if runtime_config.get("streamTransport") != "rest":
         raise RuntimeError("Phase 1 must not claim that streaming exists.")
+    if runtime_config.get("apiBaseUrl") != "/api":
+        raise RuntimeError("Phase 1 must use the same-origin /api browser boundary.")
 
     api_text = (frontend / "src/app/core/api/workplace-agent-api.service.ts").read_text(encoding="utf-8")
     for token in ROUTE_TOKENS:
@@ -100,6 +115,13 @@ def validate(repo: Path) -> None:
         raise RuntimeError("API facade does not expose all 31 typed operations.")
     if "approve(id:string" not in api_text or "reject(id:string" not in api_text:
         raise RuntimeError("Approval decision methods are missing.")
+    if "agentQueryRequestSchema.parse" not in api_text:
+        raise RuntimeError("Agent query requests are not runtime-validated.")
+    if "agentActionListFiltersSchema.parse" not in api_text:
+        raise RuntimeError("Proposal-list filters are not runtime-validated.")
+    shell = (frontend / "src/app/app.component.html").read_text(encoding="utf-8")
+    if "apiBaseUrl" in shell or "<dt>API</dt>" in shell:
+        raise RuntimeError("The non-technical shell must not expose API infrastructure.")
 
     all_typescript = "\n".join(
         path.read_text(encoding="utf-8")

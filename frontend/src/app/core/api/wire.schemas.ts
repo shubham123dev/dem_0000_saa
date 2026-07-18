@@ -32,6 +32,8 @@ export const nucleusApprovalStatusResponseSchema = z.object({ organization_id:z.
 const entitlementBase = z.object({ access_id:z.number().int(), organization_account_id:z.number().int(), version:z.number().int().positive() });
 export const nucleusEntitlementsResponseSchema = z.object({ organization_id:z.string(), entitlements:z.object({ organization_account_id:z.number().int(), category_access:z.array(entitlementBase.extend({ category_id:z.number().int().nullable(), category_sample_id:z.number().int().nullable(), created_date:nullableDateTime, is_active:z.boolean() }).strict()), company_profile_access:z.array(entitlementBase.extend({ company_id:z.number().int().nullable() }).strict()), drug_access:z.array(entitlementBase.extend({ drug_id:z.number().int().nullable() }).strict()), indication_access:z.array(entitlementBase.extend({ indication_id:z.number().int().nullable() }).strict()), market_access:z.array(entitlementBase.extend({ market_id:z.number().int().nullable(), market_sample_id:z.number().int().nullable() }).strict()), report_access:z.array(entitlementBase.extend({ reports_id:z.number().int().nullable(), sample_id:z.number().int().nullable(), sample_toc_id:z.number().int().nullable(), speciality_id:z.number().int().nullable(), is_executive_access:z.boolean().nullable(), created_date:nullableDateTime, is_active:z.boolean() }).strict()), special_permissions:z.array(z.object({ permission_id:z.number().int(), organization_account_id:z.number().int(), cp_company_master_pharma_id:z.number().int().nullable(), hc_theropetic_category_pharma_id:z.number().int().nullable(), hc_theropetic_category_epidem_id:z.number().int().nullable(), hc_disease_code_epidem_id:z.number().int().nullable(), reports_custom_id:z.number().int().nullable(), importexport_report_id:z.number().int().nullable(), created_date:nullableDateTime, is_active:z.boolean(), version:z.number().int().positive() }).strict()) }).strict(), access:accessSchema, generated_at:isoDateTimeSchema }).strict();
 
+export const agentQueryRequestSchema = z.object({ query:z.string().trim().min(1).max(4000) }).strict();
+
 export const workplaceResourceSearchRequestSchema = z.object({ filters:jsonObject.default({}), sort_by:z.string().max(100).nullable().default(null), descending:z.boolean().default(false), limit:z.number().int().min(1).max(100).default(50), offset:z.number().int().nonnegative().default(0) }).strict();
 export const workplaceResourceTypeListResponseSchema = z.object({ resources:z.array(jsonObject) }).strict();
 export const workplaceResourceSchemaResponseSchema = z.object({ resource:jsonObject }).strict();
@@ -85,6 +87,13 @@ export const agentActionNameSchema = z.enum([
   'restore_workplace_resource_snapshots'
 ]);
 export const actionStatusFilterSchema = z.enum(['pending_approval','approved','rejected','expired','cancelled','stale','executing','succeeded','failed','reconciliation_required']);
+export const agentActionListFiltersSchema = z.object({
+  status: actionStatusFilterSchema.optional(),
+  actionName: agentActionNameSchema.optional(),
+  requestedBy: z.string().trim().min(1).max(200).optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+  cursor: z.string().trim().min(1).max(200).optional()
+}).strict();
 const noArgumentActions = new Set([
   'approve_nucleus_organization_account',
   'activate_nucleus_organization_account',

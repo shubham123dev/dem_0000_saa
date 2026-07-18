@@ -1,5 +1,5 @@
 {
-  "apiBaseUrl": "http://127.0.0.1:8000",
+  "apiBaseUrl": "/api",
   "defaultOrganizationId": "org_sandbox_001",
   "mockUserId": "usr_admin_001",
   "requestTimeoutMs": 30000,

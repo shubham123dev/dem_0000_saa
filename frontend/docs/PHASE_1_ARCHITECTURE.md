@@ -15,3 +15,11 @@ Phase 1 creates a native Angular 21 LTS application using standalone components,
 ## Version choice
 
 Angular 21 LTS is selected instead of Angular 22 because it supports Node 20.19, 22.12, and 24 while retaining modern standalone, zoneless and Vitest defaults. Dependencies are exact-pinned; `npm install` creates the lockfile in the target repository.
+
+
+## Browser-to-backend routing
+
+Runtime configuration uses the same-origin `/api` prefix. The development
+server proxy forwards that prefix to FastAPI and strips it. Deployment must
+provide an equivalent reverse proxy. Components never display the API base URL
+or individual endpoint paths.

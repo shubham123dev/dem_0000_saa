@@ -13,3 +13,10 @@ Phase 1 is complete when:
 - Vitest unit tests and Playwright test discovery pass.
 - the placeholder shell works at desktop and compact widths.
 - no fake stream, fake reasoning, or fake execution behavior exists.
+
+
+- `angular.json` generates `src/index.html` and a deterministic output directory.
+- `npm start` uses the checked-in same-origin FastAPI proxy.
+- Runtime configuration accepts root-relative API bases without weakening HTTP(S) validation.
+- Agent query and proposal-list inputs are validated against backend limits before transport.
+- The visible shell does not expose the API base URL.

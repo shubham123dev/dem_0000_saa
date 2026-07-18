@@ -37,3 +37,11 @@ Thumbs.db
 
 
 .mimocode
+
+# Angular frontend generated output
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/

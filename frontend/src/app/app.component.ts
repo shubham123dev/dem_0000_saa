@@ -11,6 +11,5 @@ import { CurrentUserStore } from './core/auth/current-user.store';
 export class AppComponent {
   private readonly runtimeConfig = inject(APP_RUNTIME_CONFIG);
   readonly currentUser = inject(CurrentUserStore);
-  readonly apiBaseUrl = this.runtimeConfig.apiBaseUrl;
   readonly organizationId = this.runtimeConfig.defaultOrganizationId;
 }
