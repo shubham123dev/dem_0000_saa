@@ -66,6 +66,11 @@ EXPECTED_TOOL_NAMES = {
     "list_organization_reports",
     "check_organization_report_access",
     "get_organization_audit_log",
+    "list_workplace_resource_types",
+    "describe_workplace_resource",
+    "search_workplace_resources",
+    "get_workplace_resource",
+    "count_workplace_resources",
 }
 
 

@@ -42,12 +42,13 @@ class AgentCompletedExecution(BaseModel):
 class AgentQueryCompletion(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    mode: Literal["read", "action_proposal"]
+    mode: Literal["read", "action_proposal", "clarification_required"]
     answer: str
     answer_source: Literal["model", "deterministic"]
     evidence_ids: tuple[str, ...] = ()
     results: tuple[AgentToolResult, ...] = ()
     action_proposal: AgentActionProposal | None = None
+    missing_fields: tuple[str, ...] = ()
 
 
 class AgentAnswerGateway(Protocol):

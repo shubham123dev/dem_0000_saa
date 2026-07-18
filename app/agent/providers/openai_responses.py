@@ -83,6 +83,7 @@ class OpenAIResponsesAgentModelGateway:
                 "name": definition.name,
                 "description": definition.description,
                 "required_argument_names": list(definition.required_argument_names),
+                "metadata": definition.metadata,
             }
             for definition in available_tools
         ]
@@ -113,12 +114,17 @@ class OpenAIResponsesAgentModelGateway:
                                 "Choose exactly one intent. For read intent, return one to five "
                                 "allowlisted read tool calls and no action. For action_proposal "
                                 "intent, return exactly one allowlisted action proposal and no read "
-                                "calls. Set every union argument not required by the selected item "
-                                "to null. Never include organization_id, actor_user_id, permissions, "
-                                "approval decisions, proposal identifiers, execution commands, or "
-                                "idempotency keys. A target user_id or requested membership role may "
-                                "be included only when explicitly required by the selected action. "
-                                "An action proposal is a dry-run request pending explicit backend approval."
+                                "calls. If a required business argument is missing or ambiguous, "
+                                "return clarification_required with one concise question and the "
+                                "missing field names; never guess identifiers or values. Use the "
+                                "backend resource catalog and its canonical routes instead of "
+                                "inventing resource types, fields, tools, or actions. Set every union "
+                                "argument not required by the selected item to null. Never include "
+                                "organization_id, actor_user_id, permissions, approval decisions, "
+                                "proposal identifiers, execution commands, or idempotency keys. A "
+                                "target user_id or requested membership role may be included only "
+                                "when explicitly required by the selected action. An action proposal "
+                                "is a dry-run request pending explicit backend approval."
                             ),
                         }
                     ],
@@ -154,11 +160,17 @@ class OpenAIResponsesAgentModelGateway:
                             "tool_calls",
                             "action_name",
                             "action_arguments",
+                            "clarification_question",
+                            "missing_fields",
                         ],
                         "properties": {
                             "intent": {
                                 "type": "string",
-                                "enum": ["read", "action_proposal"],
+                                "enum": [
+                                    "read",
+                                    "action_proposal",
+                                    "clarification_required",
+                                ],
                             },
                             "tool_calls": {
                                 "type": "array",
@@ -185,6 +197,17 @@ class OpenAIResponsesAgentModelGateway:
                             "action_arguments": self._nullable_argument_schema(
                                 action_argument_names
                             ),
+                            "clarification_question": {
+                                "type": ["string", "null"],
+                                "minLength": 1,
+                                "maxLength": 500,
+                            },
+                            "missing_fields": {
+                                "type": "array",
+                                "maxItems": 8,
+                                "uniqueItems": True,
+                                "items": {"type": "string", "minLength": 1},
+                            },
                         },
                     },
                 }
@@ -321,7 +344,13 @@ class OpenAIResponsesAgentModelGateway:
             raw_tool_calls = payload.get("tool_calls")
             action_name = payload.get("action_name")
             action_arguments = payload.get("action_arguments")
-            if not isinstance(raw_tool_calls, list) or not isinstance(action_arguments, dict):
+            clarification_question = payload.get("clarification_question")
+            missing_fields = payload.get("missing_fields", [])
+            if (
+                not isinstance(raw_tool_calls, list)
+                or not isinstance(action_arguments, dict)
+                or not isinstance(missing_fields, list)
+            ):
                 raise AgentModelResponseInvalidError()
 
             tool_definitions = {item.name: item for item in available_tools}
@@ -330,8 +359,11 @@ class OpenAIResponsesAgentModelGateway:
             all_action_arguments = set(self._argument_names(available_actions))
 
             if intent == "read":
-                if action_name is not None or any(
-                    value is not None for value in action_arguments.values()
+                if (
+                    action_name is not None
+                    or any(value is not None for value in action_arguments.values())
+                    or clarification_question is not None
+                    or missing_fields
                 ):
                     raise AgentModelResponseInvalidError()
                 tool_calls: list[AgentToolCall] = []
@@ -357,7 +389,12 @@ class OpenAIResponsesAgentModelGateway:
                 return AgentPlan(intent="read", tool_calls=tuple(tool_calls))
 
             if intent == "action_proposal":
-                if raw_tool_calls or not isinstance(action_name, str):
+                if (
+                    raw_tool_calls
+                    or not isinstance(action_name, str)
+                    or clarification_question is not None
+                    or missing_fields
+                ):
                     raise AgentModelResponseInvalidError()
                 definition = action_definitions.get(action_name)
                 if definition is None or set(action_arguments) != all_action_arguments:
@@ -371,6 +408,25 @@ class OpenAIResponsesAgentModelGateway:
                             set(definition.required_argument_names),
                         ),
                     ),
+                )
+            if intent == "clarification_required":
+                if (
+                    raw_tool_calls
+                    or action_name is not None
+                    or any(value is not None for value in action_arguments.values())
+                    or not isinstance(clarification_question, str)
+                    or not clarification_question.strip()
+                    or not missing_fields
+                    or not all(
+                        isinstance(item, str) and item.strip()
+                        for item in missing_fields
+                    )
+                ):
+                    raise AgentModelResponseInvalidError()
+                return AgentPlan(
+                    intent="clarification_required",
+                    clarification_question=clarification_question,
+                    missing_fields=tuple(item.strip() for item in missing_fields),
                 )
             raise AgentModelResponseInvalidError()
         except (json.JSONDecodeError, ValidationError, TypeError) as exception:

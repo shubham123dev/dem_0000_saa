@@ -25,12 +25,16 @@ from app.api.dependencies import (
     MockOrganizationApiDep,
     NucleusOrganizationServiceDep,
     OrganizationServiceDep,
+    SessionDep,
     get_user_repository,
 )
 from app.core.config import get_settings
 from app.permissions.permission_service import PermissionService
 from app.repositories.user_repository import UserRepository
 from app.services.agent_preflight_service import AgentAuthorizationPreflightService
+from app.workplace_resources.operation_router import WorkplaceOperationRouter
+from app.workplace_resources.registry import WorkplaceResourceRegistry
+from app.workplace_resources.service import WorkplaceResourceService
 
 
 class UnavailableAgentModelGateway:
@@ -96,6 +100,8 @@ def get_agent_authorization_preflight_service(
 def get_read_only_agent_orchestrator(
     organization_service: OrganizationServiceDep,
     nucleus_organization_service: NucleusOrganizationServiceDep,
+    session: SessionDep,
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     model_gateway: Annotated[AgentModelGateway, Depends(get_agent_model_gateway)],
     tool_registry: Annotated[
         ReadOnlyAgentToolRegistry,
@@ -106,12 +112,19 @@ def get_read_only_agent_orchestrator(
         Depends(get_agent_action_registry),
     ],
 ) -> ReadOnlyAgentOrchestrator:
+    resource_registry = WorkplaceResourceRegistry()
     return ReadOnlyAgentOrchestrator(
         model_gateway=model_gateway,
         tool_registry=tool_registry,
         action_registry=action_registry,
         organization_service=organization_service,
         nucleus_organization_service=nucleus_organization_service,
+        workplace_resource_service=WorkplaceResourceService(
+            session,
+            resource_registry,
+        ),
+        workplace_operation_router=WorkplaceOperationRouter(resource_registry),
+        permission_service=PermissionService(user_repository),
     )
 
 
@@ -146,6 +159,7 @@ def get_read_only_agent_response_service(
         synthesis_service=synthesis_service,
         action_service=action_service,
         preflight_service=preflight_service,
+        operation_router=WorkplaceOperationRouter(),
     )
 
 

@@ -155,7 +155,7 @@ Invoke-RestMethod "$base/workplace/capabilities" |
 Expected current surface:
 
 ```text
-11 read tools
+16 read tools
 38 write actions
 ```
 
@@ -232,3 +232,37 @@ git status --short
 
 After push, the working tree should be clean except for an intentionally
 untracked transport archive outside the repository or excluded by `.gitignore`.
+## Agent-native resource validation
+
+After applying the agent-native resource patch, the migration head remains:
+
+```text
+0014_workplace_resources
+```
+
+Expected capability surface:
+
+```text
+16 read tools
+38 write actions
+38 handlers
+```
+
+Validate natural-language resource discovery and clarification through:
+
+```powershell
+$base = "http://127.0.0.1:8000"
+$org = "org_sandbox_001"
+$admin = @{ "X-Mock-User-Id" = "usr_admin_001" }
+
+Invoke-RestMethod -Method Post -Headers $admin -ContentType "application/json" `
+    -Uri "$base/workplace/organizations/$org/agent/query" `
+    -Body '{"query":"What workplace resources can you manage?"}' |
+    ConvertTo-Json -Depth 40
+
+Invoke-RestMethod "$base/ready/details" | ConvertTo-Json -Depth 30
+```
+
+Readiness must report `read_tools.registered = 16`, exact action/handler parity
+of `38/38`, `agent_resource_tools_registered = true`, and
+`workplace_operation_routes_valid = true`.

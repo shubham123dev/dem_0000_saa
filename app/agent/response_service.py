@@ -5,10 +5,12 @@ import hashlib
 from app.agent.answer_contracts import AgentQueryCompletion
 from app.agent.evidence import AgentEvidenceCompiler
 from app.agent.orchestrator import ReadOnlyAgentOrchestrator
+from app.agent.tool_registry import InvalidAgentToolCallError
 from app.agent.synthesis import AgentAnswerSynthesisService
 from app.domain.models import User
 from app.services.agent_action_service import AgentActionService
 from app.services.agent_preflight_service import AgentAuthorizationPreflightService
+from app.workplace_resources.operation_router import WorkplaceOperationRouter
 
 
 class ReadOnlyAgentResponseService:
@@ -20,12 +22,14 @@ class ReadOnlyAgentResponseService:
         synthesis_service: AgentAnswerSynthesisService,
         action_service: AgentActionService,
         preflight_service: AgentAuthorizationPreflightService,
+        operation_router: WorkplaceOperationRouter | None = None,
     ) -> None:
         self._orchestrator = orchestrator
         self._evidence_compiler = evidence_compiler
         self._synthesis_service = synthesis_service
         self._action_service = action_service
         self._preflight_service = preflight_service
+        self._operation_router = operation_router or WorkplaceOperationRouter()
 
     async def execute(
         self,
@@ -40,6 +44,13 @@ class ReadOnlyAgentResponseService:
             organization_id=organization_id,
         )
         agent_plan = await self._orchestrator.create_plan(user_request=user_request)
+        if agent_plan.intent == "clarification_required":
+            return AgentQueryCompletion(
+                mode="clarification_required",
+                answer=agent_plan.clarification_question or "More information is required.",
+                answer_source="deterministic",
+                missing_fields=agent_plan.missing_fields,
+            )
         if agent_plan.intent == "action_proposal":
             provenance = {
                 "proposal_source": "agent_query",
@@ -50,10 +61,16 @@ class ReadOnlyAgentResponseService:
             }
             if request_id:
                 provenance["request_id"] = request_id
+            try:
+                proposal_input = self._operation_router.normalize_action_proposal(
+                    agent_plan.action_proposal
+                )
+            except ValueError as exception:
+                raise InvalidAgentToolCallError(str(exception)) from exception
             proposal = await self._action_service.propose(
                 user=user,
                 organization_id=organization_id,
-                proposal_input=agent_plan.action_proposal,
+                proposal_input=proposal_input,
                 provenance=provenance,
             )
             return AgentQueryCompletion(

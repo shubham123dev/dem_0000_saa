@@ -7,6 +7,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.agent.action_registry import AgentActionRegistry
+from app.agent.tool_registry import ReadOnlyAgentToolRegistry
+from app.workplace_resources.operation_router import WorkplaceOperationRouter
 from app.api.action_dependencies import AgentActionServiceDep
 from app.api.dependencies import SessionDep
 from app.core.config import get_settings
@@ -112,6 +114,28 @@ async def readiness_details(
         definition.name for definition in AgentActionRegistry().list_definitions()
     }
     handler_names = set(action_service._action_handlers)
+    read_tool_names = {
+        definition.name
+        for definition in ReadOnlyAgentToolRegistry().list_tool_definitions()
+    }
+    try:
+        operation_router = WorkplaceOperationRouter()
+        routed_actions = {
+            route.target_name
+            for route in operation_router.list_routes()
+            if route.route_kind == "action"
+        }
+        routed_tools = {
+            route.target_name
+            for route in operation_router.list_routes()
+            if route.route_kind == "tool"
+        }
+        workplace_operation_routes_valid = (
+            routed_actions.issubset(registry_names)
+            and routed_tools.issubset(read_tool_names)
+        )
+    except RuntimeError:
+        workplace_operation_routes_valid = False
 
     management_permissions = {
         Permission.AGENT_ACTIONS_READ.value,
@@ -193,6 +217,8 @@ async def readiness_details(
             configured_nucleus_admin_permissions == nucleus_admin_permissions
         ),
         "registry_handler_parity": registry_names == handler_names,
+        "agent_resource_tools_registered": len(read_tool_names) == 16,
+        "workplace_operation_routes_valid": workplace_operation_routes_valid,
         "action_management_permissions_seeded": (
             configured_management_permissions == management_permissions
         ),
@@ -207,6 +233,9 @@ async def readiness_details(
         "actions": {
             "registered": len(registry_names),
             "handlers": len(handler_names),
+        },
+        "read_tools": {
+            "registered": len(read_tool_names),
         },
         "audit": {
             "pending_replay": audit_pending,

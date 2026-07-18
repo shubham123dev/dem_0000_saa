@@ -213,3 +213,20 @@ pytest -q
 
 See `APPLY_AND_VALIDATE.md` for the complete Windows PowerShell application,
 smoke-test, commit and cleanup sequence.
+## Agent-native workplace resources
+
+The chat planner now receives a backend-generated, secret-free resource catalog
+and can use five governed resource read tools for discovery, schema inspection,
+search, exact lookup and count. Resource routes are canonical: synchronized
+organization name and contact-email changes remain on their dedicated Nucleus
+handlers, while generic resource writes cannot bypass projection synchronization.
+The planner may return `clarification_required` when a business identifier or
+other required argument is missing instead of guessing.
+
+Current governed surface:
+
+```text
+16 read tools
+38 write actions
+38 handlers
+```

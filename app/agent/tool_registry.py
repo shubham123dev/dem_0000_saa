@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.agent.contracts import AgentToolCall, AgentToolDefinition
+from app.workplace_resources.operation_router import WorkplaceOperationRouter
 
 
 class InvalidAgentToolCallError(ValueError):
@@ -9,6 +10,7 @@ class InvalidAgentToolCallError(ValueError):
 
 class ReadOnlyAgentToolRegistry:
     def __init__(self) -> None:
+        resource_catalog = WorkplaceOperationRouter().public_catalog()
         self._tool_definitions_by_name = {
             "get_organization_overview": AgentToolDefinition(
                 name="get_organization_overview",
@@ -21,7 +23,7 @@ class ReadOnlyAgentToolRegistry:
                 name="get_nucleus_organization_account",
                 description=(
                     "Read the exact-schema Nucleus OrganizationAccount profile, "
-                    "contact and address state. Password is never returned."
+                    "contact and address state. Credentials are never returned."
                 ),
             ),
             "get_nucleus_organization_license": AgentToolDefinition(
@@ -69,6 +71,46 @@ class ReadOnlyAgentToolRegistry:
             "get_organization_audit_log": AgentToolDefinition(
                 name="get_organization_audit_log",
                 description="Read the current organization audit log.",
+            ),
+            "list_workplace_resource_types": AgentToolDefinition(
+                name="list_workplace_resource_types",
+                description=(
+                    "List backend-registered workplace resources, safe fields, "
+                    "available operations and canonical tool/action routes."
+                ),
+                metadata={"resource_catalog": resource_catalog},
+            ),
+            "describe_workplace_resource": AgentToolDefinition(
+                name="describe_workplace_resource",
+                description=(
+                    "Describe one registered resource, its safe fields, allowed "
+                    "operations and canonical routes."
+                ),
+                required_argument_names=("resource_type",),
+            ),
+            "search_workplace_resources": AgentToolDefinition(
+                name="search_workplace_resources",
+                description=(
+                    "Search one generic organization-scoped resource using an "
+                    "allowlisted equality-filter JSON object."
+                ),
+                required_argument_names=("resource_type", "filters_json"),
+            ),
+            "get_workplace_resource": AgentToolDefinition(
+                name="get_workplace_resource",
+                description=(
+                    "Read one generic organization-scoped resource by its "
+                    "backend-visible resource identifier."
+                ),
+                required_argument_names=("resource_type", "resource_id"),
+            ),
+            "count_workplace_resources": AgentToolDefinition(
+                name="count_workplace_resources",
+                description=(
+                    "Count generic organization-scoped resources using an "
+                    "allowlisted equality-filter JSON object."
+                ),
+                required_argument_names=("resource_type", "filters_json"),
             ),
         }
 

@@ -182,3 +182,109 @@ async def test_protected_fields_and_cross_scope_are_rejected(
         headers=admin_headers,
     )
     assert other_scope.status_code in {403, 404, 422}
+async def test_generic_profile_routes_cannot_bypass_projection_handlers(
+    client: AsyncClient,
+    admin_headers: dict[str, str],
+) -> None:
+    for changes in (
+        {"contact_email": "bypass@example.test"},
+        {"display_name": "Bypass Name"},
+    ):
+        response = await client.post(
+            f"{ACTION_BASE}/propose",
+            headers=admin_headers,
+            json={
+                "action_name": "update_workplace_resource",
+                "arguments": {
+                    "resource_type": "organization",
+                    "resource_id": ORGANIZATION_ID,
+                    "changes_json": json.dumps(changes),
+                },
+            },
+        )
+        assert response.status_code == 422
+
+
+async def test_restore_reapplies_exact_snapshot_and_redelete_records_executor(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    admin_headers: dict[str, str],
+) -> None:
+    create = await _propose(
+        client,
+        admin_headers,
+        "create_workplace_resource",
+        {
+            "resource_type": "workplace_setting",
+            "values_json": json.dumps(
+                {
+                    "namespace": "integrity",
+                    "key": "restore_snapshot",
+                    "value": {"enabled": True},
+                    "description": "Reviewed original description",
+                }
+            ),
+        },
+    )
+    await _approve(client, create, admin_headers)
+    created = await _execute(
+        client,
+        create,
+        admin_headers,
+        "create-restore-integrity-001",
+    )
+    setting_id = created["result"]["resource_id"]
+
+    delete = await _propose(
+        client,
+        admin_headers,
+        "delete_workplace_resource",
+        {"resource_type": "workplace_setting", "resource_id": setting_id},
+    )
+    await _approve(client, delete, admin_headers)
+    await _execute(client, delete, admin_headers, "delete-restore-integrity-001")
+
+    setting = await db_session.get(WorkplaceSettingORM, setting_id)
+    assert setting is not None
+    setting.description = "Unreviewed same-version tamper"
+    await db_session.commit()
+
+    restore = await _propose(
+        client,
+        admin_headers,
+        "restore_workplace_resource",
+        {"resource_type": "workplace_setting", "resource_id": setting_id},
+    )
+    restored_changes = {
+        item["field"]: item for item in restore["changes"]
+    }
+    assert restored_changes["description"]["after"] == (
+        "Reviewed original description"
+    )
+    await _approve(client, restore, admin_headers)
+    await _execute(client, restore, admin_headers, "restore-integrity-001")
+    await db_session.refresh(setting)
+    assert setting.is_active is True
+    assert setting.description == "Reviewed original description"
+
+    second_delete = await _propose(
+        client,
+        admin_headers,
+        "delete_workplace_resource",
+        {"resource_type": "workplace_setting", "resource_id": setting_id},
+    )
+    await _approve(client, second_delete, admin_headers)
+    await _execute(
+        client,
+        second_delete,
+        APPROVER_ONE,
+        "delete-restore-integrity-002",
+    )
+    tombstone = await db_session.scalar(
+        select(WorkplaceResourceTombstoneORM).where(
+            WorkplaceResourceTombstoneORM.resource_id == setting_id
+        )
+    )
+    assert tombstone is not None
+    await db_session.refresh(tombstone)
+    assert tombstone.deleted_by_user_id == "usr_approval_admin_001"

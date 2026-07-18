@@ -201,9 +201,12 @@ async def test_detailed_readiness_reports_latest_schema_without_secrets(
     assert body["checks"]["nucleus_admin_permissions_seeded"] is True
     assert body["checks"]["workplace_resource_runtime_supported"] is True
     assert body["checks"]["workplace_resource_permissions_seeded"] is True
+    assert body["checks"]["agent_resource_tools_registered"] is True
+    assert body["checks"]["workplace_operation_routes_valid"] is True
     assert body["checks"]["action_management_permissions_seeded"] is True
     assert body["migration"]["expected"] == "0014_workplace_resources"
     assert body["actions"] == {"registered": 38, "handlers": 38}
+    assert body["read_tools"] == {"registered": 16}
     assert body["limits"]["maximum_page_size"] >= 1
     response_text = response.text.lower()
     assert "api_key" not in response_text

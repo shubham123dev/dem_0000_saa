@@ -440,7 +440,19 @@ class WorkplaceResourceService:
                 )
                 if tombstone is None:
                     raise ValueError("Resource has no active tombstone to restore")
-            changes = {"is_active": target}
+                if tombstone.version != version:
+                    raise ValueError("Resource changed after deletion and cannot be restored")
+                restored_snapshot = dict(tombstone.snapshot_json)
+                changes = {
+                    field.name: restored_snapshot[field.name]
+                    for field in definition.fields
+                    if field.name in restored_snapshot
+                    and field.name not in {"id", "version", "created_at", "updated_at"}
+                    and before.get(field.name) != restored_snapshot[field.name]
+                }
+                changes["is_active"] = True
+            else:
+                changes = {"is_active": target}
         else:
             raise ValueError("Unsupported workplace resource operation")
         after = {**before, **{name: _canonical(value) for name, value in changes.items()}}
@@ -650,6 +662,24 @@ class WorkplaceResourceService:
             raise StaleActionResourceError()
         before = self._serialize(definition, row)
         changes = {change.field: change.after for change in proposal.changes}
+        active_tombstone = None
+        if operation == "restore":
+            active_tombstone = await self._session.scalar(
+                select(WorkplaceResourceTombstoneORM).where(
+                    WorkplaceResourceTombstoneORM.organization_id
+                    == proposal.organization_id,
+                    WorkplaceResourceTombstoneORM.resource_type
+                    == definition.resource_type,
+                    WorkplaceResourceTombstoneORM.resource_id == resource_id,
+                    WorkplaceResourceTombstoneORM.restored_at.is_(None),
+                )
+            )
+            if (
+                active_tombstone is None
+                or active_tombstone.version != proposal.observed_resource_version
+            ):
+                await self._session.rollback()
+                raise StaleActionResourceError()
         plan = await self._record_plan(
             proposal=proposal,
             operation=operation,
@@ -697,22 +727,14 @@ class WorkplaceResourceService:
             else:
                 tombstone.version = proposal.observed_resource_version + 1
                 tombstone.snapshot_json = before
-                tombstone.deleted_by_user_id = proposal.requested_by_user_id
+                tombstone.deleted_by_user_id = executor_user_id
                 tombstone.deleted_at = now
                 tombstone.restored_at = None
         elif operation == "restore":
-            tombstone = await self._session.scalar(
-                select(WorkplaceResourceTombstoneORM).where(
-                    WorkplaceResourceTombstoneORM.organization_id == proposal.organization_id,
-                    WorkplaceResourceTombstoneORM.resource_type == definition.resource_type,
-                    WorkplaceResourceTombstoneORM.resource_id == resource_id,
-                    WorkplaceResourceTombstoneORM.restored_at.is_(None),
-                )
-            )
-            if tombstone is None:
+            if active_tombstone is None:
                 await self._session.rollback()
                 raise StaleActionResourceError()
-            tombstone.restored_at = now
+            active_tombstone.restored_at = now
         self._session.add(
             WorkplaceMutationStepReceiptORM(
                 id=uuid.uuid4().hex,

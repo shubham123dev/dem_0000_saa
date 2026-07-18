@@ -51,21 +51,39 @@ class AgentActionProposalSummary(BaseModel):
 class AgentQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    mode: Literal["read", "action_proposal"] = "read"
+    mode: Literal["read", "action_proposal", "clarification_required"] = "read"
     organization_id: str
     answer: str
     evidence_ids: tuple[str, ...] = ()
     answer_source: Literal["model", "deterministic"]
     results: tuple[AgentToolResultOut, ...] = ()
     action_proposal: AgentActionProposalSummary | None = None
+    missing_fields: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_mode_payload(self) -> AgentQueryResponse:
         if self.mode == "read":
-            if self.action_proposal is not None:
-                raise ValueError("Read responses cannot include action proposals")
-        elif self.action_proposal is None or self.results or self.evidence_ids:
+            if self.action_proposal is not None or self.missing_fields:
+                raise ValueError(
+                    "Read responses cannot include action proposals or missing fields"
+                )
+        elif self.mode == "action_proposal":
+            if (
+                self.action_proposal is None
+                or self.results
+                or self.evidence_ids
+                or self.missing_fields
+            ):
+                raise ValueError(
+                    "Action proposal responses require a proposal and no read evidence"
+                )
+        elif (
+            self.action_proposal is not None
+            or self.results
+            or self.evidence_ids
+            or not self.missing_fields
+        ):
             raise ValueError(
-                "Action proposal responses require a proposal and no read evidence"
+                "Clarification responses require missing fields and no execution payload"
             )
         return self

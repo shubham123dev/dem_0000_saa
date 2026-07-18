@@ -56,6 +56,7 @@ async def query_read_only_agent(
         evidence_ids=completion.evidence_ids,
         answer_source=completion.answer_source,
         action_proposal=proposal_summary,
+        missing_fields=completion.missing_fields,
         results=tuple(
             AgentToolResultOut(
                 tool_name=tool_result.tool_name,

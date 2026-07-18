@@ -34,3 +34,9 @@ def test_setting_has_full_governed_lifecycle() -> None:
     assert definition.field_map["value"].editable is True
     assert definition.field_map["description"].clearable is True
     assert definition.field_map["id"].editable is False
+def test_synchronized_organization_fields_are_not_generic_writes() -> None:
+    definition = WorkplaceResourceRegistry().get("organization")
+    assert definition.field_map["display_name"].editable is False
+    assert definition.field_map["contact_email"].editable is False
+    assert definition.field_map["contact_email"].clearable is False
+    assert definition.field_map["legal_name"].editable is True
