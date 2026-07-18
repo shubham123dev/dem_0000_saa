@@ -1,0 +1,1 @@
+"""Governed workplace resource runtime."""

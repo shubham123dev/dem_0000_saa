@@ -108,6 +108,13 @@ class Permission(str, Enum):
     ORGANIZATION_REPORTS_GRANT = "organization.reports.grant"
     ORGANIZATION_REPORTS_REVOKE = "organization.reports.revoke"
 
+    WORKPLACE_RESOURCES_READ = "workplace.resources.read"
+    WORKPLACE_RESOURCES_CREATE = "workplace.resources.create"
+    WORKPLACE_RESOURCES_UPDATE = "workplace.resources.update"
+    WORKPLACE_RESOURCES_DELETE = "workplace.resources.delete"
+    WORKPLACE_RESOURCES_RESTORE = "workplace.resources.restore"
+    WORKPLACE_RESOURCES_BULK_MANAGE = "workplace.resources.bulk_manage"
+
     AGENT_ACTIONS_READ = "agent.actions.read"
     AGENT_ACTIONS_APPROVE = "agent.actions.approve"
     AGENT_ACTIONS_EXECUTE = "agent.actions.execute"
@@ -122,6 +129,7 @@ _READER_PERMISSIONS: tuple[Permission, ...] = (
     Permission.ORGANIZATION_USERS_READ,
     Permission.ORGANIZATION_SEATS_READ,
     Permission.ORGANIZATION_REPORTS_READ,
+    Permission.WORKPLACE_RESOURCES_READ,
     Permission.AUDIT_READ,
 )
 
@@ -141,6 +149,11 @@ _ADMIN_ONLY_PERMISSIONS: tuple[Permission, ...] = (
     Permission.ORGANIZATION_SEATS_REVOKE,
     Permission.ORGANIZATION_REPORTS_GRANT,
     Permission.ORGANIZATION_REPORTS_REVOKE,
+    Permission.WORKPLACE_RESOURCES_CREATE,
+    Permission.WORKPLACE_RESOURCES_UPDATE,
+    Permission.WORKPLACE_RESOURCES_DELETE,
+    Permission.WORKPLACE_RESOURCES_RESTORE,
+    Permission.WORKPLACE_RESOURCES_BULK_MANAGE,
     Permission.AGENT_ACTIONS_READ,
     Permission.AGENT_ACTIONS_APPROVE,
     Permission.AGENT_ACTIONS_EXECUTE,

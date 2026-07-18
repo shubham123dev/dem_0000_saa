@@ -38,6 +38,8 @@ ERROR_CODES = frozenset(
         "agent_action_reconciliation_required",
         "agent_action_idempotency_conflict",
         "agent_action_rollback_unavailable",
+        "workplace_resource_invalid",
+        "workplace_resource_not_found",
         "internal_error",
     }
 )

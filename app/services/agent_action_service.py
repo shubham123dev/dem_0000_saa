@@ -331,7 +331,7 @@ class AgentActionService:
             )
             raise AgentActionStaleError()
         nucleus_actor_id = None
-        if getattr(handler, "requires_execution_context", False):
+        if getattr(handler, "requires_nucleus_actor", False):
             nucleus_actor_id = (
                 await self._nucleus_actor_mapping_repository.get_nucleus_actor_id(
                     user.id

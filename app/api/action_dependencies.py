@@ -16,6 +16,7 @@ from app.agent.action_handlers import (
     UpdateOrganizationMemberRoleHandler,
 )
 from app.agent.action_registry import AgentActionRegistry
+from app.agent.workplace_resource_handlers import WorkplaceResourceActionHandler
 from app.agent.nucleus_admin_action_handlers import (
     COMPANY_PROFILE_ACCESS,
     DRUG_ACCESS,
@@ -64,6 +65,8 @@ from app.repositories.user_repository import UserRepository
 from app.services.agent_action_reconciliation_service import AgentActionReconciliationService
 from app.services.operational_resource_service import OperationalResourceService
 from app.services.release_ready_agent_action_service import ReleaseReadyAgentActionService
+from app.workplace_resources.registry import WorkplaceResourceRegistry
+from app.workplace_resources.service import WorkplaceResourceService
 
 
 def get_agent_action_repository(session: SessionDep) -> AgentActionRepository:
@@ -82,6 +85,9 @@ def get_agent_action_handlers(
     resources = OperationalResourceService(session)
     nucleus_admin = NucleusAdministrationRepository(session)
     nucleus_projections = NucleusAdministrationProjectionRepository(session)
+    workplace_resources = WorkplaceResourceService(
+        session, WorkplaceResourceRegistry()
+    )
     return {
         "update_organization_contact_email": (
             UpdateOrganizationContactEmailBridgeHandler(
@@ -164,6 +170,14 @@ def get_agent_action_handlers(
         "revoke_nucleus_market_access": RevokeNucleusManagedAccessHandler(
             nucleus_admin, MARKET_ACCESS
         ),
+        "create_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "create"),
+        "update_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "update"),
+        "clear_workplace_resource_fields": WorkplaceResourceActionHandler(workplace_resources, "clear"),
+        "activate_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "activate"),
+        "deactivate_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "deactivate"),
+        "delete_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "delete"),
+        "restore_workplace_resource": WorkplaceResourceActionHandler(workplace_resources, "restore"),
+        "bulk_update_workplace_resources": WorkplaceResourceActionHandler(workplace_resources, "bulk_update"),
         "invite_organization_user": InviteOrganizationUserHandler(resources),
         "activate_organization_membership": ActivateOrganizationMembershipHandler(
             resources

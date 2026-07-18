@@ -16,7 +16,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0013_nucleus_admin"
+EXPECTED_MIGRATION_HEAD = "0014_workplace_resources"
 
 
 @router.get("/health")
@@ -85,6 +85,29 @@ async def readiness_details(
         await session.rollback()
         nucleus_admin_sidecars_supported = False
 
+    try:
+        await session.execute(
+            text(
+                "SELECT id, organization_id, namespace, setting_key, "
+                "version FROM workplace_settings LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT proposal_id, plan_json, status "
+                "FROM workplace_mutation_plans LIMIT 1"
+            )
+        )
+        await session.execute(
+            text(
+                "SELECT resource_type, resource_id, snapshot_hash "
+                "FROM workplace_resource_snapshots LIMIT 1"
+            )
+        )
+        workplace_resource_runtime_supported = True
+    except SQLAlchemyError:
+        await session.rollback()
+        workplace_resource_runtime_supported = False
     registry_names = {
         definition.name for definition in AgentActionRegistry().list_definitions()
     }
@@ -125,6 +148,25 @@ async def readiness_details(
         ).scalars().all()
     )
 
+    workplace_resource_permissions = {
+        Permission.WORKPLACE_RESOURCES_CREATE.value,
+        Permission.WORKPLACE_RESOURCES_UPDATE.value,
+        Permission.WORKPLACE_RESOURCES_DELETE.value,
+        Permission.WORKPLACE_RESOURCES_RESTORE.value,
+        Permission.WORKPLACE_RESOURCES_BULK_MANAGE.value,
+    }
+    configured_workplace_resource_permissions = set(
+        (
+            await session.execute(
+                select(RolePermissionORM.permission).where(
+                    RolePermissionORM.role == Role.SANDBOX_ADMIN.value,
+                    RolePermissionORM.permission.in_(
+                        workplace_resource_permissions
+                    ),
+                )
+            )
+        ).scalars().all()
+    )
     audit_pending = int(
         await session.scalar(
             select(func.count())
@@ -140,6 +182,13 @@ async def readiness_details(
         "migration_at_expected_head": migration_head == EXPECTED_MIGRATION_HEAD,
         "proposal_resource_preconditions_supported": proposal_preconditions_supported,
         "nucleus_admin_sidecars_supported": nucleus_admin_sidecars_supported,
+        "workplace_resource_runtime_supported": (
+            workplace_resource_runtime_supported
+        ),
+        "workplace_resource_permissions_seeded": (
+            configured_workplace_resource_permissions
+            == workplace_resource_permissions
+        ),
         "nucleus_admin_permissions_seeded": (
             configured_nucleus_admin_permissions == nucleus_admin_permissions
         ),

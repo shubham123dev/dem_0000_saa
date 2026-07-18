@@ -9,7 +9,13 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db import action_models, nucleus_admin_models, nucleus_models, orm_models  # noqa: F401
+from app.db import (  # noqa: F401
+    action_models,
+    nucleus_admin_models,
+    nucleus_models,
+    orm_models,
+    workplace_resource_models,
+)
 
 config = context.config
 

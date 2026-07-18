@@ -43,6 +43,14 @@ EXPECTED_ACTIONS = {
     "revoke_organization_seat",
     "grant_organization_report_access",
     "revoke_organization_report_access",
+    "create_workplace_resource",
+    "update_workplace_resource",
+    "clear_workplace_resource_fields",
+    "activate_workplace_resource",
+    "deactivate_workplace_resource",
+    "delete_workplace_resource",
+    "restore_workplace_resource",
+    "bulk_update_workplace_resources",
 }
 
 

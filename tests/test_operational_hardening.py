@@ -199,9 +199,11 @@ async def test_detailed_readiness_reports_latest_schema_without_secrets(
     assert body["checks"]["proposal_resource_preconditions_supported"] is True
     assert body["checks"]["nucleus_admin_sidecars_supported"] is True
     assert body["checks"]["nucleus_admin_permissions_seeded"] is True
+    assert body["checks"]["workplace_resource_runtime_supported"] is True
+    assert body["checks"]["workplace_resource_permissions_seeded"] is True
     assert body["checks"]["action_management_permissions_seeded"] is True
-    assert body["migration"]["expected"] == "0013_nucleus_admin"
-    assert body["actions"] == {"registered": 30, "handlers": 30}
+    assert body["migration"]["expected"] == "0014_workplace_resources"
+    assert body["actions"] == {"registered": 38, "handlers": 38}
     assert body["limits"]["maximum_page_size"] >= 1
     response_text = response.text.lower()
     assert "api_key" not in response_text

@@ -16,6 +16,11 @@ EXPECTED_READ_TOOLS = [
     "list_organization_reports",
     "check_organization_report_access",
     "get_organization_audit_log",
+    "list_workplace_resource_types",
+    "describe_workplace_resource",
+    "search_workplace_resources",
+    "get_workplace_resource",
+    "count_workplace_resources",
 ]
 
 EXPECTED_WRITE_ACTIONS = {
@@ -49,6 +54,14 @@ EXPECTED_WRITE_ACTIONS = {
     "revoke_organization_seat",
     "grant_organization_report_access",
     "revoke_organization_report_access",
+    "create_workplace_resource",
+    "update_workplace_resource",
+    "clear_workplace_resource_fields",
+    "activate_workplace_resource",
+    "deactivate_workplace_resource",
+    "delete_workplace_resource",
+    "restore_workplace_resource",
+    "bulk_update_workplace_resources",
 }
 
 

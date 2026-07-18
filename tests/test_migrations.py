@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0013_nucleus_admin"
+EXPECTED_HEAD = "0014_workplace_resources"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -36,6 +36,11 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "role_permissions",
     "seat_assignments",
     "users",
+    "workplace_settings",
+    "workplace_resource_snapshots",
+    "workplace_mutation_plans",
+    "workplace_mutation_step_receipts",
+    "workplace_resource_tombstones",
 }
 
 

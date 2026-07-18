@@ -10,7 +10,10 @@ async def test_capabilities_publish_backend_owned_approval_policies(
     assert response.status_code == 200
     actions = {item["name"]: item for item in response.json()["write_actions"]}
 
-    assert len(actions) == 30
+    assert len(actions) == 38
+    assert actions["create_workplace_resource"]["minimum_approvals"] == 1
+    assert actions["delete_workplace_resource"]["minimum_approvals"] == 2
+    assert actions["bulk_update_workplace_resources"]["self_approval_allowed"] is False
     assert actions["update_organization_contact_email"]["minimum_approvals"] == 1
     assert actions["update_organization_contact_email"]["self_approval_allowed"] is True
     assert actions["update_nucleus_organization_account_field"]["minimum_approvals"] == 1

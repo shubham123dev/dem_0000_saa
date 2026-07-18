@@ -6,7 +6,7 @@ from app.domain.enums import Permission, ROLE_PERMISSIONS, Role
 
 def test_full_admin_surface_is_registered_with_scoped_policies() -> None:
     definitions = AgentActionRegistry().list_definitions()
-    assert len(definitions) == 30
+    assert len(definitions) == 38
     by_name = {definition.name: definition for definition in definitions}
     assert by_name["update_nucleus_organization_license"].risk_level == "high"
     assert (

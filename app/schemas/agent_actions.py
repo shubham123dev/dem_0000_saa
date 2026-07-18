@@ -53,6 +53,14 @@ AgentActionName = Literal[
     "revoke_nucleus_indication_access",
     "grant_nucleus_market_access",
     "revoke_nucleus_market_access",
+    "create_workplace_resource",
+    "update_workplace_resource",
+    "clear_workplace_resource_fields",
+    "activate_workplace_resource",
+    "deactivate_workplace_resource",
+    "delete_workplace_resource",
+    "restore_workplace_resource",
+    "bulk_update_workplace_resources",
     "invite_organization_user",
     "activate_organization_membership",
     "update_organization_member_role",
@@ -82,7 +90,7 @@ class AgentActionProposalRequest(BaseModel):
                 not normalized_name
                 or len(normalized_name) > 100
                 or not normalized_value
-                or len(normalized_value) > 500
+                or len(normalized_value) > 5000
             ):
                 raise ValueError("Action arguments are invalid")
             normalized[normalized_name] = normalized_value

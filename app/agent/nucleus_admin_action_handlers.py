@@ -129,6 +129,7 @@ def _admin_before(state: NucleusAccountAdminState) -> dict:
 
 class UpdateNucleusOrganizationUsernameHandler:
     requires_execution_context = True
+    requires_nucleus_actor = True
 
     def __init__(self, gateway: NucleusAdministrationGateway) -> None:
         self._gateway = gateway
@@ -184,6 +185,7 @@ class UpdateNucleusOrganizationUsernameHandler:
 
 class UpdateNucleusOrganizationLicenseHandler:
     requires_execution_context = True
+    requires_nucleus_actor = True
 
     def __init__(self, gateway: NucleusAdministrationGateway, projections: NucleusAdministrationProjectionGateway) -> None:
         self._gateway = gateway
@@ -351,6 +353,7 @@ class UpdateNucleusOrganizationLicenseHandler:
 
 class NucleusOrganizationLifecycleHandler:
     requires_execution_context = True
+    requires_nucleus_actor = True
 
     def __init__(self, gateway: NucleusAdministrationGateway, projections: NucleusAdministrationProjectionGateway, mode: str) -> None:
         self._gateway = gateway
@@ -678,6 +681,7 @@ MARKET_ACCESS = NucleusAccessActionSpec(
 
 class GrantNucleusManagedAccessHandler:
     requires_execution_context = True
+    requires_nucleus_actor = True
 
     def __init__(self, gateway: NucleusAdministrationGateway, spec: NucleusAccessActionSpec) -> None:
         self._gateway = gateway
@@ -747,6 +751,7 @@ class GrantNucleusManagedAccessHandler:
 
 class RevokeNucleusManagedAccessHandler:
     requires_execution_context = True
+    requires_nucleus_actor = True
 
     def __init__(self, gateway: NucleusAdministrationGateway, spec: NucleusAccessActionSpec) -> None:
         self._gateway = gateway

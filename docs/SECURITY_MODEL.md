@@ -58,3 +58,15 @@ reconciliation. Company-profile, drug, indication and market revocations use
 reversible tombstones because those supplied tables do not contain
 `IsActive`; exact source rows are never physically deleted by this package.
 Password is outside every action, model, response and audit contract.
+## Governed workplace-resource runtime
+
+Internal resource discovery and mutation are driven by a backend registry
+that maps public business fields to exact ORM attributes, nullability,
+visibility, searchability and mutation policy. The model never supplies a
+physical table name, ORM attribute, organization scope, actor identity,
+permission, approval or SQL expression. Generic execution is limited to
+registered operations, freezes exact resource versions in the approved
+proposal, records immutable snapshots and per-step receipts, and uses
+reversible soft deletion with tombstones. Sensitive or cross-resource
+domains such as Nucleus identity, licensing, lifecycle, seats and access
+continue through dedicated handlers with stronger invariants.

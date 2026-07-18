@@ -173,12 +173,24 @@ provide actor IDs, timestamps, organization scope, permissions, approvals or
 idempotency state. This is the same constrained-control pattern used by
 mature workplace administration agents; it is not arbitrary SQL access and
 it does not advertise production connectivity.
+## Governed workplace-resource runtime
+
+The agent can now discover backend-registered internal resources, inspect
+their safe field schemas, search within organization scope, and propose
+controlled mutations without receiving raw SQL, arbitrary ORM access, table
+names, organization scope, actor identity, approval state, or database
+credentials. Generic writes are initially enabled for a fully governed
+`workplace_setting` resource and safe organization profile fields. Existing
+Nucleus, membership, seat, report-access, license and lifecycle operations
+continue to use their stronger dedicated handlers. Every generic mutation
+persists an immutable snapshot, mutation plan and step receipt; deletion is
+soft and tombstoned, and restoration requires a separately approved action.
 ## Database and seed
 
 Current migration head:
 
 ```text
-0013_nucleus_admin
+0014_workplace_resources
 ```
 
 The deterministic idempotent seed adds one synthetic exact-schema account and

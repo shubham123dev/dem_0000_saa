@@ -181,7 +181,7 @@ async def test_seed_is_idempotent(
         "assignments": 3,
         "reports": 5,
         "access": 3,
-        "role_permissions": 31,
+        "role_permissions": 38,
     }
 
 

@@ -77,7 +77,7 @@ python -m app.db.seed
 Expected migration:
 
 ```text
-0013_nucleus_admin (head)
+0014_workplace_resources (head)
 ```
 
 Both seed runs must complete successfully.
@@ -156,7 +156,7 @@ Expected current surface:
 
 ```text
 11 read tools
-30 write actions
+38 write actions
 ```
 
 ## 9. Smoke-test one controlled action
@@ -216,7 +216,7 @@ Invoke-RestMethod "$base/ready/details" |
 ```
 
 Readiness must report migration `0013_nucleus_admin`, Nucleus administrative
-sidecar support, and registry/handler parity of 30/30.
+sidecar support, and registry/handler parity of 38/38, plus workplace-resource runtime and permission checks.
 
 ## 11. Commit only after validation
 
@@ -225,7 +225,7 @@ Do not add the ZIP archive.
 ```powershell
 git status --short
 git add app alembic tests docs README.md pyproject.toml APPLY_AND_VALIDATE.md FILE_MANIFEST.md SOURCE_STATE_AUDIT.md VALIDATION_REPORT.md
-git commit -m "add Nucleus full administrative control"
+git commit -m "add governed workplace resource runtime"
 git push origin main
 git status --short
 ```
