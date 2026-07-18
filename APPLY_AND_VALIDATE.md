@@ -300,3 +300,28 @@ git diff --check
 Expected contract surface: 31 unique public endpoint method/path pairs and 13
 validated synthetic examples. No Angular runtime or fake streaming behavior is
 introduced in this phase.
+
+<!-- ANGULAR_FRONTEND_PHASE_1_VALIDATION -->
+## Angular frontend Phase 1 validation
+
+```powershell
+python scripts/validate_frontend_contracts.py --repo .
+python scripts/validate_angular_phase1.py --repo .
+pytest -q tests/test_frontend_contracts.py tests/test_angular_phase1_foundation.py
+
+Set-Location frontend
+npm install
+npm run validate:phase1
+npx playwright install chromium
+npm run e2e
+Set-Location ..
+
+pytest -q
+git diff --check
+git status --short
+```
+
+Expected frontend foundation: Angular 21 LTS, strict standalone/zoneless
+bootstrap, 31 typed API operations, functional interceptors, fail-closed runtime
+validation, Vitest tests and Playwright discovery. Streaming remains unavailable
+and must not be simulated.

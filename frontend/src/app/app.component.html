@@ -1,0 +1,24 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<div class="foundation-shell">
+  <header class="foundation-header">
+    <strong>DBMR Workplace Agent</strong>
+    <span>Angular foundation</span>
+  </header>
+  <aside class="foundation-sidebar" aria-label="Primary navigation">
+    <p>Navigation shell reserved for Phase 3.</p>
+  </aside>
+  <main id="main-content" class="foundation-main" tabindex="-1">
+    <h1>Frontend foundation ready</h1>
+    <p>The application is bootstrapped with strict runtime configuration, validated API contracts, and a single backend facade.</p>
+    <dl>
+      <div><dt>API</dt><dd>{{ apiBaseUrl }}</dd></div>
+      <div><dt>Organization</dt><dd>{{ organizationId ?? 'Not configured' }}</dd></div>
+      <div><dt>Sandbox user</dt><dd>{{ currentUser.userId() ?? 'Not configured' }}</dd></div>
+    </dl>
+  </main>
+  <aside class="foundation-assistant" aria-label="Ask AI placeholder">
+    <h2>Ask AI</h2>
+    <p>The interactive panel is implemented in Phase 4.</p>
+  </aside>
+</div>
+<div class="sr-only" aria-live="polite" aria-atomic="true"></div>
