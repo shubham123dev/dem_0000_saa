@@ -104,7 +104,22 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: |
+          set +e
+          node --version > npm-ci-output.txt
+          npm --version >> npm-ci-output.txt
+          npm ci --verbose >> npm-ci-output.txt 2>&1
+          npm_exit_code=$?
+          cat npm-ci-output.txt
+          exit $npm_exit_code
+
+      - name: Upload npm install diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-ci-output
+          path: frontend/npm-ci-output.txt
+          if-no-files-found: warn
 
       - name: Install Playwright Chromium
         working-directory: frontend
