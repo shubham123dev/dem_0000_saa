@@ -16,14 +16,16 @@ test('renders and navigates the complete workplace shell', async ({ page }) => {
 test('opens and closes the responsive Ask AI panel', async ({ page }) => {
   await page.goto('/');
   const panel = page.getByRole('complementary', { name: 'Ask AI' });
-  const close = panel.getByRole('button', { name: 'Close Ask AI' });
-  if (await close.count() === 0) {
-    await page.getByRole('button', { name: /Ask AI/ }).first().click();
+  const toggle = page.getByRole('button', { name: /Ask AI/ }).first();
+  await expect(toggle).toBeVisible();
+  if (!(await panel.isVisible())) {
+    await toggle.click();
   }
+  const close = panel.getByRole('button', { name: 'Close Ask AI' });
   await expect(close).toBeVisible();
   await close.click();
   await expect(panel).toHaveCount(0);
-  await page.getByRole('button', { name: /Ask AI/ }).first().click();
+  await toggle.click();
   await expect(panel).toBeVisible();
 });
 

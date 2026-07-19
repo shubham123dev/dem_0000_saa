@@ -10,6 +10,12 @@ function encode(value: string): string { return encodeURIComponent(value); }
 
 class AgentRunStreamProtocolError extends Error {}
 
+class AgentRunFatalResponse extends Error {
+  constructor(readonly response: Response) {
+    super(`SSE request failed with status ${response.status}`);
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class AgentRunStreamService {
   private readonly config = inject(APP_RUNTIME_CONFIG);
@@ -105,7 +111,12 @@ export class AgentRunStreamService {
       },
       signal
     });
-    if (!response.ok || !response.body) throw new Error(`SSE request failed with status ${response.status}`);
+    if (!response.ok) {
+      throw new AgentRunFatalResponse(response);
+    }
+    if (!response.body) {
+      throw new AgentRunStreamProtocolError('The run stream returned no response body.');
+    }
     const contentType = response.headers.get('content-type') ?? '';
     if (!contentType.toLowerCase().startsWith('text/event-stream')) {
       throw new AgentRunStreamProtocolError('The run stream returned an unexpected content type.');
@@ -166,8 +177,9 @@ export class AgentRunStreamService {
   }
 
   private isFatalResponse(error: unknown): boolean {
-    if (!(error instanceof Response)) return false;
-    return error.status >= 400 && error.status < 500 && ![408, 425, 429].includes(error.status);
+    if (!(error instanceof AgentRunFatalResponse)) return false;
+    const status = error.response.status;
+    return status >= 400 && status < 500 && ![408, 425, 429].includes(status);
   }
 
   private delay(milliseconds: number, signal: AbortSignal): Promise<void> {
