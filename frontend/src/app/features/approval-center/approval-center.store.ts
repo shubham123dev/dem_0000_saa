@@ -51,10 +51,7 @@ export class ApprovalCenterStore {
   });
 
   constructor() {
-    effect(() => {
-      const requested = this.navigation.selectedProposalId();
-      if (requested) this.select(requested);
-    });
+    effect(() => { const requested = this.navigation.selectedProposalId(); if (requested) this.select(requested); });
     this.destroyRef.onDestroy(() => this.stop());
     this.load();
     if (this.recovery?.proposalId) queueMicrotask(() => this.select(this.recovery!.proposalId, true));
@@ -79,105 +76,74 @@ export class ApprovalCenterStore {
     this.navigation.open(id); this.errorState.set(null); this.loadingState.set(true);
     this.detailRequest?.unsubscribe();
     this.detailRequest = this.api.detail(this.organizationId, id).subscribe({
-      next: (proposal) => {
-        this.selectedState.set(proposal);
-        if (recover || ['executing', 'reconciliation_required'].includes(proposal.status)) this.watch(proposal.id);
-        this.persist();
-      },
+      next: (proposal) => { this.selectedState.set(proposal); if (recover || ['executing','reconciliation_required'].includes(proposal.status)) this.watch(proposal.id); this.persist(); },
       error: (error: unknown) => this.fail(error),
       complete: () => this.loadingState.set(false)
     });
   }
 
   closeDetail(): void {
-    const active = this.selected()?.status === 'executing' || this.selected()?.status === 'reconciliation_required';
+    const active = ['executing','reconciliation_required'].includes(this.selected()?.status ?? '');
     if (active) this.persist();
     this.stopStream(); this.selectedState.set(null); this.navigation.clear();
-    if (!active) {
-      this.lastSequence = 0; this.executionKey = null; this.removeRecovery();
-    }
+    if (!active) { this.lastSequence=0; this.executionKey=null; this.removeRecovery(); }
   }
 
-  approve(reason: string | null, confirmation: string | null): void { this.mutate('approve', () => this.api.approve(this.organizationId!, this.requireId(), reason, confirmation)); }
-  reject(reason: string | null): void { this.mutate('reject', () => this.api.reject(this.organizationId!, this.requireId(), reason)); }
-  cancel(reason: string | null): void { this.mutate('cancel', () => this.api.cancel(this.organizationId!, this.requireId(), reason)); }
+  approve(reason: string | null, confirmation: string | null, success?: () => void): void { this.mutate(() => this.api.approve(this.organizationId!, this.requireId(), reason, confirmation), false, success); }
+  reject(reason: string | null, success?: () => void): void { this.mutate(() => this.api.reject(this.organizationId!, this.requireId(), reason), false, success); }
+  cancel(reason: string | null, success?: () => void): void { this.mutate(() => this.api.cancel(this.organizationId!, this.requireId(), reason), false, success); }
 
-  execute(confirmation: string | null): void {
-    if (!this.organizationId) return;
-    const id = this.requireId();
-    this.executionKey ??= globalThis.crypto?.randomUUID?.() ?? `execution-${Date.now()}`;
+  execute(confirmation: string | null, success?: () => void): void {
+    if (!this.organizationId || this.busy()) return;
+    const id=this.requireId(); this.executionKey ??= globalThis.crypto?.randomUUID?.() ?? `execution-${Date.now()}`;
     this.persist(); this.watch(id); this.busyState.set(true); this.errorState.set(null);
     this.commandRequest?.unsubscribe();
-    this.commandRequest = this.api.execute(this.organizationId, id, this.executionKey, confirmation).subscribe({
-      next: (proposal) => this.accept(proposal),
-      error: (error: unknown) => { this.busyState.set(false); this.fail(error); },
-      complete: () => this.busyState.set(false)
+    this.commandRequest=this.api.execute(this.organizationId,id,this.executionKey,confirmation).subscribe({
+      next:(proposal)=>{this.accept(proposal);success?.();},
+      error:(error:unknown)=>{this.busyState.set(false);this.fail(error);this.refreshSelected();},
+      complete:()=>this.busyState.set(false)
     });
   }
 
-  reconcile(): void {
-    const id = this.requireId(); this.watch(id);
-    this.mutate('reconcile', () => this.api.reconcile(this.organizationId!, id));
-  }
+  reconcile(): void { const id=this.requireId();this.watch(id);this.mutate(()=>this.api.reconcile(this.organizationId!,id)); }
+  rollback(reason:string|null,success?:()=>void):void { this.mutate(()=>this.api.createRollback(this.organizationId!,this.requireId(),reason),true,success); }
 
-  rollback(reason: string | null): void {
-    this.mutate('rollback', () => this.api.createRollback(this.organizationId!, this.requireId(), reason), true);
-  }
-
-  private mutate(_name: string, request: () => ReturnType<ActionControlApiService['detail']>, selectReturned = false): void {
-    if (!this.organizationId || this.busy()) return;
-    this.busyState.set(true); this.errorState.set(null);
-    this.commandRequest?.unsubscribe();
-    this.commandRequest = request().subscribe({
-      next: (proposal) => {
-        this.accept(proposal);
-        if (selectReturned) this.select(proposal.id);
-      },
-      error: (error: unknown) => { this.busyState.set(false); this.fail(error); },
-      complete: () => this.busyState.set(false)
+  private mutate(request:()=>ReturnType<ActionControlApiService['detail']>,selectReturned=false,success?:()=>void):void {
+    if(!this.organizationId||this.busy())return;
+    this.busyState.set(true);this.errorState.set(null);this.commandRequest?.unsubscribe();
+    this.commandRequest=request().subscribe({
+      next:(proposal)=>{this.accept(proposal);if(selectReturned)this.select(proposal.id);success?.();},
+      error:(error:unknown)=>{this.busyState.set(false);this.fail(error);this.refreshSelected();},
+      complete:()=>this.busyState.set(false)
     });
   }
 
-  private accept(proposal: ActionProposalControl): void {
+  private accept(proposal:ActionProposalControl):void {
     this.selectedState.set(proposal);
-    this.proposalsState.update((items) => {
-      const next = items.filter((item) => item.id !== proposal.id);
-      return [proposal, ...next];
+    this.proposalsState.update((items)=>{
+      const next=items.filter((item)=>item.id!==proposal.id);
+      return this.status()==='all'||proposal.status===this.status()?[proposal,...next]:next;
     });
-    if (proposal.execution && ['succeeded', 'failed', 'reconciliation_required'].includes(proposal.execution.outcome)) {
-      if (proposal.execution.outcome !== 'reconciliation_required') this.executionKey = null;
-    }
+    if(proposal.execution&&['succeeded','failed','reconciliation_required'].includes(proposal.execution.outcome)&&proposal.execution.outcome!=='reconciliation_required')this.executionKey=null;
     this.persist();
   }
 
-  private watch(proposalId: string): void {
-    if (!this.organizationId) return;
-    this.stopStream(); this.abort = new AbortController();
-    this.streamSubscription = this.stream.watch(this.organizationId, proposalId, this.lastSequence, this.abort.signal).subscribe({
-      next: (update) => {
-        if (update.kind === 'state') { this.connectionState.set(update.state); return; }
-        if (update.event.sequence <= this.lastSequence) return;
-        this.lastSequence = update.event.sequence;
-        this.eventsState.update((events) => [...events.filter((event) => event.sequence !== update.event.sequence), update.event].sort((a,b) => a.sequence-b.sequence).slice(-50));
-        this.persist();
-        if (update.event.terminal) this.refreshSelected();
-      },
-      error: (error: unknown) => { this.connectionState.set('closed'); this.fail(error); },
-      complete: () => this.connectionState.set('closed')
+  private watch(proposalId:string):void {
+    if(!this.organizationId)return;
+    this.stopStream();this.abort=new AbortController();
+    this.streamSubscription=this.stream.watch(this.organizationId,proposalId,this.lastSequence,this.abort.signal).subscribe({
+      next:(update)=>{if(update.kind==='state'){this.connectionState.set(update.state);return;}if(update.event.sequence<=this.lastSequence)return;this.lastSequence=update.event.sequence;this.eventsState.update((events)=>[...events.filter((event)=>event.sequence!==update.event.sequence),update.event].sort((a,b)=>a.sequence-b.sequence).slice(-50));this.persist();if(update.event.terminal)this.refreshSelected();},
+      error:(error:unknown)=>{this.connectionState.set('closed');this.fail(error);},
+      complete:()=>this.connectionState.set('closed')
     });
   }
 
-  private refreshSelected(): void { const id = this.selected()?.id; if (id && this.organizationId) this.api.detail(this.organizationId, id).subscribe({ next: (proposal) => this.accept(proposal) }); }
-  private requireId(): string { const id = this.selected()?.id; if (!id) throw new Error('No action proposal is selected.'); return id; }
-  private fail(error: unknown): void { const normalized = normalizeWorkplaceError(error); this.errorState.set(`${normalized.title}: ${normalized.message}`); this.loadingState.set(false); }
-  private stopStream(): void { this.streamSubscription?.unsubscribe(); this.abort?.abort(); this.streamSubscription=undefined; this.abort=undefined; this.connectionState.set('closed'); }
-  private stop(): void {
-    this.listRequest?.unsubscribe();
-    this.detailRequest?.unsubscribe();
-    this.commandRequest?.unsubscribe();
-    this.stopStream();
-  }
-  private persist(): void { const id=this.selected()?.id; if(!id) return; try { sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ proposalId:id, lastSequence:this.lastSequence, executionKey:this.executionKey } satisfies Recovery)); } catch { /* optional */ } }
-  private readRecovery(): Recovery | null { try { const raw=sessionStorage.getItem(RECOVERY_KEY); if(!raw) return null; const value=JSON.parse(raw) as Partial<Recovery>; return typeof value.proposalId==='string' ? {proposalId:value.proposalId,lastSequence:Number.isInteger(value.lastSequence)?Number(value.lastSequence):0,executionKey:typeof value.executionKey==='string'?value.executionKey:null}:null; } catch { return null; } }
-  private removeRecovery(): void { try { sessionStorage.removeItem(RECOVERY_KEY); } catch { /* optional */ } }
+  private refreshSelected():void { const id=this.selected()?.id;if(id&&this.organizationId)this.api.detail(this.organizationId,id).subscribe({next:(proposal)=>this.accept(proposal)}); }
+  private requireId():string { const id=this.selected()?.id;if(!id)throw new Error('No action proposal is selected.');return id; }
+  private fail(error:unknown):void { const normalized=normalizeWorkplaceError(error);this.errorState.set(`${normalized.title}: ${normalized.message}`);this.loadingState.set(false); }
+  private stopStream():void { this.streamSubscription?.unsubscribe();this.abort?.abort();this.streamSubscription=undefined;this.abort=undefined;this.connectionState.set('closed'); }
+  private stop():void { this.listRequest?.unsubscribe();this.detailRequest?.unsubscribe();this.commandRequest?.unsubscribe();this.stopStream(); }
+  private persist():void { const id=this.selected()?.id;if(!id)return;try{sessionStorage.setItem(RECOVERY_KEY,JSON.stringify({proposalId:id,lastSequence:this.lastSequence,executionKey:this.executionKey} satisfies Recovery));}catch{/* optional */} }
+  private readRecovery():Recovery|null { try{const raw=sessionStorage.getItem(RECOVERY_KEY);if(!raw)return null;const value=JSON.parse(raw) as Partial<Recovery>;return typeof value.proposalId==='string'?{proposalId:value.proposalId,lastSequence:Number.isInteger(value.lastSequence)?Number(value.lastSequence):0,executionKey:typeof value.executionKey==='string'?value.executionKey:null}:null;}catch{return null;} }
+  private removeRecovery():void { try{sessionStorage.removeItem(RECOVERY_KEY);}catch{/* optional */} }
 }
