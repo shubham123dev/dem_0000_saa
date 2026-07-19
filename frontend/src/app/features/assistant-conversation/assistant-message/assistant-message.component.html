@@ -1,45 +1,18 @@
 <article class="message message--{{ message.role }}" [attr.aria-label]="message.role === 'user' ? 'You' : 'Workplace agent'">
   <div class="message__avatar" aria-hidden="true">{{ message.role === 'user' ? 'Y' : message.role === 'error' ? '!' : 'W' }}</div>
   <div class="message__content">
-    <div class="message__meta">
-      <strong>{{ message.role === 'user' ? 'You' : message.role === 'error' ? 'Request error' : message.role === 'notice' ? 'Notice' : 'Workplace agent' }}</strong>
-      <time [attr.datetime]="message.createdAt">{{ message.createdAt | date:'shortTime' }}</time>
-    </div>
-
+    <div class="message__meta"><strong>{{ message.role === 'user' ? 'You' : message.role === 'error' ? 'Request error' : message.role === 'notice' ? 'Notice' : 'Workplace agent' }}</strong><time [attr.datetime]="message.createdAt">{{ message.createdAt | date:'shortTime' }}</time></div>
     @if (message.role === 'error') {
-      <app-ui-callout tone="danger" [title]="message.title ?? 'Request failed'">
-        {{ message.text }}
-      </app-ui-callout>
-      @if (message.retryable && retryAvailable) {
-        <div class="message__actions">
-          <app-ui-button variant="outline" size="small" (pressed)="retryRequested.emit()">Retry manually</app-ui-button>
-          <small>A retry may prepare another proposal. Check Pending approvals if the earlier request may have completed.</small>
-        </div>
-      }
+      <app-ui-callout tone="danger" [title]="message.title ?? 'Request failed'">{{ message.text }}</app-ui-callout>
+      @if (message.retryable && retryAvailable) {<div class="message__actions"><app-ui-button variant="outline" size="small" (pressed)="retryRequested.emit()">Retry manually</app-ui-button><small>A retry may prepare another proposal. Check Pending approvals if the earlier request may have completed.</small></div>}
     } @else if (message.role === 'notice') {
-      <app-ui-callout [tone]="message.tone === 'warning' ? 'warning' : 'info'" [title]="message.title ?? 'Notice'">
-        {{ message.text }}
-      </app-ui-callout>
+      <app-ui-callout [tone]="message.tone === 'warning' ? 'warning' : 'info'" [title]="message.title ?? 'Notice'">{{ message.text }}</app-ui-callout>
     } @else {
       <p class="message__text">{{ message.text }}</p>
-      @if (message.contextNote) { <p class="message__context">{{ message.contextNote }}</p> }
-      @if (message.role === 'assistant' && message.sourceCount > 0) {
-        <app-ui-badge tone="info">{{ sourceLabel() }}</app-ui-badge>
-      }
-      @if (message.mode === 'clarification_required') {
-        <div class="clarification-card">
-          <strong>More detail is required</strong>
-          <p>Your next message will be sent together with the original request.</p>
-          @if (message.missingFields.length) {
-            <div class="clarification-card__fields" aria-label="Missing details">
-              @for (field of message.missingFields; track field) { <app-ui-badge tone="warning">{{ field }}</app-ui-badge> }
-            </div>
-          }
-        </div>
-      }
-      @if (message.proposal; as proposal) {
-        <app-assistant-proposal-card [proposal]="proposal" (reviewRequested)="reviewProposal.emit($event)" />
-      }
+      @if (message.contextNote) {<p class="message__context">{{ message.contextNote }}</p>}
+      @if (message.role === 'assistant' && message.sourceCount > 0) {<app-ui-badge tone="info">{{ sourceLabel() }}</app-ui-badge>}
+      @if (message.mode === 'clarification_required') {<div class="clarification-card"><strong>More detail is required</strong><p>Your next message will be sent together with the original request.</p>@if (message.missingFields.length) {<div class="clarification-card__fields" aria-label="Missing details">@for (field of message.missingFields; track field) {<app-ui-badge tone="warning">{{ field }}</app-ui-badge>}</div>}</div>}
+      @if (message.proposal; as proposal) {<app-assistant-proposal-card [proposal]="proposal" [messageId]="message.id" (reviewRequested)="reviewProposal.emit($event)" />}
     }
   </div>
 </article>
