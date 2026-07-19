@@ -95,3 +95,45 @@ def test_onboarding_command_prefers_onboarding_not_invitation() -> None:
         "action__onboard_organization_user",
         "clarify__request",
     }
+
+
+def test_conversation_follow_up_scopes_from_latest_user_turn() -> None:
+    payload = _gateway()._build_plan_request_payload(
+        user_request=(
+            "Conversation context:\n\n"
+            "User: Show the exact user ID for Demo Analyst.\n\n"
+            "Assistant: The exact user ID for Demo Analyst is "
+            "usr_invited_e32175a743ac6dcbdc35.\n\n"
+            "User: Assign a standard seat to user "
+            "usr_invited_e32175a743ac6dcbdc35.\n\n"
+            "Respond to the latest user message using the earlier messages only as context."
+        ),
+        available_tools=_tools(),
+        available_actions=AgentActionRegistry().list_model_definitions(),
+    )
+
+    assert _function_names(payload) == {
+        "action__assign_organization_seat",
+        "clarify__request",
+    }
+    assert payload["parallel_tool_calls"] is False
+
+
+def test_short_seat_follow_up_never_falls_back_to_read_tools() -> None:
+    payload = _gateway()._build_plan_request_payload(
+        user_request=(
+            "Conversation context:\n\n"
+            "User: What is pending for Demo Analyst?\n\n"
+            "Assistant: Demo Analyst needs an active seat.\n\n"
+            "User: assign an active seat pls\n\n"
+            "Respond to the latest user message using the earlier messages only as context."
+        ),
+        available_tools=_tools(),
+        available_actions=AgentActionRegistry().list_model_definitions(),
+    )
+
+    names = _function_names(payload)
+    assert "action__assign_organization_seat" in names
+    assert "clarify__request" in names
+    assert not any(name.startswith("read__") for name in names)
+    assert payload["parallel_tool_calls"] is False
