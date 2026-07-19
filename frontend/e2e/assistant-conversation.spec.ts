@@ -32,6 +32,8 @@ test('submits a durable run and renders real SSE activity', async ({ page }) => 
   await panel.getByRole('button', { name: 'Send' }).click();
   await expect(panel.getByText('Checking your access')).toBeVisible();
   await expect(panel.getByText('There are twelve active users.')).toBeVisible();
+  await expect(panel.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Working', { exact: true })).toHaveCount(0);
   await expect(panel).not.toContainText('chain-of-thought');
 });
 
