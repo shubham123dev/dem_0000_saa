@@ -13,7 +13,7 @@
       <app-ui-button variant="outline" size="small" (pressed)="reviewRequested.emit(current.id)">Review full details</app-ui-button>
     </div>
     @if (!current.allowed_operations.approve && !current.allowed_operations.reject && current.status === 'pending_approval') {<p class="proposal-card__notice">This proposal requires a decision from another authorized approver.</p>}
-    @if (current.execution; as receipt) {<p class="proposal-card__notice">Execution {{ receipt.outcome.replaceAll('_',' ') }}{{ receipt.completed_at ? ' at ' + (receipt.completed_at | date:'medium') : '' }}.</p>}
+    @if (current.execution; as receipt) {<p class="proposal-card__notice">Execution {{ receipt.outcome.replaceAll('_',' ') }}.</p>@if (receipt.completed_at) {<p class="proposal-card__notice">Completed {{ receipt.completed_at | date:'medium' }}.</p>}}
   } @else {
     <div class="proposal-card__heading"><div><p>Review required</p><h3>{{ proposal.actionLabel }}</h3></div><app-ui-badge [tone]="riskTone()">{{ proposal.riskLevel }} risk</app-ui-badge></div>
     <div class="proposal-card__meta"><span>Status: {{ proposal.statusLabel }}</span><span>Expires {{ proposal.expiresAt | date:'medium' }}</span></div>
