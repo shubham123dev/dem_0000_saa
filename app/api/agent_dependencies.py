@@ -16,7 +16,7 @@ from app.agent.contracts import AgentModelGateway, AgentPlan, AgentToolDefinitio
 from app.agent.errors import AgentModelUnavailableError
 from app.agent.evidence import AgentEvidenceCompiler
 from app.agent.orchestrator import ReadOnlyAgentOrchestrator
-from app.agent.providers.openai_responses import OpenAIResponsesAgentModelGateway
+from app.agent.providers.workplace_openai_responses import OpenAIResponsesAgentModelGateway
 from app.agent.response_service import ReadOnlyAgentResponseService
 from app.agent.synthesis import AgentAnswerSynthesisService
 from app.agent.tool_registry import ReadOnlyAgentToolRegistry
