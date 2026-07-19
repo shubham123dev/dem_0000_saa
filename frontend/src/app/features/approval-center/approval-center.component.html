@@ -20,7 +20,7 @@
           <span>{{ proposal.resource_label }} · {{ proposal.requested_by }}</span>
           <span class="proposal-row__bottom"><span>{{ statusLabel(proposal.status) }}</span><time [attr.datetime]="proposal.created_at">{{ proposal.created_at | date:'mediumDate' }}</time></span>
         </button>
-      } @empty { @if (!store.loading()) { <p class="empty">No proposals match these filters.</p> } }
+      } @empty { @if (!store.loading() && !store.error()) { <p class="empty">No proposals match these filters.</p> } }
     </aside>
 
     @if (store.selected(); as proposal) {
@@ -54,9 +54,9 @@
     <div class="dialog-backdrop" role="presentation" (click)="close()"></div>
     <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" [cdkTrapFocus]="true" [cdkTrapFocusAutoCapture]="true">
       <p class="eyebrow">Explicit confirmation</p><h2 id="confirmation-title">{{ statusLabel(action) }} this proposal?</h2><p>Review the proposed changes again. Approval and execution are separate governed operations.</p>
-      <label><span>Reason</span><textarea rows="3" [value]="reason()" (input)="updateReason($event)" placeholder="Add an audit-ready reason"></textarea></label>
+      <label><span>Reason{{ reasonRequired() ? ' (required)' : ' (optional)' }}</span><textarea rows="3" [value]="reason()" (input)="updateReason($event)" placeholder="Add an audit-ready reason"></textarea></label>
       @if (confirmationWord(); as word) { <label><span>Type {{ word }} to continue</span><input [value]="confirmation()" (input)="updateConfirmation($event)" autocomplete="off"></label> }
-      <div class="dialog-actions"><button type="button" class="secondary-button" (click)="close()">Go back</button><button type="button" class="primary-button" [disabled]="!!confirmationWord() && confirmation() !== confirmationWord()" (click)="confirm()">Confirm {{ action }}</button></div>
+      <div class="dialog-actions"><button type="button" class="secondary-button" [disabled]="store.busy()" (click)="close()">Go back</button><button type="button" class="primary-button" [disabled]="store.busy() || !canConfirm()" (click)="confirm()">{{ store.busy() ? 'Submitting…' : 'Confirm ' + action }}</button></div>
     </section>
   }
 </section>
