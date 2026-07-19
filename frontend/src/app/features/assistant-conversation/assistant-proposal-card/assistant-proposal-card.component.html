@@ -25,5 +25,5 @@
   }
 
   <p class="proposal-card__notice">This screen has not executed the change. Review and approval remain separate governed steps.</p>
-  <app-ui-button variant="outline" [fullWidth]="true" (pressed)="reviewRequested.emit()">Review pending approvals</app-ui-button>
+  <app-ui-button variant="outline" [fullWidth]="true" (pressed)="reviewRequested.emit(proposal.id ?? null)">Review pending approvals</app-ui-button>
 </section>

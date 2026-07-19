@@ -1,0 +1,62 @@
+<section class="approval-center" aria-labelledby="approval-title">
+  <header class="approval-header">
+    <div><p class="eyebrow">Governed operations</p><h1 id="approval-title">Approval Center</h1><p>Review exact changes, make an explicit decision, and follow verified execution activity.</p></div>
+    <button type="button" class="secondary-button" (click)="store.load()">Refresh</button>
+  </header>
+
+  <div class="approval-toolbar">
+    <label><span>Search proposals</span><input type="search" placeholder="Action, resource, requester…" [value]="store.search()" (input)="updateSearch($event)"></label>
+    <label><span>Status</span><select [value]="store.status()" (change)="updateStatus($event)"><option value="all">All statuses</option><option value="pending_approval">Pending approval</option><option value="approved">Approved</option><option value="executing">Executing</option><option value="reconciliation_required">Reconciliation required</option><option value="succeeded">Completed</option><option value="rejected">Rejected</option><option value="stale">Stale</option></select></label>
+  </div>
+
+  @if (store.error()) { <div class="error-banner" role="alert">{{ store.error() }}</div> }
+
+  <div class="approval-layout" [class.approval-layout--detail]="store.selected()">
+    <aside class="proposal-list" aria-label="Action proposals">
+      @if (store.loading() && !store.proposals().length) { <p class="empty">Loading proposals…</p> }
+      @for (proposal of store.filtered(); track proposal.id) {
+        <button type="button" class="proposal-row" [class.proposal-row--active]="store.selected()?.id === proposal.id" (click)="store.select(proposal.id)">
+          <span class="proposal-row__top"><strong>{{ proposal.action_label }}</strong><span class="risk risk--{{ proposal.risk_level }}">{{ proposal.risk_level }}</span></span>
+          <span>{{ proposal.resource_label }} · {{ proposal.requested_by }}</span>
+          <span class="proposal-row__bottom"><span>{{ statusLabel(proposal.status) }}</span><time [attr.datetime]="proposal.created_at">{{ proposal.created_at | date:'mediumDate' }}</time></span>
+        </button>
+      } @empty { @if (!store.loading()) { <p class="empty">No proposals match these filters.</p> } }
+    </aside>
+
+    @if (store.selected(); as proposal) {
+      <article class="proposal-detail" aria-labelledby="proposal-detail-title">
+        <div class="detail-heading"><div><p class="eyebrow">{{ proposal.resource_label }}</p><h2 id="proposal-detail-title">{{ proposal.action_label }}</h2></div><button type="button" class="icon-button" aria-label="Close proposal detail" (click)="store.closeDetail()">×</button></div>
+        <div class="status-strip"><span class="status-pill">{{ statusLabel(proposal.status) }}</span><span class="risk risk--{{ proposal.risk_level }}">{{ proposal.risk_level }} risk</span><span>{{ proposal.approval_progress.approved }}/{{ proposal.approval_progress.required }} approvals</span></div>
+
+        @if (proposal.status === 'stale') { <div class="warning-card"><strong>This proposal is stale.</strong><span>The resource changed after review. Prepare and approve a new proposal before execution.</span></div> }
+        @if (proposal.status === 'reconciliation_required') { <div class="danger-card"><strong>Reconciliation required.</strong><span>The backend cannot yet prove the outcome. Do not repeat the action until the current resource state is checked.</span></div> }
+
+        <section class="detail-section"><h3>Proposed changes</h3><div class="change-table">@for (change of proposal.changes; track change.field) {<div class="change-row"><strong>{{ change.field }}</strong><span><small>Current</small>{{ change.before }}</span><span><small>Proposed</small>{{ change.after }}</span></div>}</div></section>
+        <section class="detail-section governance-grid"><div><small>Requested by</small><strong>{{ proposal.requested_by }}</strong></div><div><small>Created</small><strong>{{ proposal.created_at | date:'medium' }}</strong></div><div><small>Expires</small><strong>{{ proposal.expires_at | date:'medium' }}</strong></div><div><small>Approval policy</small><strong>{{ proposal.self_approval_allowed ? 'Self-approval allowed' : 'Independent approval required' }}</strong></div></section>
+
+        @if (store.events().length) { <section class="detail-section"><h3>Execution activity <span class="live-state">{{ store.connection() }}</span></h3><ol class="timeline">@for (event of store.events(); track event.sequence) {<li [class.timeline__terminal]="event.terminal"><span aria-hidden="true">{{ event.terminal ? '✓' : '●' }}</span><div><strong>{{ event.message }}</strong><small>{{ event.occurred_at | date:'mediumTime' }}</small></div></li>}</ol></section> }
+
+        @if (proposal.execution; as receipt) { <section class="receipt"><div><p class="eyebrow">Execution receipt</p><h3>{{ statusLabel(receipt.outcome) }}</h3></div><dl><div><dt>Executed by</dt><dd>{{ receipt.executed_by }}</dd></div><div><dt>Started</dt><dd>{{ receipt.started_at | date:'medium' }}</dd></div><div><dt>Completed</dt><dd>{{ receipt.completed_at ? (receipt.completed_at | date:'medium') : 'In progress' }}</dd></div></dl>@if (receipt.before || receipt.after) {<div class="receipt-diff"><pre>{{ receipt.before | json }}</pre><span>→</span><pre>{{ receipt.after | json }}</pre></div>}</section> }
+
+        <footer class="detail-actions">
+          @if (proposal.allowed_operations.reject) { <button type="button" class="secondary-button" [disabled]="store.busy()" (click)="open('reject')">Reject</button> }
+          @if (proposal.allowed_operations.cancel) { <button type="button" class="secondary-button" [disabled]="store.busy()" (click)="open('cancel')">Cancel proposal</button> }
+          @if (proposal.allowed_operations.approve) { <button type="button" class="primary-button" [disabled]="store.busy()" (click)="open('approve')">Approve</button> }
+          @if (proposal.allowed_operations.execute) { <button type="button" class="primary-button" [disabled]="store.busy()" (click)="open('execute')">Execute approved change</button> }
+          @if (proposal.allowed_operations.reconcile) { <button type="button" class="danger-button" [disabled]="store.busy()" (click)="store.reconcile()">Reconcile state</button> }
+          @if (proposal.allowed_operations.create_rollback) { <button type="button" class="secondary-button" [disabled]="store.busy()" (click)="open('rollback')">Create rollback proposal</button> }
+        </footer>
+      </article>
+    } @else { <div class="detail-empty"><span aria-hidden="true">✓</span><h2>Select a proposal</h2><p>Review the exact diff, governance policy, execution state, and receipt.</p></div> }
+  </div>
+
+  @if (dialog(); as action) {
+    <div class="dialog-backdrop" role="presentation" (click)="close()"></div>
+    <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" [cdkTrapFocus]="true" [cdkTrapFocusAutoCapture]="true">
+      <p class="eyebrow">Explicit confirmation</p><h2 id="confirmation-title">{{ statusLabel(action) }} this proposal?</h2><p>Review the proposed changes again. Approval and execution are separate governed operations.</p>
+      <label><span>Reason</span><textarea rows="3" [value]="reason()" (input)="updateReason($event)" placeholder="Add an audit-ready reason"></textarea></label>
+      @if (confirmationWord(); as word) { <label><span>Type {{ word }} to continue</span><input [value]="confirmation()" (input)="updateConfirmation($event)" autocomplete="off"></label> }
+      <div class="dialog-actions"><button type="button" class="secondary-button" (click)="close()">Go back</button><button type="button" class="primary-button" [disabled]="!!confirmationWord() && confirmation() !== confirmationWord()" (click)="confirm()">Confirm {{ action }}</button></div>
+    </section>
+  }
+</section>

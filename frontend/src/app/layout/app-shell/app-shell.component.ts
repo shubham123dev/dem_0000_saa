@@ -7,10 +7,12 @@ import { navigationItem, type ShellSectionId } from '../shell/shell-navigation.m
 import { ShellStateService } from '../shell/shell-state.service';
 import { WorkspaceDashboardComponent } from '../workspace/workspace-dashboard.component';
 
+import { ApprovalCenterComponent } from '../../features/approval-center/approval-center.component';
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [AssistantPanelComponent, AssistantResizeHandleComponent, GlobalHeaderComponent, PrimarySidebarComponent, WorkspaceDashboardComponent],
+  imports: [
+    ApprovalCenterComponent,AssistantPanelComponent, AssistantResizeHandleComponent, GlobalHeaderComponent, PrimarySidebarComponent, WorkspaceDashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss'

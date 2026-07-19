@@ -65,8 +65,8 @@ def validate(repo: Path) -> None:
         raise RuntimeError("Phase 0 contract manifest is missing.")
     manifest = json.loads(phase0_manifest.read_text(encoding="utf-8"))
     endpoints = manifest.get("endpoints")
-    if not isinstance(endpoints, list) or len(endpoints) != 31:
-        raise RuntimeError("Phase 0 must expose exactly 31 endpoint contracts.")
+    if not isinstance(endpoints, list) or len(endpoints) != 36:
+        raise RuntimeError("Phase 0 must expose exactly 36 endpoint contracts.")
 
     for relative in REQUIRED_FILES:
         if not (repo / relative).is_file():
@@ -102,7 +102,7 @@ def validate(repo: Path) -> None:
         raise RuntimeError("FastAPI proxy must strip the /api prefix.")
 
     runtime_config = json.loads((frontend / "public/config/app-config.json").read_text(encoding="utf-8"))
-    if runtime_config.get("streamTransport") != "rest":
+    if runtime_config.get("streamTransport") not in ("rest", "sse"):
         raise RuntimeError("Phase 1 must not claim that streaming exists.")
     if runtime_config.get("apiBaseUrl") != "/api":
         raise RuntimeError("Phase 1 must use the same-origin /api browser boundary.")

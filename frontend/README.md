@@ -64,3 +64,8 @@ The responsive Ask AI panel is connected to `WorkplaceAgentApiService.query`. It
 ## Phase 5 durable runs and live activity
 
 Ask AI now uses backend-authoritative conversations and resumable authenticated SSE. The browser keeps only recovery identifiers and a replay cursor; `/agent/query` remains the explicit REST fallback.
+
+<!-- PHASE_6_GOVERNED_ACTION_CONTROL_PLANE -->
+## Phase 6 Approval Center
+
+Pending approvals now open a responsive governed control plane backed by real proposal projections, backend-derived operations, explicit execution, resumable execution SSE, safe receipts, reconciliation, and governed rollback proposals.

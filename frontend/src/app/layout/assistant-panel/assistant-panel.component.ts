@@ -7,6 +7,7 @@ import { AssistantMessageComponent } from '../../features/assistant-conversation
 import { UiBadgeComponent, UiButtonComponent, UiCalloutComponent } from '../../shared/ui';
 import type { ShellSectionId } from '../shell/shell-navigation.model';
 
+import { ActionNavigationStore } from '../../core/action-control/action-navigation.store';
 interface StarterPrompt { readonly label: string; readonly query: string; }
 const DEFAULT_PROMPTS: readonly StarterPrompt[] = [
   { label:'Summarize this workspace', query:'Give me a concise overview of this organization and its current workspace status.' },
@@ -35,13 +36,14 @@ export class AssistantPanelComponent {
   @Output() readonly closePressed=new EventEmitter<void>();
   @Output() readonly sectionSelected=new EventEmitter<ShellSectionId>();
   readonly conversation=inject(AgentConversationStore);
+  private readonly actionNavigation=inject(ActionNavigationStore);
   readonly greeting=this.createGreeting();
   constructor(){effect(()=>{this.conversation.messages();this.conversation.activities();this.conversation.pending();queueMicrotask(()=>this.scrollToLatest());});}
   prompts():readonly StarterPrompt[]{return SECTION_PROMPTS[this.currentSection]??DEFAULT_PROMPTS;}
   submit(text:string):void{this.conversation.submit(text);}
   submitPrompt(prompt:StarterPrompt):void{this.conversation.submit(prompt.query);}
   startNewConversation():void{this.conversation.clearConversation();queueMicrotask(()=>this.composer?.focus());}
-  reviewProposal():void{this.sectionSelected.emit('approvals');}
+  reviewProposal(proposalId:string|null):void{this.actionNavigation.open(proposalId);this.sectionSelected.emit('approvals');}
   private scrollToLatest():void{const element=this.transcript?.nativeElement;if(element)element.scrollTop=element.scrollHeight;}
   private createGreeting():string{const hour=new Date().getHours();return hour<12?'Good morning.':hour<18?'Good afternoon.':'Good evening.';}
 }

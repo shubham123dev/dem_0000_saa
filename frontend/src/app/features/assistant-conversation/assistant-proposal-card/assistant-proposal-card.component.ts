@@ -13,7 +13,7 @@ import type { ConversationProposal } from '../agent-conversation.model';
 })
 export class AssistantProposalCardComponent {
   @Input({ required: true }) proposal!: ConversationProposal;
-  @Output() readonly reviewRequested = new EventEmitter<void>();
+  @Output() readonly reviewRequested = new EventEmitter<string | null>();
 
   riskTone(): 'info' | 'warning' | 'danger' {
     return this.proposal.riskLevel === 'high' ? 'danger' : this.proposal.riskLevel === 'medium' ? 'warning' : 'info';

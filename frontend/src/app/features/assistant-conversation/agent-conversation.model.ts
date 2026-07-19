@@ -7,6 +7,7 @@ export const conversationProposalChangeSchema = z.object({
 }).strict();
 
 export const conversationProposalSchema = z.object({
+  id: z.string().min(1).nullable().optional(),
   actionLabel: z.string().min(1).max(200),
   riskLevel: z.enum(['low', 'medium', 'high']),
   statusLabel: z.string().min(1).max(120),

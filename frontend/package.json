@@ -22,8 +22,9 @@
     "validate:phase2": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
     "validate:phase3": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
     "validate:phase4": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
-    "validate:full": "npm run validate:phase5 && npm run e2e",
-    "validate:phase5": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list"
+    "validate:full": "npm run validate:phase6 && npm run e2e",
+    "validate:phase5": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list",
+    "validate:phase6": "npm run quality:boundaries && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e:list"
   },
   "dependencies": {
     "@angular/cdk": "21.2.14",

@@ -28,7 +28,11 @@
   />
 
   <main id="main-content" class="shell-workspace" tabindex="-1">
-    <app-workspace-dashboard [section]="state.activeSection()" (navigate)="navigate($event)" (askAi)="askAboutCurrentSection()" />
+    @if (state.activeSection() === 'approvals') {
+      <app-approval-center />
+    } @else {
+      <app-workspace-dashboard [section]="state.activeSection()" (navigate)="navigate($event)" (askAi)="askAboutCurrentSection()" />
+    }
   </main>
 
   @if (state.assistantOpen()) {

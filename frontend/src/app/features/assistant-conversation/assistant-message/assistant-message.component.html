@@ -38,7 +38,7 @@
         </div>
       }
       @if (message.proposal; as proposal) {
-        <app-assistant-proposal-card [proposal]="proposal" (reviewRequested)="reviewProposal.emit()" />
+        <app-assistant-proposal-card [proposal]="proposal" (reviewRequested)="reviewProposal.emit($event)" />
       }
     }
   </div>

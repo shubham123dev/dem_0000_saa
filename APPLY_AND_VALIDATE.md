@@ -382,3 +382,16 @@ npm run e2e
 Set-Location ..
 git diff --check
 ```
+
+<!-- PHASE_6_GOVERNED_ACTION_CONTROL_PLANE -->
+## Phase 6 validation
+
+```powershell
+python scripts/validate_phase6_action_control_plane.py --repo .
+pytest -q
+Set-Location frontend
+npm run validate:phase6
+npm run e2e
+Set-Location ..
+git diff --check
+```

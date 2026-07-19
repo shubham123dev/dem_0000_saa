@@ -33,6 +33,7 @@ function mapProposalValue(value: unknown): ConversationProposal | null {
   ) return null;
   const changes = Array.isArray(proposal['changes']) ? proposal['changes'] : [];
   return {
+    id: typeof proposal['id'] === 'string' ? proposal['id'] : null,
     actionLabel: humanizeIdentifier(proposal['action_name']),
     riskLevel: proposal['risk_level'] as 'low' | 'medium' | 'high',
     statusLabel: humanizeIdentifier(typeof proposal['status'] === 'string' ? proposal['status'] : 'pending_approval'),

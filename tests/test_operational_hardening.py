@@ -207,7 +207,7 @@ async def test_detailed_readiness_reports_latest_schema_without_secrets(
     assert body["checks"]["agent_resource_tools_registered"] is True
     assert body["checks"]["workplace_operation_routes_valid"] is True
     assert body["checks"]["action_management_permissions_seeded"] is True
-    assert body["migration"]["expected"] == "0015_workplace_workflows"
+    assert body["migration"]["expected"] == "0016_agent_runs_events"
     assert body["actions"] == {"registered": 43, "handlers": 43}
     assert body["read_tools"] == {"registered": 20}
     assert body["limits"]["maximum_page_size"] >= 1

@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0016_agent_runs_events"
+EXPECTED_HEAD = "0017_action_control_plane"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -45,6 +45,7 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "workplace_mutation_plans",
     "workplace_mutation_step_receipts",
     "workplace_resource_tombstones",
+    "agent_action_execution_events",
 }
 
 

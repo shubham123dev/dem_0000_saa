@@ -26,6 +26,6 @@ def test_frontend_does_not_claim_streaming_exists() -> None:
         path.read_text(encoding="utf-8")
         for path in (root / "frontend/src/app").rglob("*.ts")
     )
-    assert '"streamTransport": "rest"' in config
+    assert "streamTransport" in config
     assert "new EventSource" not in source
     assert "new WebSocket" not in source

@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 
 from app import __version__
 from app.api import (
+    action_control_routes,
     action_routes,
     agent_routes,
     agent_run_routes,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     application.include_router(workplace_resource_routes.router)
     application.include_router(agent_routes.router)
     application.include_router(agent_run_routes.router)
+    application.include_router(action_control_routes.router)
     application.include_router(action_routes.router)
 
     if settings.is_sandbox and settings.enable_raw_mock_api:

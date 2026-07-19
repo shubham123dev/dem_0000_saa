@@ -294,3 +294,8 @@ Ask AI now submits real requests through the existing governed REST agent endpoi
 ## Durable agent runs and resumable SSE
 
 The workplace agent now persists conversations, normalized messages, idempotent runs, leases, and safe operational events. Angular submits commands over REST and follows/replays real backend activity through authenticated fetch-based SSE. See `docs/AGENT_RUNS_SSE.md`.
+
+<!-- PHASE_6_GOVERNED_ACTION_CONTROL_PLANE -->
+## Governed action control plane
+
+The Angular Approval Center now exposes the backend-governed proposal lifecycle: safe previews, explicit approval or rejection, separate idempotent execution, durable execution activity over SSE, reconciliation, receipts, and rollback proposals. Cloudflare is a product-behavior reference only; no Cloudflare or GitHub integration is introduced.

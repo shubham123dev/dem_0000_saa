@@ -16,7 +16,7 @@ export class AssistantMessageComponent {
   @Input({ required: true }) message!: ConversationMessage;
   @Input() retryAvailable = false;
   @Output() readonly retryRequested = new EventEmitter<void>();
-  @Output() readonly reviewProposal = new EventEmitter<void>();
+  @Output() readonly reviewProposal = new EventEmitter<string | null>();
 
   sourceLabel(): string {
     return `${this.message.sourceCount} verified ${this.message.sourceCount === 1 ? 'source' : 'sources'}`;
