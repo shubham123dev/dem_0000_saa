@@ -1,46 +1,32 @@
 <section class="proposal-card" aria-label="Governed action proposal">
   @if (control.proposal(); as current) {
-    <div class="proposal-card__heading">
-      <div><p>Review required</p><h3>{{ current.action_label }}</h3></div>
-      <app-ui-badge [tone]="riskTone()">{{ current.risk_level }} risk</app-ui-badge>
-    </div>
-    <div class="proposal-card__meta">
-      <span>Status: {{ current.status.replaceAll('_', ' ') }}</span>
-      <span>Expires {{ current.expires_at | date:'medium' }}</span>
-      <span>{{ current.approval_progress.approved }}/{{ current.approval_progress.required }} approvals</span>
-    </div>
-    @if (current.changes.length) {
-      <div class="proposal-card__changes">
-        @for (change of current.changes; track change.field + $index) {
-          <div class="proposal-change"><strong>{{ change.field }}</strong><span><small>Current</small>{{ change.before }}</span><span><small>Proposed</small>{{ change.after }}</span></div>
-        }
-      </div>
-    }
-    @if (control.error()) { <p class="proposal-card__error" role="alert">{{ control.error() }}</p> }
-    <p class="proposal-card__notice">Approval and execution are separate governed steps. Approving this proposal does not create the user.</p>
+    <div class="proposal-card__heading"><div><p>Review required</p><h3>{{ current.action_label }}</h3></div><app-ui-badge [tone]="riskTone()">{{ current.risk_level }} risk</app-ui-badge></div>
+    <div class="proposal-card__meta"><span>Status: {{ current.status.replaceAll('_',' ') }}</span><span>Expires {{ current.expires_at | date:'medium' }}</span><span>{{ current.approval_progress.approved }}/{{ current.approval_progress.required }} approvals</span></div>
+    @if (current.changes.length) {<div class="proposal-card__changes">@for (change of current.changes; track change.field + $index) {<div class="proposal-change"><strong>{{ change.field }}</strong><span><small>Current</small>{{ change.before }}</span><span><small>Proposed</small>{{ change.after }}</span></div>}</div>}
+    @if (control.error()) {<p class="proposal-card__error" role="alert">{{ control.error() }}</p>}
+    <p class="proposal-card__notice">Approval and execution are separate governed steps. Approval alone does not apply the change.</p>
     <div class="proposal-card__actions">
-      @if (current.allowed_operations.reject) { <app-ui-button variant="outline" size="small" [disabled]="control.busy()" (pressed)="openDecision('reject')">Reject</app-ui-button> }
-      @if (current.allowed_operations.approve) { <app-ui-button size="small" [disabled]="control.busy()" (pressed)="openDecision('approve')">Approve</app-ui-button> }
+      @if (current.allowed_operations.reject) {<app-ui-button variant="outline" size="small" [disabled]="control.busy()" (pressed)="openDecision('reject')">Reject</app-ui-button>}
+      @if (current.allowed_operations.approve) {<app-ui-button size="small" [disabled]="control.busy()" (pressed)="openDecision('approve')">Approve</app-ui-button>}
+      @if (current.allowed_operations.cancel) {<app-ui-button variant="outline" size="small" [disabled]="control.busy()" (pressed)="openDecision('cancel')">Cancel proposal</app-ui-button>}
+      @if (current.allowed_operations.execute) {<app-ui-button size="small" [disabled]="control.busy()" (pressed)="openDecision('execute')">Execute approved change</app-ui-button>}
       <app-ui-button variant="outline" size="small" (pressed)="reviewRequested.emit(current.id)">Review full details</app-ui-button>
     </div>
-    @if (!current.allowed_operations.approve && !current.allowed_operations.reject && current.status === 'pending_approval') {
-      <p class="proposal-card__notice">This proposal requires a decision from another authorized approver.</p>
-    }
+    @if (!current.allowed_operations.approve && !current.allowed_operations.reject && current.status === 'pending_approval') {<p class="proposal-card__notice">This proposal requires a decision from another authorized approver.</p>}
+    @if (current.execution; as receipt) {<p class="proposal-card__notice">Execution {{ receipt.outcome.replaceAll('_',' ') }}{{ receipt.completed_at ? ' at ' + (receipt.completed_at | date:'medium') : '' }}.</p>}
   } @else {
     <div class="proposal-card__heading"><div><p>Review required</p><h3>{{ proposal.actionLabel }}</h3></div><app-ui-badge [tone]="riskTone()">{{ proposal.riskLevel }} risk</app-ui-badge></div>
     <div class="proposal-card__meta"><span>Status: {{ proposal.statusLabel }}</span><span>Expires {{ proposal.expiresAt | date:'medium' }}</span></div>
-    @if (proposal.changes.length) { <div class="proposal-card__changes">@for (change of proposal.changes; track change.fieldLabel + $index) {<div class="proposal-change"><strong>{{ change.fieldLabel }}</strong><span><small>Current</small>{{ change.beforeSummary }}</span><span><small>Proposed</small>{{ change.afterSummary }}</span></div>}</div> }
+    @if (proposal.changes.length) {<div class="proposal-card__changes">@for (change of proposal.changes; track change.fieldLabel + $index) {<div class="proposal-change"><strong>{{ change.fieldLabel }}</strong><span><small>Current</small>{{ change.beforeSummary }}</span><span><small>Proposed</small>{{ change.afterSummary }}</span></div>}</div>}
     <p class="proposal-card__notice">Loading the current approval state…</p>
     <app-ui-button variant="outline" [fullWidth]="true" (pressed)="reviewRequested.emit(proposal.id ?? null)">Review pending approvals</app-ui-button>
   }
-
-  @if (decision(); as action) {
+  @if (decision()) {
     <div class="proposal-card__decision" role="dialog" aria-modal="true" aria-label="Confirm proposal decision">
-      <strong>{{ action === 'approve' ? 'Approve this proposal?' : 'Reject this proposal?' }}</strong>
-      <p>{{ action === 'approve' ? 'This records approval only. Execution remains a separate step.' : 'Rejecting closes this proposal without applying the change.' }}</p>
-      <label><span>Reason{{ reasonRequired() ? ' (required)' : ' (optional)' }}</span><textarea rows="2" [value]="reason()" (input)="updateReason($event)"></textarea></label>
-      @if (confirmationWord(); as word) { <label><span>Type {{ word }}</span><input [value]="confirmation()" (input)="updateConfirmation($event)" autocomplete="off"></label> }
-      <div class="proposal-card__actions"><app-ui-button variant="outline" size="small" [disabled]="control.busy()" (pressed)="closeDecision()">Go back</app-ui-button><app-ui-button size="small" [disabled]="control.busy() || !canConfirm()" (pressed)="confirm()">Confirm {{ action }}</app-ui-button></div>
+      <strong>{{ decisionTitle() }}</strong><p>{{ decisionText() }}</p>
+      @if (decision() !== 'execute') {<label><span>Reason{{ reasonRequired() ? ' (required)' : ' (optional)' }}</span><textarea rows="2" [value]="reason()" (input)="updateReason($event)"></textarea></label>}
+      @if (confirmationWord(); as word) {<label><span>Type {{ word }}</span><input [value]="confirmation()" (input)="updateConfirmation($event)" autocomplete="off"></label>}
+      <div class="proposal-card__actions"><app-ui-button variant="outline" size="small" [disabled]="control.busy()" (pressed)="closeDecision()">Go back</app-ui-button><app-ui-button size="small" [disabled]="control.busy() || !canConfirm()" (pressed)="confirm()">{{ control.busy() ? 'Submitting…' : 'Confirm ' + decision() }}</app-ui-button></div>
     </div>
   }
 </section>
