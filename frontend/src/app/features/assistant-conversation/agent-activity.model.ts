@@ -13,4 +13,22 @@ export type AgentActivityStatus =
   | 'working'
   | 'connecting'
   | 'live'
-  | 're
+  | 'reconnecting'
+  | 'cancellation_requested'
+  | 'completed'
+  | 'clarification_required'
+  | 'proposal_ready'
+  | 'cancelled'
+  | 'failed'
+  | 'stopped'
+  | 'interrupted';
+
+export interface AgentConversationRecovery {
+  readonly version: 2;
+  readonly organizationScope: string;
+  readonly conversationId: string | null;
+  readonly activeRunId: string | null;
+  readonly lastEventSequence: number;
+}
+
+export type { AgentRunConnectionState };
