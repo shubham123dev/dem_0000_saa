@@ -1,7 +1,7 @@
-<section class="activity" aria-label="Agent activity" role="status">
+<section class="activity" aria-label="Agent activity" role="status" [attr.data-status]="status">
   <div class="activity__heading">
     <strong>Activity</strong>
-    <span>{{ cancellationRequested ? 'Cancellation requested' : connection === 'reconnecting' ? 'Reconnecting' : connection === 'open' ? 'Live' : 'Working' }}</span>
+    <span>{{ statusLabel }}</span>
   </div>
   <ol>
     @for (item of items; track item.sequence) {
