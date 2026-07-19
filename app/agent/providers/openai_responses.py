@@ -205,7 +205,6 @@ class OpenAIResponsesAgentModelGateway:
                             "missing_fields": {
                                 "type": "array",
                                 "maxItems": 8,
-                                "uniqueItems": True,
                                 "items": {"type": "string", "minLength": 1},
                             },
                         },
@@ -273,7 +272,6 @@ class OpenAIResponsesAgentModelGateway:
                                 "type": "array",
                                 "minItems": 1,
                                 "maxItems": 5,
-                                "uniqueItems": True,
                                 "items": {"type": "string", "enum": evidence_ids},
                             },
                         },
@@ -305,11 +303,15 @@ class OpenAIResponsesAgentModelGateway:
                     continue
                 if response.status_code in _RETRYABLE_STATUS_CODES:
                     if attempt_number == self._maximum_attempts:
-                        raise AgentModelRequestFailedError()
+                        raise AgentModelRequestFailedError(
+                            f"HTTP {response.status_code} after {attempt_number} attempts: {response.text[:500]}"
+                        )
                     await asyncio.sleep(self._retry_delay_seconds)
                     continue
                 if response.is_error:
-                    raise AgentModelRequestFailedError()
+                    raise AgentModelRequestFailedError(
+                        f"HTTP {response.status_code}: {response.text[:500]}"
+                    )
                 try:
                     payload = response.json()
                 except ValueError as exception:

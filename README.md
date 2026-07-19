@@ -299,3 +299,8 @@ The workplace agent now persists conversations, normalized messages, idempotent 
 ## Governed action control plane
 
 The Angular Approval Center now exposes the backend-governed proposal lifecycle: safe previews, explicit approval or rejection, separate idempotent execution, durable execution activity over SSE, reconciliation, receipts, and rollback proposals. Cloudflare is a product-behavior reference only; no Cloudflare or GitHub integration is introduced.
+
+How to start : 
+(.venv) PS C:\Users\Shubham Shrivastav\Desktop\dem_0000_sa> python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+PS C:\Users\Shubham Shrivastav\Desktop\dem_0000_sa\frontend> npm start
