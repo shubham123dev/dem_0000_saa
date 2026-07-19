@@ -1,6 +1,6 @@
 <aside class="assistant-panel" aria-label="Ask AI" [cdkTrapFocus]="overlay" [cdkTrapFocusAutoCapture]="overlay">
   <header>
-    <div class="assistant-title"><strong>Ask AI</strong><app-ui-badge [tone]="conversation.streamingEnabled() ? 'success' : 'info'">{{ conversation.streamingEnabled() ? 'Live activity' : 'REST fallback' }}</app-ui-badge></div>
+    <div class="assistant-title"><strong>Ask AI</strong><app-ui-badge [tone]="conversation.streamingEnabled() ? 'success' : 'info'">{{ conversation.streamingEnabled() ? 'Resumable activity' : 'REST fallback' }}</app-ui-badge></div>
     <div><button type="button" class="assistant-icon-button" aria-label="Start new conversation" title="Start new conversation" (click)="startNewConversation()">＋</button><button type="button" class="assistant-icon-button" aria-label="Close Ask AI" title="Close Ask AI" (click)="closePressed.emit()">×</button></div>
   </header>
   <div #transcript class="assistant-body ui-dot-grid" role="log" aria-label="Conversation" aria-live="polite" [attr.aria-busy]="conversation.pending()">
@@ -13,7 +13,7 @@
     } @else {
       <div class="assistant-transcript">
         @for (message of conversation.messages(); track message.id) {<app-assistant-message [message]="message" [retryAvailable]="conversation.retryMessageId() === message.id" (retryRequested)="conversation.retryLast()" (reviewProposal)="reviewProposal($event)" />}
-        @if (conversation.activities().length || conversation.pending()) {<app-assistant-activity [items]="conversation.activities()" [connection]="conversation.connection()" [cancellationRequested]="conversation.cancellationRequested()" />}
+        @if (conversation.activities().length || conversation.pending()) {<app-assistant-activity [items]="conversation.activities()" [status]="activityStatus()" />}
         @if (conversation.canResume()) {<app-ui-callout tone="warning" title="Run continues in the backend"><div class="resume-actions"><span>Watching stopped; the run was not resubmitted or cancelled.</span><app-ui-button size="small" variant="outline" (pressed)="conversation.resumeWatching()">Resume watching</app-ui-button>@if (conversation.canCancel()) {<app-ui-button size="small" variant="danger" (pressed)="conversation.cancelActiveRun()">Cancel run</app-ui-button>}</div></app-ui-callout>}
       </div>
     }
