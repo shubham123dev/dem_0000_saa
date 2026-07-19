@@ -82,14 +82,18 @@ def build_run_response_service(
         organization_service=organization_service,
         nucleus_organization_service=nucleus_service,
         workplace_resource_service=WorkplaceResourceService(
-            session, resource_registry
+            session,
+            resource_registry,
         ),
         workplace_operation_router=operation_router,
         advanced_query_service=WorkplaceAdvancedQueryService(
-            session, resource_registry
+            session,
+            resource_registry,
         ),
         relationship_service=WorkplaceRelationshipService(
-            session, resource_registry, operation_router
+            session,
+            resource_registry,
+            operation_router,
         ),
         permission_service=PermissionService(user_repository),
         activity_sink=activity_sink,
@@ -100,7 +104,10 @@ def build_run_response_service(
         synthesis_service=get_agent_synthesis_service(get_agent_answer_gateway()),
         action_service=action_service,
         preflight_service=get_agent_authorization_preflight_service(
-            mock_api, user_repository
+            mock_api,
+            user_repository,
         ),
         operation_router=WorkplaceOperationRouter(),
+        organization_service=organization_service,
+        action_registry=action_registry,
     )
