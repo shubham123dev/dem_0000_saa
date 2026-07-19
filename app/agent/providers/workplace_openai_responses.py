@@ -15,6 +15,9 @@ _READ, _ACTION, _CLARIFY = "read__", "action__", "clarify__request"
 _WORDS = re.compile(r"[a-z0-9]+")
 _PREFIX = {"please", "kindly", "can", "could", "would", "will", "you", "i", "want", "need", "to", "just", "me"}
 _GENERIC = {"organization", "workplace", "nucleus", "resource", "resources", "account"}
+_CONTEXT_PREFIX = "Conversation context:"
+_USER_MARKER = "\n\nUser: "
+_CONTEXT_TRAILER = "\n\nRespond to the latest user message"
 
 
 def _words(value: str) -> tuple[str, ...]:
@@ -30,11 +33,20 @@ def _stem(value: str) -> str:
     return value[:-1] if value.endswith("e") and len(value) > 3 else value
 
 
+def _latest_user_turn(value: str) -> str:
+    if not value.startswith(_CONTEXT_PREFIX) or _USER_MARKER not in value:
+        return value.strip()
+    latest = value.rsplit(_USER_MARKER, 1)[1]
+    if _CONTEXT_TRAILER in latest:
+        latest = latest.split(_CONTEXT_TRAILER, 1)[0]
+    return latest.strip() or value.strip()
+
+
 class OpenAIResponsesAgentModelGateway(BaseGateway):
     """Strict function-call planner with registry-derived action precedence."""
 
     def _action_scope(self, request: str, actions: tuple[AgentActionDefinition, ...]) -> tuple[AgentActionDefinition, ...]:
-        tokens = list(_words(request))
+        tokens = list(_words(_latest_user_turn(request)))
         while tokens and tokens[0] in _PREFIX:
             tokens.pop(0)
         if not tokens:
@@ -64,8 +76,8 @@ class OpenAIResponsesAgentModelGateway(BaseGateway):
         })
         instruction = "Choose one path: one to five read__ calls, exactly one action__ call, or clarify__request. Actions only prepare reviewable proposals."
         if scoped_actions:
-            instruction = "This is an explicit change command. Choose exactly one offered action__ function, or clarify__request if required values are missing. Do not answer with a read."
-        return {"model": self._model, "store": False, "max_output_tokens": self._maximum_output_tokens, "parallel_tool_calls": True, "tool_choice": "required", "tools": functions, "input": [{"role": "system", "content": [{"type": "input_text", "text": instruction}]}, {"role": "user", "content": [{"type": "input_text", "text": user_request}]}]}
+            instruction = "The latest user message is an explicit change command. Choose exactly one offered action__ function, or clarify__request if required values are missing. Use earlier conversation messages only as context. Do not answer with a read."
+        return {"model": self._model, "store": False, "max_output_tokens": self._maximum_output_tokens, "parallel_tool_calls": not bool(scoped_actions), "tool_choice": "required", "tools": functions, "input": [{"role": "system", "content": [{"type": "input_text", "text": instruction}]}, {"role": "user", "content": [{"type": "input_text", "text": user_request}]}]}
 
     def _parse_plan(self, response_payload: dict[str, Any], *, available_tools: tuple[AgentToolDefinition, ...], available_actions: tuple[AgentActionDefinition, ...]) -> AgentPlan:
         try:
