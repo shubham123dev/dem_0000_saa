@@ -8,12 +8,9 @@ export interface AgentActivityItem {
   readonly state: 'active' | 'completed';
 }
 
-export interface AgentConversationRecovery {
-  readonly version: 2;
-  readonly organizationScope: string;
-  readonly conversationId: string | null;
-  readonly activeRunId: string | null;
-  readonly lastEventSequence: number;
-}
-
-export type { AgentRunConnectionState };
+export type AgentActivityStatus =
+  | 'idle'
+  | 'working'
+  | 'connecting'
+  | 'live'
+  | 're
