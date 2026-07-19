@@ -1,5 +1,7 @@
 import { A11yModule } from '@angular/cdk/a11y';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild, effect, inject, type ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild, computed, effect, inject, type ElementRef } from '@angular/core';
+import { ActionNavigationStore } from '../../core/action-control/action-navigation.store';
+import type { AgentActivityStatus } from '../../features/assistant-conversation/agent-activity.model';
 import { AgentConversationStore } from '../../features/assistant-conversation/agent-conversation.store';
 import { AssistantActivityComponent } from '../../features/assistant-conversation/assistant-activity/assistant-activity.component';
 import { AssistantComposerComponent } from '../../features/assistant-conversation/assistant-composer/assistant-composer.component';
@@ -7,7 +9,6 @@ import { AssistantMessageComponent } from '../../features/assistant-conversation
 import { UiBadgeComponent, UiButtonComponent, UiCalloutComponent } from '../../shared/ui';
 import type { ShellSectionId } from '../shell/shell-navigation.model';
 
-import { ActionNavigationStore } from '../../core/action-control/action-navigation.store';
 interface StarterPrompt { readonly label: string; readonly query: string; }
 const DEFAULT_PROMPTS: readonly StarterPrompt[] = [
   { label:'Summarize this workspace', query:'Give me a concise overview of this organization and its current workspace status.' },
@@ -38,6 +39,25 @@ export class AssistantPanelComponent {
   readonly conversation=inject(AgentConversationStore);
   private readonly actionNavigation=inject(ActionNavigationStore);
   readonly greeting=this.createGreeting();
+  readonly activityStatus = computed<AgentActivityStatus>(() => {
+    if (this.conversation.cancellationRequested()) return 'cancellation_requested';
+    const connection = this.conversation.connection();
+    if (this.conversation.pending()) {
+      if (connection === 'connecting') return 'connecting';
+      if (connection === 'open') return 'live';
+      if (connection === 'reconnecting') return 'reconnecting';
+      return 'working';
+    }
+    const lastMessage = this.conversation.messages().at(-1);
+    if (lastMessage?.title === 'Run cancelled') return 'cancelled';
+    if (lastMessage?.title === 'Run failed') return 'failed';
+    if (this.conversation.canResume()) return lastMessage?.role === 'error' ? 'interrupted' : 'stopped';
+    if (lastMessage?.role === 'error') return 'interrupted';
+    if (lastMessage?.mode === 'clarification_required') return 'clarification_required';
+    if (lastMessage?.mode === 'action_proposal') return 'proposal_ready';
+    if (this.conversation.activities().length > 0 && this.conversation.activities().every((item) => item.state === 'completed')) return 'completed';
+    return 'idle';
+  });
   constructor(){effect(()=>{this.conversation.messages();this.conversation.activities();this.conversation.pending();queueMicrotask(()=>this.scrollToLatest());});}
   prompts():readonly StarterPrompt[]{return SECTION_PROMPTS[this.currentSection]??DEFAULT_PROMPTS;}
   submit(text:string):void{this.conversation.submit(text);}
