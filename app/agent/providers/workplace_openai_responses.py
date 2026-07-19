@@ -2,77 +2,100 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
+from pydantic import ValidationError
+
+from app.agent.action_contracts import AgentActionDefinition, AgentActionProposalInput
+from app.agent.contracts import AgentPlan, AgentToolCall, AgentToolDefinition
+from app.agent.errors import AgentModelResponseInvalidError
 from app.agent.providers.openai_responses import (
     OpenAIResponsesAgentModelGateway as BaseOpenAIResponsesAgentModelGateway,
 )
 
 logger = logging.getLogger("app.agent_model")
 
+_READ_PREFIX = "read__"
+_ACTION_PREFIX = "action__"
+_CLARIFICATION_FUNCTION = "clarify__request"
+_MAX_READ_CALLS = 5
+
 
 class OpenAIResponsesAgentModelGateway(BaseOpenAIResponsesAgentModelGateway):
-    """Normalize only harmless optional questions on complete plans.
+    """Use strict function calls for workplace planning.
 
-    The provider schema requires clarification fields for every intent. A model can
-    therefore attach an optional follow-up question even after selecting a complete
-    read or action plan. This adapter clears only that non-executable field when the
-    plan is otherwise exclusive and reports no missing business fields. The strict
-    base parser remains authoritative for operation names, exact argument keys,
-    required values, mixed intents and every other invalid response.
+    Each registered read tool and model-selectable action receives its own exact
+    argument schema. The model must choose one exclusive planning path: one to five
+    reads, exactly one dry-run action proposal, or one clarification request. The
+    backend parser and registries remain authoritative and fail closed.
     """
 
-    def _extract_output_text(self, response_payload: dict[str, object]) -> str:
-        output_text = super()._extract_output_text(response_payload)
-        try:
-            payload = json.loads(output_text)
-        except (json.JSONDecodeError, TypeError):
-            return output_text
-
-        if not isinstance(payload, dict):
-            return output_text
-
-        intent = payload.get("intent")
-        tool_calls = payload.get("tool_calls")
-        action_name = payload.get("action_name")
-        action_arguments = payload.get("action_arguments")
-        missing_fields = payload.get("missing_fields")
-        clarification_question = payload.get("clarification_question")
-
-        if (
-            not isinstance(clarification_question, str)
-            or not clarification_question.strip()
-            or missing_fields != []
-            or not isinstance(action_arguments, dict)
-        ):
-            return output_text
-
-        normalization_reason: str | None = None
-        if (
-            intent == "read"
-            and isinstance(tool_calls, list)
-            and bool(tool_calls)
-            and action_name is None
-            and all(value is None for value in action_arguments.values())
-        ):
-            normalization_reason = "complete_read_optional_question"
-        elif (
-            intent == "action_proposal"
-            and tool_calls == []
-            and isinstance(action_name, str)
-            and action_name.strip()
-        ):
-            normalization_reason = "complete_action_optional_question"
-
-        if normalization_reason is None:
-            return output_text
-
-        payload["clarification_question"] = None
-        logger.info(
-            "Normalized non-blocking planner question",
-            extra={
-                "planner_normalization": normalization_reason,
-                "provider_response_id": response_payload.get("id"),
-                "action_name": action_name if intent == "action_proposal" else None,
-            },
+    def _build_plan_request_payload(
+        self,
+        *,
+        user_request: str,
+        available_tools: tuple[AgentToolDefinition, ...],
+        available_actions: tuple[AgentActionDefinition, ...],
+    ) -> dict[str, Any]:
+        functions = [
+            self._planning_function(
+                name=f"{_READ_PREFIX}{definition.name}",
+                description=(
+                    f"READ ONLY. {definition.description} Use only when the user "
+                    "is asking to inspect information, not change it."
+                ),
+                required_argument_names=definition.required_argument_names,
+            )
+            for definition in available_tools
+        ]
+        functions.extend(
+            self._planning_function(
+                name=f"{_ACTION_PREFIX}{definition.name}",
+                description=(
+                    f"DRY-RUN ACTION PROPOSAL ONLY. {definition.description} "
+                    "Calling this function never executes the change; backend "
+                    "authorization, review and explicit approval remain required."
+                ),
+                required_argument_names=definition.required_argument_names,
+            )
+            for definition in available_actions
         )
-        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        functions.append(
+            {
+                "type": "function",
+                "name": _CLARIFICATION_FUNCTION,
+                "description": (
+                    "Ask one concise clarification question only when a required "
+                    "business value or identifier is missing or ambiguous. Never "
+                    "guess identifiers, roles, values or approval decisions."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["question", "missing_fields"],
+                    "properties": {
+                        "question": {"type": "string"},
+                        "missing_fields": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+                "strict": True,
+            }
+        )
+        return {
+            "model": self._model,
+            "store": False,
+            "max_output_tokens": self._maximum_output_tokens,
+            "parallel_tool_calls": True,
+            "tool_choice": "required",
+            "tools": functions,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Choose exactly one exclusive
