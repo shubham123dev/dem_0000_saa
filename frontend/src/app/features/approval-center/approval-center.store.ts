@@ -95,13 +95,15 @@ export class ApprovalCenterStore {
 
   execute(confirmation: string | null, success?: () => void): void {
     if (!this.organizationId || this.busy()) return;
-    const id=this.requireId(); this.executionKey ??= globalThis.crypto?.randomUUID?.() ?? `execution-${Date.now()}`;
+    const id = this.requireId();
+    const executionKey = this.executionKey ?? globalThis.crypto?.randomUUID?.() ?? `execution-${Date.now()}`;
+    this.executionKey = executionKey;
     this.persist(); this.watch(id); this.busyState.set(true); this.errorState.set(null);
     this.commandRequest?.unsubscribe();
-    this.commandRequest=this.api.execute(this.organizationId,id,this.executionKey,confirmation).subscribe({
-      next:(proposal)=>{this.accept(proposal);success?.();},
-      error:(error:unknown)=>{this.busyState.set(false);this.fail(error);this.refreshSelected();},
-      complete:()=>this.busyState.set(false)
+    this.commandRequest = this.api.execute(this.organizationId, id, executionKey, confirmation).subscribe({
+      next: (proposal) => { this.accept(proposal); success?.(); },
+      error: (error: unknown) => { this.busyState.set(false); this.fail(error); this.refreshSelected(); },
+      complete: () => this.busyState.set(false)
     });
   }
 
