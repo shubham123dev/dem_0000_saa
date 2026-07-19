@@ -1,7 +1,17 @@
 from __future__ import annotations
 
-from app.agent.action_contracts import AgentActionProposal, AgentActionProposalInput
-from app.agent.action_errors import AgentActionInvalidError
+from app.agent.action_contracts import (
+    AgentActionExecutionResult,
+    AgentActionProposal,
+    AgentActionProposalInput,
+)
+from app.agent.action_errors import (
+    AgentActionExecutionInProgressError,
+    AgentActionIdempotencyConflictError,
+    AgentActionInvalidError,
+    AgentActionReconciliationRequiredError,
+    AgentActionStaleError,
+)
 from app.agent.action_registry import InvalidAgentActionProposalError
 from app.domain.enums import Permission
 from app.domain.models import User
@@ -78,3 +88,37 @@ class ReleaseReadyAgentActionService(HardenedAgentActionService):
             ),
         )
         return await self._expire_if_needed(proposal)
+
+    async def execute(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        proposal_id: str,
+        idempotency_key: str,
+    ) -> AgentActionExecutionResult:
+        try:
+            return await super().execute(
+                user=user,
+                organization_id=organization_id,
+                proposal_id=proposal_id,
+                idempotency_key=idempotency_key,
+            )
+        except AgentActionStaleError as exception:
+            # A concurrent request can finish the same idempotent execution while
+            # this request is re-preparing the resource. The resulting state drift
+            # belongs to that already-recorded execution, not to a new stale action.
+            execution = await self._action_repository.get_execution(proposal_id)
+            if execution is None:
+                raise
+            if execution.idempotency_key != idempotency_key:
+                raise AgentActionIdempotencyConflictError() from exception
+            if execution.outcome == "executing":
+                raise AgentActionExecutionInProgressError() from exception
+            if execution.outcome == "reconciliation_required":
+                raise AgentActionReconciliationRequiredError() from exception
+            if execution.outcome == "succeeded":
+                return execution
+            # A failed execution marked stale is a real stale outcome and must
+            # continue to surface as such.
+            raise
