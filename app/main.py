@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 
 from app import __version__
 from app.api import (
+    action_conversation_control_routes,
     action_control_routes,
     action_routes,
     agent_routes,
@@ -44,7 +45,6 @@ async def _lifespan(application: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-
     application = FastAPI(
         title=settings.app_name,
         version=__version__,
@@ -65,7 +65,6 @@ def create_app() -> FastAPI:
         return response
 
     register_exception_handlers(application)
-
     application.include_router(health_routes.router)
     application.include_router(workplace_routes.router)
     application.include_router(nucleus_routes.router)
@@ -73,11 +72,11 @@ def create_app() -> FastAPI:
     application.include_router(agent_routes.router)
     application.include_router(agent_run_routes.router)
     application.include_router(action_control_routes.router)
+    application.include_router(action_conversation_control_routes.router)
     application.include_router(action_routes.router)
 
     if settings.is_sandbox and settings.enable_raw_mock_api:
         application.include_router(mock_api_routes.router)
-
     return application
 
 
