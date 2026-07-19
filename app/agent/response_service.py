@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import hashlib
 
+from app.agent.action_registry import AgentActionRegistry
+from app.agent.action_selection import scope_actions
 from app.agent.answer_contracts import AgentQueryCompletion
+from app.agent.contextual_action_resolver import resolve_member_action_plan
+from app.agent.contracts import AgentPlan
 from app.agent.evidence import AgentEvidenceCompiler
 from app.agent.orchestrator import ReadOnlyAgentOrchestrator
 from app.agent.run_contracts import AgentRunActivitySink, NullAgentRunActivitySink
-from app.agent.tool_registry import InvalidAgentToolCallError
 from app.agent.synthesis import AgentAnswerSynthesisService
+from app.agent.tool_registry import InvalidAgentToolCallError
 from app.domain.models import User
 from app.services.agent_action_service import AgentActionService
 from app.services.agent_preflight_service import AgentAuthorizationPreflightService
+from app.services.organization_service import OrganizationService
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
 
 
@@ -24,6 +29,8 @@ class ReadOnlyAgentResponseService:
         action_service: AgentActionService,
         preflight_service: AgentAuthorizationPreflightService,
         operation_router: WorkplaceOperationRouter | None = None,
+        organization_service: OrganizationService | None = None,
+        action_registry: AgentActionRegistry | None = None,
     ) -> None:
         self._orchestrator = orchestrator
         self._evidence_compiler = evidence_compiler
@@ -31,6 +38,8 @@ class ReadOnlyAgentResponseService:
         self._action_service = action_service
         self._preflight_service = preflight_service
         self._operation_router = operation_router or WorkplaceOperationRouter()
+        self._organization_service = organization_service
+        self._action_registry = action_registry
 
     async def execute(
         self,
@@ -51,9 +60,18 @@ class ReadOnlyAgentResponseService:
         )
         await activity.checkpoint()
         await activity.emit(
-            stage="request_planning", message="Understanding your request"
+            stage="request_planning",
+            message="Understanding your request",
         )
-        agent_plan = await self._orchestrator.create_plan(user_request=user_request)
+        agent_plan = await self._resolve_contextual_action(
+            user=user,
+            organization_id=organization_id,
+            user_request=user_request,
+        )
+        planner_source = "deterministic_context_resolver"
+        if agent_plan is None:
+            agent_plan = await self._orchestrator.create_plan(user_request=user_request)
+            planner_source = "configured_model"
         await activity.checkpoint()
         if agent_plan.intent == "clarification_required":
             return AgentQueryCompletion(
@@ -71,7 +89,7 @@ class ReadOnlyAgentResponseService:
             await activity.checkpoint()
             provenance = {
                 "proposal_source": "agent_query",
-                "planner": "configured_model",
+                "planner": planner_source,
                 "request_hash": hashlib.sha256(
                     user_request.encode("utf-8")
                 ).hexdigest(),
@@ -114,7 +132,8 @@ class ReadOnlyAgentResponseService:
         )
         await activity.checkpoint()
         await activity.emit(
-            stage="answer_preparation", message="Preparing the answer"
+            stage="answer_preparation",
+            message="Preparing the answer",
         )
         evidence = self._evidence_compiler.compile(execution_result.results)
         synthesis = await self._synthesis_service.synthesize(
@@ -128,4 +147,35 @@ class ReadOnlyAgentResponseService:
             answer_source=synthesis.answer_source,
             evidence_ids=synthesis.evidence_ids,
             results=execution_result.results,
+        )
+
+    async def _resolve_contextual_action(
+        self,
+        *,
+        user: User,
+        organization_id: str,
+        user_request: str,
+    ) -> AgentPlan | None:
+        if self._organization_service is None or self._action_registry is None:
+            return None
+        scoped_actions = scope_actions(
+            user_request,
+            self._action_registry.list_model_definitions(),
+        )
+        if len(scoped_actions) != 1:
+            return None
+        action_name = scoped_actions[0].name
+        if action_name not in {
+            "assign_organization_seat",
+            "revoke_organization_seat",
+        }:
+            return None
+        members, _ = await self._organization_service.list_users(
+            user=user,
+            organization_id=organization_id,
+        )
+        return resolve_member_action_plan(
+            user_request=user_request,
+            action_name=action_name,
+            members=members,
         )
