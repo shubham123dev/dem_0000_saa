@@ -24,6 +24,10 @@ export class ActionControlApiService {
     return this.client.request('GET', `${root(organizationId)}/control/actions/${encode(proposalId)}`, actionProposalControlSchema);
   }
 
+  forConversation(organizationId: string, conversationId: string): Observable<ActionProposalControl> {
+    return this.client.request('GET', `${root(organizationId)}/control/conversations/${encode(conversationId)}/action`, actionProposalControlSchema);
+  }
+
   approve(organizationId: string, proposalId: string, reason: string | null, confirmation: string | null): Observable<ActionProposalControl> {
     return this.command(organizationId, proposalId, 'approve', { reason, confirmation });
   }
@@ -49,9 +53,6 @@ export class ActionControlApiService {
   }
 
   private command(organizationId: string, proposalId: string, command: string, body: unknown): Observable<ActionProposalControl> {
-    return this.client.request(
-      'POST', `${root(organizationId)}/control/actions/${encode(proposalId)}/${command}`,
-      actionProposalControlSchema, body === undefined ? undefined : { body }
-    );
+    return this.client.request('POST', `${root(organizationId)}/control/actions/${encode(proposalId)}/${command}`, actionProposalControlSchema, body === undefined ? undefined : { body });
   }
 }
