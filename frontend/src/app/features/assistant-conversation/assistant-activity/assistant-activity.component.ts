@@ -1,5 +1,21 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import type { AgentActivityItem, AgentRunConnectionState } from '../agent-activity.model';
+import type { AgentActivityItem, AgentActivityStatus } from '../agent-activity.model';
+
+const STATUS_LABELS: Readonly<Record<AgentActivityStatus, string>> = {
+  idle: 'Idle',
+  working: 'Working',
+  connecting: 'Connecting',
+  live: 'Live',
+  reconnecting: 'Reconnecting',
+  cancellation_requested: 'Cancellation requested',
+  completed: 'Completed',
+  clarification_required: 'Needs input',
+  proposal_ready: 'Proposal ready',
+  cancelled: 'Cancelled',
+  failed: 'Failed',
+  stopped: 'Watching stopped',
+  interrupted: 'Connection interrupted'
+};
 
 @Component({
   selector: 'app-assistant-activity',
@@ -10,6 +26,9 @@ import type { AgentActivityItem, AgentRunConnectionState } from '../agent-activi
 })
 export class AssistantActivityComponent {
   @Input() items: readonly AgentActivityItem[] = [];
-  @Input() connection: AgentRunConnectionState = 'closed';
-  @Input() cancellationRequested = false;
+  @Input() status: AgentActivityStatus = 'idle';
+
+  get statusLabel(): string {
+    return STATUS_LABELS[this.status];
+  }
 }
