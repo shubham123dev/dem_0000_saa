@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api import action_routes, agent_routes, workplace_routes
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 from app.db.orm_models import (
     OrganizationMembershipORM,
     OrganizationORM,
@@ -18,7 +19,6 @@ from app.db.orm_models import (
     ReportORM,
     RolePermissionORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.db.seed import seed
 from app.main import app
@@ -151,10 +151,11 @@ async def test_seed_is_idempotent(
                 await session.scalar(select(func.count()).select_from(model)) or 0
             )
 
+        sandbox_dir = get_sandbox_user_directory()
         return {
             "orgs": await count(OrganizationORM),
             "overviews": await count(OrganizationOverviewORM),
-            "users": await count(UserORM),
+            "users": len(sandbox_dir._users),
             "memberships": await count(OrganizationMembershipORM),
             "pools": await count(OrganizationSeatPoolORM),
             "assignments": await count(SeatAssignmentORM),

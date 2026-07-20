@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
+from app.adapters.user.provider import get_user_directory
 from app.agent.instrumented_orchestrator import InstrumentedReadOnlyAgentOrchestrator
 from app.agent.response_service import ReadOnlyAgentResponseService
 from app.api.action_dependencies import (
@@ -41,7 +42,8 @@ def build_run_response_service(
     *,
     activity_sink: DatabaseAgentRunActivitySink,
 ) -> ReadOnlyAgentResponseService:
-    user_repository = get_user_repository(session)
+    user_directory = get_user_directory()
+    user_repository = get_user_repository(session, user_directory)
     audit_repository = get_audit_repository(session)
     mock_api = MockOrganizationApi(session)
     organization_gateway = MockOrganizationApiAdapter(mock_api)
@@ -63,6 +65,7 @@ def build_run_response_service(
         session,
         nucleus_gateway,
         organization_gateway,
+        user_directory,
     )
     action_service = get_agent_action_service(
         organization_gateway,
@@ -94,6 +97,7 @@ def build_run_response_service(
             session,
             resource_registry,
             operation_router,
+            user_directory=user_directory,
         ),
         permission_service=PermissionService(user_repository),
         activity_sink=activity_sink,

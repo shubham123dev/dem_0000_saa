@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 from app.agent.answer_contracts import AgentQueryCompletion
 from app.agent.contextual_action_resolver import resolve_member_action_plan
-from app.db.orm_models import OrganizationMembershipORM, SeatAssignmentORM, UserORM
+from app.db.orm_models import OrganizationMembershipORM, SeatAssignmentORM
 from app.domain.enums import MembershipStatus, UserStatus
-from app.domain.models import OrganizationMember
+from app.domain.models import OrganizationMember, User
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
 from app.services.agent_run_worker import AgentRunExecutor
@@ -82,12 +83,12 @@ async def test_three_turn_demo_analyst_flow_creates_proposal_without_mutation(
 ) -> None:
     user_id = "usr_invited_e32175a743ac6dcbdc35"
     async with sessionmaker_() as session:
-        session.add(
-            UserORM(
+        get_sandbox_user_directory().upsert(
+            User(
                 id=user_id,
                 display_name="Demo Analyst",
                 email="demo.analyst@example.test",
-                status=UserStatus.ACTIVE.value,
+                status=UserStatus.ACTIVE,
             )
         )
         session.add(

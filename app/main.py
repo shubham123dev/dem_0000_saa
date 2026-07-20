@@ -8,6 +8,7 @@ import uuid
 from fastapi import FastAPI, Request
 
 from app import __version__
+from app.adapters.user.provider import dispose_user_directory
 from app.api import (
     action_conversation_control_routes,
     action_control_routes,
@@ -41,6 +42,7 @@ async def _lifespan(application: FastAPI):
         yield
     finally:
         await coordinator.stop()
+        await dispose_user_directory()
 
 
 def create_app() -> FastAPI:

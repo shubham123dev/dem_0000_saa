@@ -10,7 +10,7 @@ from app.agent.action_registry import AgentActionRegistry
 from app.agent.tool_registry import ReadOnlyAgentToolRegistry
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
 from app.api.action_dependencies import AgentActionServiceDep
-from app.api.dependencies import SessionDep
+from app.api.dependencies import SessionDep, UserDirectoryDep
 from app.core.config import get_settings
 from app.db.action_models import AgentActionExecutionORM
 from app.db.orm_models import RolePermissionORM
@@ -18,7 +18,7 @@ from app.domain.enums import Permission, Role
 from app.schemas.organization import CapabilityActionOut, CapabilitiesResponse
 
 router = APIRouter(tags=["health"])
-EXPECTED_MIGRATION_HEAD = "0016_agent_runs_events"
+EXPECTED_MIGRATION_HEAD = "0018_replace_local_users"
 
 
 @router.get("/health")
@@ -27,11 +27,16 @@ async def health() -> dict[str, str]:
 
 
 @router.get("/ready")
-async def ready(session: SessionDep) -> dict[str, str]:
+async def ready(
+    session: SessionDep,
+    user_directory: UserDirectoryDep,
+) -> dict[str, str]:
     await session.execute(text("SELECT 1"))
+    await user_directory.ping()
     return {
         "status": "ready",
         "database": "connected",
+        "user_directory": "connected",
         "environment": get_settings().environment,
     }
 
@@ -40,9 +45,15 @@ async def ready(session: SessionDep) -> dict[str, str]:
 async def readiness_details(
     session: SessionDep,
     action_service: AgentActionServiceDep,
+    user_directory: UserDirectoryDep,
 ) -> dict:
     await session.execute(text("SELECT 1"))
     settings = get_settings()
+    try:
+        await user_directory.ping()
+        user_directory_connected = True
+    except Exception:
+        user_directory_connected = False
     try:
         migration_head = await session.scalar(
             text("SELECT version_num FROM alembic_version")
@@ -250,6 +261,10 @@ async def readiness_details(
 
     checks = {
         "database_connected": True,
+        "user_directory_connected": user_directory_connected,
+        "user_directory_is_test_user1_or_sandbox": bool(
+            settings.nucleus_user_database_url or settings.is_sandbox
+        ),
         "sandbox_environment": settings.is_sandbox,
         "migration_at_expected_head": migration_head == EXPECTED_MIGRATION_HEAD,
         "proposal_resource_preconditions_supported": proposal_preconditions_supported,

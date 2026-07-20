@@ -26,7 +26,6 @@ class NucleusActorMappingORM(Base):
 
     workplace_user_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
     nucleus_actor_id: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -42,7 +42,7 @@ class AgentActionProposalORM(Base):
         String, ForeignKey("organizations.id"), nullable=False, index=True
     )
     requested_by_user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False, index=True
+        String, nullable=False, index=True
     )
     source_agent_run_id: Mapped[str | None] = mapped_column(
         String,
@@ -89,7 +89,7 @@ class AgentActionApprovalORM(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     proposal_id: Mapped[str] = mapped_column(String, ForeignKey("agent_action_proposals.id"), nullable=False, index=True)
     decision: Mapped[str] = mapped_column(String, nullable=False)
-    decided_by_user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False, index=True)
+    decided_by_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     decision_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -112,7 +112,7 @@ class AgentActionExecutionORM(Base):
     proposal_id: Mapped[str] = mapped_column(String, ForeignKey("agent_action_proposals.id"), nullable=False, index=True)
     idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
     executed_by_user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False, index=True
+        String, nullable=False, index=True
     )
     nucleus_actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     outcome: Mapped[str] = mapped_column(String, nullable=False)
@@ -157,7 +157,6 @@ class AgentActionRollbackORM(Base):
     )
     created_by_user_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("users.id"),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(

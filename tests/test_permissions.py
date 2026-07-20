@@ -9,7 +9,8 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.orm_models import UserORM
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
+from app.domain.enums import UserStatus
 
 PROFILE_URL = "/workplace/organizations/org_sandbox_001/profile"
 
@@ -59,10 +60,20 @@ async def test_unknown_user_receives_401(client: AsyncClient) -> None:
 async def test_disabled_user_receives_403(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    user = await db_session.get(UserORM, "usr_admin_001")
+    sandbox_dir = get_sandbox_user_directory()
+    user = await sandbox_dir.get_by_id("usr_admin_001")
     assert user is not None
-    user.status = "disabled"
-    await db_session.commit()
+    from app.domain.models import User
+    sandbox_dir.upsert(
+        User(
+            id=user.id,
+            display_name=user.display_name,
+            email=user.email,
+            status=UserStatus.DISABLED,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        )
+    )
 
     resp = await client.get(PROFILE_URL, headers={"X-Mock-User-Id": "usr_admin_001"})
     assert resp.status_code == 403

@@ -18,6 +18,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 from app.db.nucleus_admin_models import NucleusActorMappingORM
 from app.db.nucleus_models import (
     NucleusOrganizationAccountORM,
@@ -39,7 +40,6 @@ from app.db.orm_models import (
     ReportORM,
     RolePermissionORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.db.session import get_engine, get_sessionmaker
 from app.domain.enums import (
@@ -57,6 +57,7 @@ from app.domain.enums import (
     UserStatus,
     WorkspaceHealthStatus,
 )
+from app.domain.models import User
 
 _EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -304,16 +305,19 @@ async def seed(session: AsyncSession) -> None:
     if await session.get(OrganizationSeatPoolORM, SEAT_POOL["id"]) is None:
         session.add(OrganizationSeatPoolORM(**SEAT_POOL))
 
-    for user_id, display_name, email in USERS:
-        if await session.get(UserORM, user_id) is None:
-            session.add(
-                UserORM(
-                    id=user_id,
-                    display_name=display_name,
-                    email=email,
-                    status=UserStatus.ACTIVE.value,
-                )
-            )
+    # Sandbox users are no longer persisted in the Workplace database.
+    # Production resolves the same contract from Test_user1.
+    get_sandbox_user_directory().reset(
+        User(
+            id=user_id,
+            display_name=display_name,
+            email=email,
+            status=UserStatus.ACTIVE,
+            created_at=_EPOCH,
+            updated_at=_EPOCH,
+        )
+        for user_id, display_name, email in USERS
+    )
 
     await session.flush()
 

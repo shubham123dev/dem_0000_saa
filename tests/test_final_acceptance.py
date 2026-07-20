@@ -35,9 +35,9 @@ async def test_final_readiness_and_capability_counts(
     readiness = await client.get("/ready/details")
     assert readiness.status_code == 200
     body = readiness.json()
-    assert body["migration"]["expected"] == "0016_agent_runs_events"
+    assert body["migration"]["expected"] == "0018_replace_local_users"
     assert body["migration"]["current"] in (
-        "0016_agent_runs_events", None
+        "0018_replace_local_users", None
     )
     assert body["actions"] == {"registered": 43, "handlers": 43}
     assert body["read_tools"] == {"registered": 20}

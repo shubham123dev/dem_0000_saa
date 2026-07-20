@@ -7,6 +7,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.user.contract import UserDirectory
+from app.adapters.user.provider import get_user_directory
 from app.db.nucleus_models import (
     NucleusOrganizationAccountORM,
     NucleusOrganizationCategoryAccessORM,
@@ -23,7 +25,6 @@ from app.db.orm_models import (
     OrganizationSeatPoolORM,
     ReportORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.db.workplace_resource_models import WorkplaceSettingORM
 from app.workplace_resources.operation_router import WorkplaceOperationRouter
@@ -220,8 +221,10 @@ class WorkplaceRelationshipService:
         resource_registry: WorkplaceResourceRegistry | None = None,
         operation_router: WorkplaceOperationRouter | None = None,
         relation_registry: WorkplaceRelationRegistry | None = None,
+        user_directory: UserDirectory | None = None,
     ) -> None:
         self._session = session
+        self._users = user_directory or get_user_directory()
         self._resource_registry = resource_registry or WorkplaceResourceRegistry()
         self._operation_router = operation_router or WorkplaceOperationRouter(
             self._resource_registry
@@ -358,7 +361,7 @@ class WorkplaceRelationshipService:
             if membership is None:
                 raise ValueError("Organization membership was not found")
             if relationship == "user":
-                user = await self._session.get(UserORM, membership.user_id)
+                user = await self._users.get_by_id(membership.user_id)
                 return (user,) if user is not None else ()
             statement = (
                 select(SeatAssignmentORM)

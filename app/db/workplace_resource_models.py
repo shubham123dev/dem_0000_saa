@@ -193,9 +193,7 @@ class WorkplaceResourceTombstoneORM(Base):
     resource_id: Mapped[str] = mapped_column(String(250), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    deleted_by_user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False
-    )
+    deleted_by_user_id: Mapped[str] = mapped_column(String, nullable=False)
     deleted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

@@ -1,46 +1,37 @@
-"""User repository: resolves users, memberships, roles, and role permissions.
-
-All authorization inputs (roles, permissions) are read from the database. They
-are never accepted from request bodies or user text. Only *active* memberships
-grant roles; invited/suspended/removed memberships confer no access.
-"""
+"""User facade combining Test_user1 identity with local access sidecars."""
 
 from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.orm_models import (
-    OrganizationMembershipORM,
-    RolePermissionORM,
-    UserORM,
-)
-from app.domain.enums import MembershipStatus, UserStatus
+from app.adapters.user.contract import UserDirectory
+from app.adapters.user.provider import get_user_directory
+from app.db.orm_models import OrganizationMembershipORM, RolePermissionORM
+from app.domain.enums import MembershipStatus
 from app.domain.models import User
 
 
 class UserRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        user_directory: UserDirectory | None = None,
+    ) -> None:
         self._session = session
+        self._users = user_directory or get_user_directory()
 
     async def get_by_id(self, user_id: str) -> User | None:
-        row = await self._session.get(UserORM, user_id)
-        if row is None:
-            return None
-        return User(
-            id=row.id,
-            display_name=row.display_name,
-            email=row.email,
-            status=UserStatus(row.status),
-            created_at=row.created_at,
-            updated_at=row.updated_at,
-        )
+        return await self._users.get_by_id(user_id)
+
+    async def get_by_email(self, email: str) -> User | None:
+        return await self._users.get_by_email(email)
 
     async def get_active_roles(self, user_id: str, organization_id: str) -> list[str]:
-        """Return roles from the user's *active* membership in the org."""
+        """Return roles from the user's active local organization membership."""
 
         stmt = select(OrganizationMembershipORM.role).where(
-            OrganizationMembershipORM.user_id == user_id,
+            OrganizationMembershipORM.user_id == str(user_id),
             OrganizationMembershipORM.organization_id == organization_id,
             OrganizationMembershipORM.membership_status
             == MembershipStatus.ACTIVE.value,
@@ -59,17 +50,23 @@ class UserRepository:
 
     async def list_memberships(
         self, organization_id: str
-    ) -> list[tuple[UserORM, OrganizationMembershipORM]]:
-        """Return every (user, membership) pair for an organization."""
+    ) -> list[tuple[User, OrganizationMembershipORM]]:
+        """Hydrate organization memberships from the sole user directory."""
 
-        stmt = (
-            select(UserORM, OrganizationMembershipORM)
-            .join(
-                OrganizationMembershipORM,
-                OrganizationMembershipORM.user_id == UserORM.id,
-            )
+        statement = (
+            select(OrganizationMembershipORM)
             .where(OrganizationMembershipORM.organization_id == organization_id)
             .order_by(OrganizationMembershipORM.id.asc())
         )
-        result = await self._session.execute(stmt)
-        return [(user, membership) for user, membership in result.all()]
+        memberships = tuple(
+            (await self._session.execute(statement)).scalars().all()
+        )
+        users = await self._users.get_many_by_ids(
+            tuple(item.user_id for item in memberships)
+        )
+        # This mirrors the old inner join: stale references are not exposed.
+        return [
+            (users[item.user_id], item)
+            for item in memberships
+            if item.user_id in users
+        ]

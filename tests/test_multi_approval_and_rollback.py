@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from httpx import AsyncClient
+
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.action_models import AgentActionApprovalORM, AgentActionRollbackORM
-from app.db.orm_models import OrganizationMembershipORM, OrganizationORM, UserORM
+from app.db.orm_models import OrganizationMembershipORM, OrganizationORM
+from app.domain.enums import UserStatus
+from app.domain.models import User
 
 ORGANIZATION_ID = "org_sandbox_001"
 ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
@@ -14,12 +18,12 @@ ACTION_BASE_URL = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
 async def add_peer_admins(db_session: AsyncSession) -> tuple[dict[str, str], dict[str, str]]:
     for suffix in ("a", "b"):
         user_id = f"usr_approver_{suffix}"
-        db_session.add(
-            UserORM(
+        get_sandbox_user_directory().upsert(
+            User(
                 id=user_id,
                 display_name=f"Approver {suffix.upper()}",
                 email=f"approver.{suffix}@example.test",
-                status="active",
+                status=UserStatus.ACTIVE,
             )
         )
         db_session.add(

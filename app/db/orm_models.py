@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
@@ -113,29 +113,6 @@ class OrganizationOverviewORM(Base):
     )
 
 
-class UserORM(Base):
-    __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    display_name: Mapped[str] = mapped_column(String, nullable=False)
-    email: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=_utcnow,
-        onupdate=_utcnow,
-        nullable=False,
-    )
-
-    memberships: Mapped[list["OrganizationMembershipORM"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
-
-
 class OrganizationMembershipORM(Base):
     __tablename__ = "organization_memberships"
     __table_args__ = (
@@ -153,9 +130,9 @@ class OrganizationMembershipORM(Base):
     organization_id: Mapped[str] = mapped_column(
         String, ForeignKey("organizations.id"), nullable=False, index=True
     )
-    user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False, index=True
-    )
+    # String form of the canonical Test_user1.UserID. Cross-database
+    # referential validity is enforced by the user-directory boundary.
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     role: Mapped[str] = mapped_column(String, nullable=False)
     membership_status: Mapped[str] = mapped_column(
         String, nullable=False, default="active"
@@ -173,8 +150,6 @@ class OrganizationMembershipORM(Base):
         onupdate=_utcnow,
         nullable=False,
     )
-
-    user: Mapped["UserORM"] = relationship(back_populates="memberships")
 
 
 class OrganizationSeatPoolORM(Base):
@@ -240,9 +215,9 @@ class SeatAssignmentORM(Base):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False, index=True
-    )
+    # String form of the canonical Test_user1.UserID. Cross-database
+    # referential validity is enforced by the user-directory boundary.
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     assigned_at: Mapped[datetime | None] = mapped_column(

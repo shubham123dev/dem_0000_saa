@@ -19,6 +19,20 @@ class Settings(BaseSettings):
     environment: str = "sandbox"
     enable_raw_mock_api: bool = False
 
+    # Test_user1 is the only production user source. Keep its connection
+    # separate from the Workplace database so Alembic never manages it.
+    nucleus_user_database_url: str | None = None
+    nucleus_user_database_name: str = "dbmr_Database_Nucleus"
+    nucleus_user_schema_name: str = "dbo"
+    nucleus_user_table_name: str = "Test_user1"
+    nucleus_user_writes_enabled: bool = False
+    nucleus_user_default_type_id: int | None = None
+    nucleus_user_default_source: str | None = "workplace_agent"
+    nucleus_user_create_defaults: dict[str, str | int | bool | None] = Field(
+        default_factory=dict
+    )
+    nucleus_user_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
+
     agent_model_provider: str | None = None
     agent_model_api_key: str | None = None
     agent_model_name: str = "gpt-5-mini"

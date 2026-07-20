@@ -8,6 +8,8 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.nucleus.contract import NucleusOrganizationGateway
+from app.adapters.user.contract import UserDirectory
+from app.adapters.user.provider import get_user_directory as provide_user_directory
 from app.adapters.organization.contract import OrganizationApiGateway
 from app.adapters.organization.mock_adapter import MockOrganizationApiAdapter
 from app.agent.action_contracts import VersionedOrganizationMutationGateway
@@ -26,8 +28,18 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 MOCK_USER_HEADER = "X-Mock-User-Id"
 
 
-def get_user_repository(session: SessionDep) -> UserRepository:
-    return UserRepository(session)
+def get_user_directory() -> UserDirectory:
+    return provide_user_directory()
+
+
+UserDirectoryDep = Annotated[UserDirectory, Depends(get_user_directory)]
+
+
+def get_user_repository(
+    session: SessionDep,
+    user_directory: UserDirectoryDep,
+) -> UserRepository:
+    return UserRepository(session, user_directory)
 
 
 def get_audit_repository(session: SessionDep) -> AuditRepository:

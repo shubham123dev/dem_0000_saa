@@ -49,6 +49,7 @@ from app.api.dependencies import (
     NucleusOrganizationGatewayDep,
     OrganizationGatewayDep,
     SessionDep,
+    UserDirectoryDep,
     VersionedOrganizationMutationGatewayDep,
     get_audit_repository,
     get_user_repository,
@@ -89,15 +90,16 @@ def get_agent_action_handlers(
     session: SessionDep,
     nucleus: NucleusOrganizationGatewayDep,
     organization_mutations: VersionedOrganizationMutationGatewayDep,
+    user_directory: UserDirectoryDep,
 ) -> dict[str, AgentActionHandler]:
-    resources = OperationalResourceService(session)
+    resources = OperationalResourceService(session, user_directory)
     nucleus_admin = NucleusAdministrationRepository(session)
     nucleus_projections = NucleusAdministrationProjectionRepository(session)
     workplace_resources = WorkplaceResourceService(
         session, WorkplaceResourceRegistry()
     )
     workplace_workflows = WorkplaceWorkflowService(
-        session, WorkplaceResourceRegistry()
+        session, WorkplaceResourceRegistry(), user_directory
     )
     return {
         "update_organization_contact_email": (

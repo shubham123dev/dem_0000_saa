@@ -10,6 +10,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.user.contract import CreateUserCommand, UserDirectory
+from app.adapters.user.provider import get_user_directory
 from app.agent.action_contracts import (
     AgentActionChange,
     AgentActionHandlerResult,
@@ -40,7 +42,6 @@ from app.db.orm_models import (
     OrganizationSeatPoolORM,
     ReportORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.db.workplace_resource_models import (
     WorkplaceMutationPlanORM,
@@ -54,7 +55,6 @@ from app.domain.enums import (
     Role,
     SeatAssignmentStatus,
     SeatPoolStatus,
-    UserStatus,
 )
 from app.workplace_resources.advanced_query import WorkplaceAdvancedQueryService
 from app.workplace_resources.registry import WorkplaceResourceRegistry
@@ -78,11 +78,6 @@ def _canonical_json(value: Any) -> str:
 
 def _hash(value: Any) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
-
-
-def _user_id_for_email(email: str) -> str:
-    digest = hashlib.sha256(email.encode("utf-8")).hexdigest()[:20]
-    return f"usr_invited_{digest}"
 
 
 def _parse_object(raw: str, *, field_name: str) -> dict[str, Any]:
@@ -188,9 +183,11 @@ class WorkplaceWorkflowService:
         self,
         session: AsyncSession,
         registry: WorkplaceResourceRegistry | None = None,
+        user_directory: UserDirectory | None = None,
     ) -> None:
         self._session = session
         self._registry = registry or WorkplaceResourceRegistry()
+        self._users = user_directory or get_user_directory()
         self._advanced_query = WorkplaceAdvancedQueryService(
             session,
             self._registry,
@@ -217,7 +214,11 @@ class WorkplaceWorkflowService:
         if seat_type not in {"none", "standard"}:
             raise ValueError("seat_type must be none or standard")
 
-        user = await self._session.scalar(select(UserORM).where(UserORM.email == email))
+        user = await self._users.get_by_email(email)
+        if user is not None and not user.is_active:
+            raise ValueError("Production user is disabled")
+        if user is None and not self._users.creation_enabled:
+            raise ValueError("Production user creation is not configured")
         membership = None
         if user is not None:
             membership = await self._session.scalar(
@@ -256,10 +257,15 @@ class WorkplaceWorkflowService:
             if active_seat_count >= pool.total_seats:
                 raise ValueError("No standard seats are available")
 
-        user_id = user.id if user is not None else _user_id_for_email(email)
+        # Keep preparation stable if a prior execution created Test_user1 but
+        # failed before the local membership transaction committed.
+        user_id = membership.user_id if membership is not None else email
+        seat_lookup_user_id = user.id if user is not None else user_id
         before = {
-            "user_id": user_id if user is not None else None,
-            "user_status": user.status if user is not None else None,
+            "user_id": membership.user_id if membership is not None else None,
+            "user_status": (
+                user.status.value if membership is not None and user is not None else None
+            ),
             "membership_status": (
                 membership.membership_status if membership is not None else None
             ),
@@ -272,15 +278,15 @@ class WorkplaceWorkflowService:
                 select(SeatAssignmentORM).where(
                     SeatAssignmentORM.organization_id == organization_id,
                     SeatAssignmentORM.seat_pool_id == pool.id,
-                    SeatAssignmentORM.user_id == user_id,
+                    SeatAssignmentORM.user_id == seat_lookup_user_id,
                     SeatAssignmentORM.status == SeatAssignmentStatus.ACTIVE.value,
                 )
             )
             if active_assignment is not None:
                 raise ValueError("User already has an active standard seat")
         after = {
-            "user_id": user_id,
-            "user_status": UserStatus.ACTIVE.value,
+            "user_id": membership.user_id if membership is not None else None,
+            "user_status": "active",
             "membership_status": MembershipStatus.ACTIVE.value,
             "role": role,
             "active_seat": seat_type == "standard",
@@ -344,22 +350,17 @@ class WorkplaceWorkflowService:
         self._require_same_preparation(proposal, fresh)
         now = _utcnow()
         email = proposal.arguments["email"]
-        user = await self._session.scalar(select(UserORM).where(UserORM.email == email))
+        user = await self._users.get_by_email(email)
         if user is None:
-            user = UserORM(
-                id=_user_id_for_email(email),
-                display_name=proposal.arguments["display_name"],
-                email=email,
-                status=UserStatus.ACTIVE.value,
-                created_at=now,
-                updated_at=now,
+            user = await self._users.create_user(
+                CreateUserCommand(
+                    display_name=proposal.arguments["display_name"],
+                    email=email,
+                    actor_user_id=executor_user_id,
+                )
             )
-            self._session.add(user)
-            await self._session.flush()
-        else:
-            user.display_name = proposal.arguments["display_name"]
-            user.status = UserStatus.ACTIVE.value
-            user.updated_at = now
+        if not user.is_active:
+            raise ValueError("Production user is disabled")
 
         membership = await self._session.scalar(
             select(OrganizationMembershipORM).where(
@@ -480,9 +481,7 @@ class WorkplaceWorkflowService:
         *,
         proposal: AgentActionProposal,
     ) -> AgentActionHandlerResult | None:
-        user = await self._session.scalar(
-            select(UserORM).where(UserORM.email == proposal.arguments["email"])
-        )
+        user = await self._users.get_by_email(proposal.arguments["email"])
         if user is None:
             return None
         membership = await self._session.scalar(
@@ -585,7 +584,7 @@ class WorkplaceWorkflowService:
             )
             if pool is not None:
                 pools[pool.id] = pool
-        user = await self._session.get(UserORM, user_id)
+        user = await self._users.get_by_id(user_id)
         if user is None:
             raise ValueError("Organization user was not found")
         before = {

@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import hashlib
 import uuid
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.user.contract import CreateUserCommand, UserDirectory
+from app.adapters.user.provider import get_user_directory
 from app.db.orm_models import (
     OrganizationMembershipORM,
     OrganizationReportAccessORM,
     OrganizationSeatPoolORM,
     ReportORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.domain.enums import (
     MembershipStatus,
@@ -23,7 +23,6 @@ from app.domain.enums import (
     Role,
     SeatAssignmentStatus,
     SeatPoolStatus,
-    UserStatus,
 )
 
 
@@ -40,11 +39,16 @@ class OperationalResourceNotFoundError(LookupError):
 
 
 class OperationalResourceService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        user_directory: UserDirectory | None = None,
+    ) -> None:
         self._session = session
+        self._users = user_directory or get_user_directory()
 
     async def inspect_invitation(self, organization_id: str, email: str) -> dict:
-        user = await self._session.scalar(select(UserORM).where(UserORM.email == email))
+        user = await self._users.get_by_email(email)
         membership = None
         if user is not None:
             membership = await self._membership(organization_id, user.id)
@@ -53,6 +57,7 @@ class OperationalResourceService:
             "membership_status": membership.membership_status if membership else None,
             "role": membership.role if membership else None,
             "version": membership.version if membership else 0,
+            "creation_enabled": self._users.creation_enabled,
         }
 
     async def invite_user(
@@ -62,25 +67,25 @@ class OperationalResourceService:
         email: str,
         display_name: str,
         role: str,
+        requested_by_user_id: str,
         expected_version: int,
     ) -> dict | None:
         state = await self.inspect_invitation(organization_id, email)
         if state["version"] != expected_version or state["membership_status"] is not None:
             return None
-        user_id = state["user_id"] or self._user_id_for_email(email)
-        if state["user_id"] is None:
-            self._session.add(
-                UserORM(
-                    id=user_id,
+        user = await self._users.get_by_email(email)
+        if user is None:
+            user = await self._users.create_user(
+                CreateUserCommand(
                     display_name=display_name,
                     email=email,
-                    status=UserStatus.ACTIVE.value,
+                    actor_user_id=requested_by_user_id,
                 )
             )
         self._session.add(
             OrganizationMembershipORM(
                 organization_id=organization_id,
-                user_id=user_id,
+                user_id=user.id,
                 role=role,
                 membership_status=MembershipStatus.INVITED.value,
                 version=1,
@@ -92,9 +97,9 @@ class OperationalResourceService:
             await self._session.rollback()
             return None
         return {
-            "user_id": user_id,
-            "email": email,
-            "display_name": display_name,
+            "user_id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
             "role": role,
             "membership_status": MembershipStatus.INVITED.value,
             "version": 1,
@@ -519,8 +524,3 @@ class OperationalResourceService:
                 OrganizationMembershipORM.user_id == user_id,
             )
         )
-
-    @staticmethod
-    def _user_id_for_email(email: str) -> str:
-        digest = hashlib.sha256(email.encode("utf-8")).hexdigest()[:20]
-        return f"usr_invited_{digest}"

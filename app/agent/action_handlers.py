@@ -101,6 +101,8 @@ class InviteOrganizationUserHandler:
         state = await self._resources.inspect_invitation(organization_id, email)
         if state["membership_status"] is not None:
             raise ValueError("User already has an organization membership")
+        if state["user_id"] is None and not state["creation_enabled"]:
+            raise ValueError("Production user creation is not configured")
         return AgentActionPreparation(
             normalized_arguments={"email": email, "display_name": display_name, "role": role},
             changes=(AgentActionChange(field="organization_membership", before=None, after={"email": email, "display_name": display_name, "role": role, "status": "invited"}),),
@@ -115,6 +117,7 @@ class InviteOrganizationUserHandler:
             email=proposal.arguments["email"],
             display_name=proposal.arguments["display_name"],
             role=proposal.arguments["role"],
+            requested_by_user_id=proposal.requested_by_user_id,
             expected_version=proposal.observed_resource_version,
         )
         if result is None:

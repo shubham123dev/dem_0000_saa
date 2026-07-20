@@ -19,7 +19,6 @@ from app.db.orm_models import (
     ReportORM,
     RolePermissionORM,
     SeatAssignmentORM,
-    UserORM,
 )
 from app.db.workplace_resource_models import WorkplaceSettingORM
 from app.workplace_resources.definitions import (
@@ -313,7 +312,9 @@ class WorkplaceResourceRegistry:
             WorkplaceResourceDefinition(
                 resource_type="user",
                 display_name="User",
-                orm_type=UserORM,
+                # Test_user1 is exposed through the dedicated user adapter,
+                # never through the local Workplace SQLAlchemy metadata.
+                orm_type=None,
                 id_attribute="id",
                 organization_attribute=None,
                 version_attribute=None,

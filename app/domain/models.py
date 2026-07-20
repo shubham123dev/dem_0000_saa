@@ -64,7 +64,7 @@ class OrganizationOverview:
 
 @dataclass(frozen=True)
 class User:
-    """An authenticated mock user (internal employee) from the sandbox DB."""
+    """Authenticated user projected from the configured user directory."""
 
     id: str
     display_name: str
@@ -82,7 +82,7 @@ class User:
 class OrganizationMember:
     """A user's membership in an organization, plus derived seat status.
 
-    ``users`` and ``seats`` are distinct: an active member may or may not
+    User identity and seats are distinct: an active member may or may not
     occupy a licensed seat.
     """
 

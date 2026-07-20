@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from httpx import AsyncClient
+
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.orm_models import (
@@ -13,8 +15,9 @@ from app.db.orm_models import (
     OrganizationSeatPoolORM,
     ReportORM,
     SeatAssignmentORM,
-    UserORM,
 )
+from app.domain.enums import UserStatus
+from app.domain.models import User
 
 PRIMARY_ORGANIZATION_ID = "org_sandbox_001"
 SECONDARY_ORGANIZATION_ID = "org_sandbox_002"
@@ -44,12 +47,12 @@ async def create_secondary_organization_data(database_session: AsyncSession) -> 
             updated_at=current_time_utc,
         )
     )
-    database_session.add(
-        UserORM(
+    get_sandbox_user_directory().upsert(
+        User(
             id=SECONDARY_USER_ID,
             display_name="Secondary Organization User",
             email="secondary.user@example.test",
-            status="active",
+            status=UserStatus.ACTIVE,
             created_at=current_time_utc,
             updated_at=current_time_utc,
         )

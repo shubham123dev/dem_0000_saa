@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_HEAD = "0017_action_control_plane"
+EXPECTED_HEAD = "0018_replace_local_users"
 EXPECTED_DATABASE_TABLE_NAMES = {
     "OrganizationAccount",
     "OrganizationCategoryAccess",
@@ -39,7 +39,6 @@ EXPECTED_DATABASE_TABLE_NAMES = {
     "reports",
     "role_permissions",
     "seat_assignments",
-    "users",
     "workplace_settings",
     "workplace_resource_snapshots",
     "workplace_mutation_plans",

@@ -8,6 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.user.contract import UserDirectory
+from app.adapters.user.provider import get_user_directory
 from app.agent.action_control_contracts import AgentActionExecutionEventRecord
 from app.db.action_control_models import AgentActionExecutionEventORM
 from app.db.action_models import (
@@ -16,7 +18,6 @@ from app.db.action_models import (
     AgentActionProposalORM,
 )
 from app.db.agent_run_models import AgentRunORM
-from app.db.orm_models import UserORM
 
 
 def _aware(value: datetime) -> datetime:
@@ -29,8 +30,13 @@ def _bounded(value: str, limit: int) -> str:
 
 
 class ActionControlRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        user_directory: UserDirectory | None = None,
+    ) -> None:
         self._session = session
+        self._users = user_directory or get_user_directory()
 
     async def append_event(
         self,
@@ -142,11 +148,8 @@ class ActionControlRepository:
         return row[0], row[1]
 
     async def user_label(self, user_id: str) -> str:
-        result = await self._session.execute(
-            select(UserORM.display_name).where(UserORM.id == user_id)
-        )
-        value = result.scalar_one_or_none()
-        return value or "Workspace user"
+        user = await self._users.get_by_id(user_id)
+        return user.display_name if user is not None else "Workspace user"
 
     async def execution_row(self, proposal_id: str) -> AgentActionExecutionORM | None:
         result = await self._session.execute(

@@ -43,7 +43,6 @@ class AgentConversationORM(Base):
     )
     created_by_user_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
@@ -102,7 +101,6 @@ class AgentRunORM(Base):
     )
     requested_by_user_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_message_id: Mapped[str] = mapped_column(String, nullable=False)

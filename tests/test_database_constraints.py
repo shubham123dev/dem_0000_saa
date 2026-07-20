@@ -88,10 +88,15 @@ async def test_duplicate_active_seat_assignment_is_rejected(
     await db_session.rollback()
 
 
-async def test_membership_for_unknown_user_is_rejected(
+async def test_membership_for_unknown_user_is_accepted_without_fk(
     db_session: AsyncSession,
     seeded,
 ) -> None:
+    """After the Test_user1 cutover, local FK constraints to users are removed.
+
+    Memberships no longer enforce cross-database referential integrity at the
+    SQL level; the user-directory boundary handles this at application layer.
+    """
     current_timestamp = datetime.now(timezone.utc)
     db_session.add(
         OrganizationMembershipORM(
@@ -105,9 +110,7 @@ async def test_membership_for_unknown_user_is_rejected(
         )
     )
 
-    with pytest.raises(IntegrityError):
-        await db_session.commit()
-
+    await db_session.commit()
     await db_session.rollback()
 
 

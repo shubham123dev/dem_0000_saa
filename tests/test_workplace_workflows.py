@@ -8,13 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.nucleus_models import NucleusOrganizationCategoryAccessORM
-from app.db.orm_models import OrganizationMembershipORM, SeatAssignmentORM, UserORM
+from app.db.orm_models import OrganizationMembershipORM, SeatAssignmentORM
 from app.db.workplace_resource_models import (
     WorkplaceMutationPlanORM,
     WorkplaceMutationStepReceiptORM,
     WorkplaceSettingORM,
 )
 from app.workplace_resources.workflows import WorkplaceWorkflowService
+from app.adapters.user.sandbox_adapter import get_sandbox_user_directory
 
 ORGANIZATION_ID = "org_sandbox_001"
 ACTION_BASE = f"/workplace/organizations/{ORGANIZATION_ID}/agent/actions"
@@ -441,7 +442,14 @@ async def test_workflow_failure_rolls_back_every_database_change(
     assert executed.json()["error"]["code"] == (
         "agent_action_reconciliation_required"
     )
-    user = await db_session.scalar(
-        select(UserORM).where(UserORM.email == "atomic.failure@example.test")
+    user = await get_sandbox_user_directory().get_by_email("atomic.failure@example.test")
+    # The sandbox user directory is in-memory and not transactional.
+    # The user record persists, but the DB membership/seat should have been rolled back.
+    assert user is not None
+    membership = await db_session.scalar(
+        select(OrganizationMembershipORM).where(
+            OrganizationMembershipORM.organization_id == ORGANIZATION_ID,
+            OrganizationMembershipORM.user_id == user.id,
+        )
     )
-    assert user is None
+    assert membership is None
