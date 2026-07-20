@@ -3,20 +3,20 @@
     @if (compact) {
       <button type="button" class="header-icon-button" aria-label="Open navigation" (click)="navigationPressed.emit()">☰</button>
     }
-    <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-    <div class="brand-copy"><strong>Workplace Agent</strong><span>Sandbox workspace</span></div>
+    <img class="brand-mark" src="sara-ai-orb.svg" alt="" aria-hidden="true" />
+    <div class="brand-copy"><strong>SARA AI</strong><span>RAG ENGINE ONLINE</span></div>
   </div>
 
   <div class="global-header__center">
     <span class="section-title">{{ sectionTitle }}</span>
     <nav aria-label="Global actions">
-      <button type="button" class="header-action" [attr.aria-pressed]="assistantOpen" (click)="assistantPressed.emit()"><span aria-hidden="true">✦</span> Ask AI</button>
+      <button type="button" class="header-action" [attr.aria-pressed]="assistantOpen" (click)="assistantPressed.emit()"><span aria-hidden="true">✦</span> Ask SARA</button>
       <div class="header-popover-anchor header-support">
         <button type="button" class="header-action" [attr.aria-expanded]="supportOpen()" (click)="toggleSupport()"><span aria-hidden="true">?</span> Support</button>
         @if (supportOpen()) {
           <div class="header-popover" role="dialog" aria-label="Support information">
             <strong>Need help?</strong>
-            <p>Use Ask AI for workplace questions. Approval and execution controls remain backend governed.</p>
+            <p>Use SARA for workplace questions. Approval and execution controls remain backend governed.</p>
           </div>
         }
       </div>
@@ -34,7 +34,7 @@
   </div>
 
   <div class="global-header__assistant" [class.global-header__assistant--hidden]="!assistantOpen">
-    <strong>Ask AI preview</strong>
-    <span>Phase 3</span>
+    <strong>Ask SARA</strong>
+    <span>Resumable activity</span>
   </div>
 </header>
