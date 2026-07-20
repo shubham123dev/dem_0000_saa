@@ -1,8 +1,15 @@
-:host { display: block; min-height: 100dvh; }
+:host {
+  display: block;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
 .app-shell {
   --shell-assistant-current: var(--ui-shell-assistant-width);
   display: grid;
-  min-height: 100dvh;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   grid-template-columns: var(--ui-shell-sidebar-width) minmax(0, 1fr) var(--shell-assistant-current);
   grid-template-rows: var(--ui-shell-header-height) minmax(0, 1fr);
   grid-template-areas: 'header header header' 'sidebar workspace assistant';
@@ -12,17 +19,18 @@
   transition: grid-template-columns var(--ui-duration-panel) var(--ui-ease-standard);
 }
 .brand-strip { position: fixed; z-index: calc(var(--ui-z-sticky) + 1); top: 0; right: 0; left: 0; height: 0.25rem; background: linear-gradient(90deg, var(--ui-status-danger-fg), var(--ui-brand-600)); }
+.shell-header, .shell-sidebar, .shell-workspace, .shell-assistant { min-height: 0; }
 .shell-header { grid-area: header; min-width: 0; }
-.shell-sidebar { grid-area: sidebar; min-height: 0; }
-.shell-workspace { grid-area: workspace; min-width: 0; min-height: 0; overflow: auto; background: var(--ui-surface-base); }
-.shell-assistant { position: relative; z-index: var(--ui-z-base); grid-area: assistant; min-width: 0; min-height: 0; border-left: 1px solid var(--ui-border-subtle); background: var(--ui-surface-base); }
+.shell-sidebar { grid-area: sidebar; overflow: hidden; }
+.shell-workspace { grid-area: workspace; min-width: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background: var(--ui-surface-base); }
+.shell-assistant { position: relative; z-index: var(--ui-z-base); grid-area: assistant; min-width: 0; height: 100%; overflow: hidden; border-left: 1px solid var(--ui-border-subtle); background: var(--ui-surface-base); }
 .shell-backdrop { position: fixed; z-index: calc(var(--ui-z-overlay) - 1); inset: var(--ui-shell-header-height) 0 0; border: 0; background: var(--ui-surface-overlay); cursor: default; }
 .shell-backdrop--sidebar { display: none; }
 .skip-link { position: fixed; z-index: var(--ui-z-toast); top: var(--ui-space-2); left: var(--ui-space-3); transform: translateY(-160%); border-radius: var(--ui-radius-sm); background: var(--ui-surface-inverse); color: var(--ui-text-inverse); padding: var(--ui-space-2) var(--ui-space-3); }
 .skip-link:focus { transform: translateY(0); }
 @media (max-width: 73.99rem) {
   .app-shell { grid-template-columns: var(--ui-shell-sidebar-width) minmax(0, 1fr); grid-template-areas: 'header header' 'sidebar workspace'; }
-  .shell-assistant { position: fixed; z-index: var(--ui-z-overlay); top: var(--ui-shell-header-height); right: 0; bottom: 0; width: min(var(--ui-shell-assistant-width), 92vw); border-left: 1px solid var(--ui-border-subtle); box-shadow: var(--ui-shadow-lg); }
+  .shell-assistant { position: fixed; z-index: var(--ui-z-overlay); top: var(--ui-shell-header-height); right: 0; bottom: 0; width: min(var(--ui-shell-assistant-width), 92vw); height: auto; border-left: 1px solid var(--ui-border-subtle); box-shadow: var(--ui-shadow-lg); }
 }
 @media (max-width: 47.99rem) {
   .app-shell { grid-template-columns: minmax(0,1fr); grid-template-areas: 'header' 'workspace'; }
