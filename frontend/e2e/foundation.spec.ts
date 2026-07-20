@@ -32,6 +32,31 @@ test('opens and closes the responsive Ask AI panel', async ({ page }) => {
   await expect(panel).toBeVisible();
 });
 
+test('keeps the SARA panel fixed while the workspace scrolls', async ({ page }) => {
+  await page.goto('/');
+  const panel = page.getByRole('complementary', { name: 'Ask SARA' });
+  const toggle = page.getByRole('button', { name: /Ask SARA/ }).first();
+  if (!(await panel.isVisible())) {
+    await toggle.click();
+  }
+  await expect(panel).toBeVisible();
+
+  const assistantTopBefore = await panel.evaluate(element => element.getBoundingClientRect().top);
+  await page.locator('.shell-workspace').evaluate(element => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '2200px';
+    spacer.setAttribute('data-testid', 'scroll-spacer');
+    element.appendChild(spacer);
+    element.scrollTop = 1200;
+  });
+
+  await expect.poll(() => page.locator('.shell-workspace').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  const assistantTopAfter = await panel.evaluate(element => element.getBoundingClientRect().top);
+  expect(assistantTopAfter).toBe(assistantTopBefore);
+  expect(await page.evaluate(() => document.scrollingElement?.scrollTop ?? -1)).toBe(0);
+  await expect(panel.getByRole('textbox', { name: 'Ask SARA' })).toBeVisible();
+});
+
 test('persists the dark theme choice', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open account preferences' }).click();
