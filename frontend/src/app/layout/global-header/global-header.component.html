@@ -10,7 +10,7 @@
   <div class="global-header__center">
     <span class="section-title">{{ sectionTitle }}</span>
     <nav aria-label="Global actions">
-      <button type="button" class="header-action" [attr.aria-pressed]="assistantOpen" (click)="assistantPressed.emit()"><span aria-hidden="true">✦</span> Ask SARA</button>
+      <button type="button" class="header-action" aria-label="Ask AI" [attr.aria-pressed]="assistantOpen" (click)="assistantPressed.emit()"><span aria-hidden="true">✦</span> Ask SARA</button>
       <div class="header-popover-anchor header-support">
         <button type="button" class="header-action" [attr.aria-expanded]="supportOpen()" (click)="toggleSupport()"><span aria-hidden="true">?</span> Support</button>
         @if (supportOpen()) {
