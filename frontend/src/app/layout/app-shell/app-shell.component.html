@@ -37,9 +37,9 @@
 
   @if (state.assistantOpen()) {
     @if (state.assistantOverlay()) {
-      <button type="button" class="shell-backdrop shell-backdrop--assistant" aria-label="Close Ask AI" (click)="state.closeAssistant()"></button>
+      <button type="button" class="shell-backdrop shell-backdrop--assistant" aria-label="Close Ask SARA" (click)="state.closeAssistant()"></button>
     }
-    <section class="shell-assistant" aria-label="Ask AI panel">
+    <section class="shell-assistant" aria-label="Ask SARA panel">
       @if (!state.assistantOverlay()) {
         <app-assistant-resize-handle [width]="state.assistantWidth()" (widthChange)="state.setAssistantWidth($event)" />
       }
