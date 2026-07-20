@@ -1,9 +1,9 @@
 @if (section === 'home') {
   <div class="workspace-home">
     <section class="workspace-hero">
-      <app-ui-badge tone="warning">Governed workplace agent</app-ui-badge>
+      <app-ui-badge tone="warning">Governed SARA workspace</app-ui-badge>
       <h1>Let's get to work.</h1>
-      <p>Explore workplace resources, review governed actions, or open Ask AI for natural-language assistance.</p>
+      <p>Explore workplace resources, review governed actions, or open SARA for natural-language assistance.</p>
       <div class="workspace-search">
         <app-ui-input label="Search workspace" type="search" placeholder="Organizations, users, reports, settings…" [(value)]="searchValue" />
         <kbd>Ctrl K</kbd>
@@ -30,7 +30,7 @@
     <nav aria-label="Breadcrumb"><button type="button" (click)="navigate.emit('home')">Workspace home</button><span aria-hidden="true">›</span><span>{{ current.label }}</span></nav>
     <header>
       <div><span class="workspace-eyebrow">{{ current.group }}</span><h1>{{ current.label }}</h1><p>{{ current.description }}</p></div>
-      <app-ui-button variant="outline" (pressed)="askAi.emit()">Ask AI about this</app-ui-button>
+      <app-ui-button variant="outline" (pressed)="askAi.emit()">Ask SARA about this</app-ui-button>
     </header>
     <app-ui-callout tone="info" title="Shell ready">
       This section is structurally complete. Its live data view is connected in the dedicated resource-dashboard phase, without duplicating backend rules.
