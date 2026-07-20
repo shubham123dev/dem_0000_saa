@@ -17,6 +17,6 @@ describe('AppComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.textContent).toContain("Let's get to work.");
     expect(element.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
-    expect(element.querySelector('[aria-label="Ask AI"]')).not.toBeNull();
+    expect(element.querySelector('[aria-label="Ask SARA"]')).not.toBeNull();
   });
 });
