@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function openAssistant(page: Page) {
-  const toggle = page.getByRole('button', { name: /Ask AI/ }).first();
-  const panel = page.getByRole('complementary', { name: 'Ask AI' });
+  const toggle = page.getByRole('button', { name: /Ask SARA/ }).first();
+  const panel = page.getByRole('complementary', { name: 'Ask SARA' });
   await expect(toggle).toBeVisible();
   if (!(await panel.isVisible())) {
     await toggle.click();
@@ -28,7 +28,7 @@ test('submits a durable run and renders real SSE activity', async ({ page }) => 
   await mockRun(page);
   await page.goto('/');
   const panel = await openAssistant(page);
-  await panel.getByRole('textbox', { name: 'Ask the workplace agent' }).fill('List active users');
+  await panel.getByRole('textbox', { name: 'Ask SARA' }).fill('List active users');
   await panel.getByRole('button', { name: 'Send' }).click();
   await expect(panel.getByText('Checking your access')).toBeVisible();
   await expect(panel.getByText('There are twelve active users.')).toBeVisible();
@@ -42,7 +42,7 @@ test('REST fallback remains supported', async ({ page }) => {
   await page.route('**/api/workplace/organizations/**/agent/query', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'read', organization_id: 'org_sandbox_001', answer: 'REST answer.', evidence_ids: [], answer_source: 'deterministic', results: [], action_proposal: null, missing_fields: [] }) }));
   await page.goto('/');
   const panel = await openAssistant(page);
-  await panel.getByRole('textbox', { name: 'Ask the workplace agent' }).fill('Status');
+  await panel.getByRole('textbox', { name: 'Ask SARA' }).fill('Status');
   await panel.getByRole('button', { name: 'Send' }).click();
   await expect(panel.getByText('REST answer.')).toBeVisible();
 });
@@ -64,7 +64,7 @@ test('reconnects from the last sequence without resubmitting the run', async ({ 
   });
   await page.goto('/');
   const panel = await openAssistant(page);
-  await panel.getByRole('textbox', { name: 'Ask the workplace agent' }).fill('List active users');
+  await panel.getByRole('textbox', { name: 'Ask SARA' }).fill('List active users');
   await panel.getByRole('button', { name: 'Send' }).click();
   await expect(panel.getByText('Recovered answer.')).toBeVisible({ timeout: 10_000 });
   expect(postCount).toBe(1);
