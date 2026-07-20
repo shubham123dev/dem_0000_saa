@@ -4,10 +4,13 @@ test('renders and navigates the complete workplace shell', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: "Let's get to work." })).toBeVisible();
   await expect(page.getByText('SARA AI', { exact: true })).toBeVisible();
-  await expect(page.getByText('RAG ENGINE ONLINE', { exact: true })).toBeVisible();
+  const subtitle = page.getByText('RAG ENGINE ONLINE', { exact: true });
   const viewport = page.viewportSize();
   if (viewport && viewport.width < 768) {
+    await expect(subtitle).toBeHidden();
     await page.getByRole('button', { name: 'Open navigation' }).click();
+  } else {
+    await expect(subtitle).toBeVisible();
   }
   await page.getByRole('button', { name: /Users/ }).first().click();
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
