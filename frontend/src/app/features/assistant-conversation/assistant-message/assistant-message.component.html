@@ -1,7 +1,7 @@
-<article class="message message--{{ message.role }}" [attr.aria-label]="message.role === 'user' ? 'You' : 'Workplace agent'">
-  <div class="message__avatar" aria-hidden="true">{{ message.role === 'user' ? 'Y' : message.role === 'error' ? '!' : 'W' }}</div>
+<article class="message message--{{ message.role }}" [attr.aria-label]="message.role === 'user' ? 'You' : 'SARA'">
+  <div class="message__avatar" aria-hidden="true">{{ message.role === 'user' ? 'Y' : message.role === 'error' ? '!' : 'S' }}</div>
   <div class="message__content">
-    <div class="message__meta"><strong>{{ message.role === 'user' ? 'You' : message.role === 'error' ? 'Request error' : message.role === 'notice' ? 'Notice' : 'Workplace agent' }}</strong><time [attr.datetime]="message.createdAt">{{ message.createdAt | date:'shortTime' }}</time></div>
+    <div class="message__meta"><strong>{{ message.role === 'user' ? 'You' : message.role === 'error' ? 'Request error' : message.role === 'notice' ? 'Notice' : 'SARA' }}</strong><time [attr.datetime]="message.createdAt">{{ message.createdAt | date:'shortTime' }}</time></div>
     @if (message.role === 'error') {
       <app-ui-callout tone="danger" [title]="message.title ?? 'Request failed'">{{ message.text }}</app-ui-callout>
       @if (message.retryable && retryAvailable) {<div class="message__actions"><app-ui-button variant="outline" size="small" (pressed)="retryRequested.emit()">Retry manually</app-ui-button><small>A retry may prepare another proposal. Check Pending approvals if the earlier request may have completed.</small></div>}
