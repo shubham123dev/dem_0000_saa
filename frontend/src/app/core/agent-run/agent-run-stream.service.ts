@@ -102,7 +102,7 @@ export class AgentRunStreamService {
     const response = await fetch(`${this.config.apiBaseUrl}${path}?after_sequence=${afterSequence}`, {
       method: 'GET',
       cache: 'no-store',
-      credentials: 'same-origin',
+      credentials: 'include',
       headers: {
         Accept: 'text/event-stream',
         'X-Mock-User-Id': userId,

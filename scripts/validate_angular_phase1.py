@@ -96,7 +96,7 @@ def validate(repo: Path) -> None:
     if "--proxy-config proxy.conf.json" not in scripts.get("start", ""):
         raise RuntimeError("Angular development proxy is not configured in npm start.")
     proxy = json.loads((frontend / "proxy.conf.json").read_text(encoding="utf-8"))
-    if proxy.get("/api", {}).get("target") != "http://127.0.0.1:8000":
+    if proxy.get("/api", {}).get("target") != "http://127.0.0.1:8043":
         raise RuntimeError("FastAPI development proxy target is invalid.")
     if proxy.get("/api", {}).get("pathRewrite", {}).get("^/api") != "":
         raise RuntimeError("FastAPI proxy must strip the /api prefix.")

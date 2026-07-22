@@ -6,8 +6,10 @@ import type { AgentRunEvent, AgentRunMessage, AgentRunStreamUpdate } from '../..
 import { agentRunMessageSchema } from '../../core/agent-run/agent-run.schemas';
 import { AgentRunStreamService } from '../../core/agent-run/agent-run-stream.service';
 import { WorkplaceAgentApiService } from '../../core/api/workplace-agent-api.service';
+import { CurrentUserStore } from '../../core/auth/current-user.store';
 import { APP_RUNTIME_CONFIG } from '../../core/config/app-config.token';
 import { normalizeWorkplaceError } from '../../core/errors/error-normalizer';
+import { WorkplaceApiError } from '../../core/errors/workplace-api.error';
 import type { AgentActivityItem, AgentConversationRecovery, AgentRunConnectionState } from './agent-activity.model';
 import type { ConversationMessage, PendingClarification } from './agent-conversation.model';
 import { emptyConversationMessage } from './agent-conversation.model';
@@ -39,10 +41,15 @@ export class AgentConversationStore {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly config = inject(APP_RUNTIME_CONFIG);
+  private readonly currentUser = inject(CurrentUserStore);
   private readonly restApi = inject(WorkplaceAgentApiService);
   private readonly runApi = inject(AgentRunApiService);
   private readonly stream = inject(AgentRunStreamService);
-  private readonly organizationId = this.config.defaultOrganizationId;
+
+  get organizationId(): string | null {
+    return this.currentUser.organizationId();
+  }
+
   private readonly scope = this.organizationId ? organizationScope(this.organizationId) : null;
   private readonly recovery = this.readRecovery();
   private readonly messagesState = signal<ConversationMessage[]>([]);
@@ -317,6 +324,9 @@ export class AgentConversationStore {
   }
 
   private appendError(error: unknown, retryable = false): void {
+    if (error instanceof WorkplaceApiError && (error.status === 401 || error.code === 'unauthenticated')) {
+      this.currentUser.clearUser();
+    }
     const normalized = normalizeWorkplaceError(error);
     const id = this.createId();
     this.append({ ...emptyConversationMessage('error', normalized.message, id, this.now()), tone:'danger', title:normalized.title, retryable: retryable && normalized.retryable });

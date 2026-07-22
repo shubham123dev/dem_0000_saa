@@ -64,7 +64,7 @@ export class AuthenticatedSseClient {
     if (!userId) throw new AuthenticatedSseProtocolError('No authenticated sandbox user is configured.');
     const separator = path.includes('?') ? '&' : '?';
     const response = await fetch(`${this.config.apiBaseUrl}${path}${separator}after_sequence=${afterSequence}`, {
-      method: 'GET', cache: 'no-store', credentials: 'same-origin', signal,
+      method: 'GET', cache: 'no-store', credentials: 'include', signal,
       headers: { Accept: 'text/event-stream', 'X-Mock-User-Id': userId, 'Last-Event-ID': String(afterSequence) }
     });
     if (!response.ok) throw new AuthenticatedSseResponseError(response);

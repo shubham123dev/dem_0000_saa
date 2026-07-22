@@ -13,6 +13,7 @@
     [assistantOpen]="state.assistantOpen()"
     (navigationPressed)="state.openSidebar()"
     (assistantPressed)="state.toggleAssistant()"
+    (loginRequested)="openLoginModal()"
   />
 
   @if (state.isCompact() && state.sidebarOpen()) {
@@ -48,7 +49,12 @@
         [currentSection]="state.activeSection()"
         (closePressed)="state.closeAssistant()"
         (sectionSelected)="navigate($event)"
+        (loginRequested)="openLoginModal()"
       />
     </section>
   }
-</div>
+
+  @if (loginModalOpen()) {
+    <app-auth-login-modal (loggedIn)="closeLoginModal()" (closed)="closeLoginModal()" />
+  }
+</div>

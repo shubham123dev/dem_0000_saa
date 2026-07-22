@@ -23,6 +23,8 @@ const SECTION_PROMPTS: Partial<Record<ShellSectionId, readonly StarterPrompt[]>>
   settings:[{label:'List settings resources',query:'List available workplace setting resources and their current state.'}]
 };
 
+import { CurrentUserStore } from '../../core/auth/current-user.store';
+
 @Component({
   selector:'app-assistant-panel', standalone:true,
   imports:[A11yModule,AssistantActivityComponent,AssistantComposerComponent,AssistantMessageComponent,UiBadgeComponent,UiButtonComponent,UiCalloutComponent],
@@ -36,7 +38,9 @@ export class AssistantPanelComponent {
   @Input() currentSection:ShellSectionId='home';
   @Output() readonly closePressed=new EventEmitter<void>();
   @Output() readonly sectionSelected=new EventEmitter<ShellSectionId>();
+  @Output() readonly loginRequested=new EventEmitter<void>();
   readonly conversation=inject(AgentConversationStore);
+  readonly userStore=inject(CurrentUserStore);
   private readonly actionNavigation=inject(ActionNavigationStore);
   readonly greeting=this.createGreeting();
   readonly activityStatus = computed<AgentActivityStatus>(() => {

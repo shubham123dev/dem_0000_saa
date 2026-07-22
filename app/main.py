@@ -15,6 +15,7 @@ from app.api import (
     action_routes,
     agent_routes,
     agent_run_routes,
+    auth_routes,
     health_routes,
     nucleus_routes,
     workplace_resource_routes,
@@ -30,6 +31,20 @@ from app.services.agent_run_worker import AgentRunCoordinator
 @asynccontextmanager
 async def _lifespan(application: FastAPI):
     settings = get_settings()
+
+    # Ensure all ORM tables (e.g. user_sessions) exist in local sandbox database
+    import app.db.orm_models  # noqa: F401
+    from app.db.base import Base
+    from app.db.session import get_engine
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    import logging
+    logger = logging.getLogger("uvicorn")
+    if settings.nucleus_user_database_url:
+        logger.info("Nucleus SQL Server User Directory configured for dbmr_Database_Nucleus.dbo.Test_user1")
+
     coordinator = AgentRunCoordinator(
         get_sessionmaker(),
         poll_seconds=settings.agent_run_poll_seconds,
@@ -68,6 +83,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(application)
     application.include_router(health_routes.router)
+    application.include_router(auth_routes.router)
     application.include_router(workplace_routes.router)
     application.include_router(nucleus_routes.router)
     application.include_router(workplace_resource_routes.router)

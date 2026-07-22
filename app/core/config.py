@@ -16,8 +16,9 @@ class Settings(BaseSettings):
 
     app_name: str = "DBMR Workplace Agent (Sandbox)"
     database_url: str = "sqlite+aiosqlite:///./workplace_sandbox.db"
-    environment: str = "sandbox"
+    environment: str = "production"
     enable_raw_mock_api: bool = False
+    session_cookie_secure: bool = False
 
     # Test_user1 is the only production user source. Keep its connection
     # separate from the Workplace database so Alembic never manages it.

@@ -5,7 +5,7 @@ from app.core.errors import AppError
 
 class AgentActionInvalidError(AppError):
     code = "agent_action_invalid"
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "Agent action proposal is invalid."
 
 

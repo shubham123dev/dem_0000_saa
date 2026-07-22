@@ -324,7 +324,7 @@ FILES = {'frontend/.editorconfig': 'root = true\n'
                           '    "npm": ">=10"\n'
                           '  },\n'
                           '  "scripts": {\n'
-                          '    "start": "ng serve --host 127.0.0.1 --port 4200 --proxy-config '
+                          '    "start": "ng serve --host 127.0.0.1 --port 4201 --proxy-config '
                           'proxy.conf.json",\n'
                           '    "build": "ng build",\n'
                           '    "build:development": "ng build --configuration development",\n'
@@ -377,10 +377,10 @@ FILES = {'frontend/.editorconfig': 'root = true\n'
                                   "  forbidOnly: Boolean(process.env['CI']),\n"
                                   "  retries: process.env['CI'] ? 2 : 0,\n"
                                   "  reporter: [['html', { open: 'never' }]],\n"
-                                  "  use: { baseURL: 'http://127.0.0.1:4200', trace: "
+                                  "  use: { baseURL: 'http://127.0.0.1:4201', trace: "
                                   "'on-first-retry' },\n"
                                   "  webServer: { command: 'npm run start', url: "
-                                  "'http://127.0.0.1:4200', reuseExistingServer: "
+                                  "'http://127.0.0.1:4201', reuseExistingServer: "
                                   "!process.env['CI'], timeout: 120000 },\n"
                                   '  projects: [\n'
                                   "    { name:'chromium-desktop', use:{...devices['Desktop "

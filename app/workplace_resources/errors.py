@@ -7,7 +7,7 @@ from app.core.errors import AppError
 
 class WorkplaceResourceInvalidError(AppError):
     code = "workplace_resource_invalid"
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "Workplace resource request is invalid."
 
 

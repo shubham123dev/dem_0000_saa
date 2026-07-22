@@ -99,7 +99,7 @@ Do not commit if any test fails.
 Open Swagger:
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8043/docs
 ```
 
 ## 7. Smoke-test all new reads
@@ -107,7 +107,7 @@ http://127.0.0.1:8000/docs
 In a second PowerShell window:
 
 ```powershell
-$base = "http://127.0.0.1:8000"
+$base = "http://127.0.0.1:8043"
 $admin = @{ "X-Mock-User-Id" = "usr_admin_001" }
 $reader = @{ "X-Mock-User-Id" = "usr_member_001" }
 $org = "org_sandbox_001"

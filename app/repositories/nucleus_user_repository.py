@@ -30,11 +30,57 @@ from app.domain.models import User
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SAFE_COLUMNS = (
     "UserID",
+    "UserTypeID",
+    "OrganizationId",
     "Name",
     "EmailID",
-    "IsActive",
     "CreatedDate",
     "ModifiedDate",
+    "CreatedBy",
+    "ModifiedBy",
+    "IsActive",
+    "PareentUserID",
+    "menuAccess",
+    "regionsAssigned",
+    "macAddress",
+    "isClient",
+    "company",
+    "contactNumber",
+    "designation",
+    "licenceEndDate",
+    "licenceStartDate",
+    "licenceType",
+    "reportAccess",
+    "isFrontAccess",
+    "countryAccess",
+    "epidemAccess",
+    "iExportAccess",
+    "indicatorAccess",
+    "pharmaAccess",
+    "reportAccessMew",
+    "epidomReegions",
+    "pharmaReegions",
+    "reportReegions",
+    "userSource",
+    "isSampleDatabaseAccess",
+    "isApprovedTC",
+    "SpocUserID",
+    "RpocUserID",
+    "isCpAccess",
+    "clientType",
+    "IndicationsAccess",
+    "pharma_CompanyView",
+    "pharma_DrugView",
+    "pharma_TherpyView",
+    "firstLoginDate",
+    "viewOnly",
+    "expiryDate",
+    "NoOFDays",
+    "isSampleTocDatabaseAccess",
+    "epicDatabaseAccess",
+    "isBlurAll",
+    "ciDataBaseAccess",
+    "isSpecialityAccess",
 )
 _PROTECTED_CREATE_COLUMNS = {"UserID", "Password"}
 
@@ -122,6 +168,33 @@ class NucleusUserRepository:
         if len(rows) > 1:
             raise AmbiguousUserEmailError(
                 "Test_user1 contains more than one row for this EmailID"
+            )
+        return self._to_user(rows[0]) if rows else None
+
+    async def get_by_email_and_password(
+        self, email: str, password: str
+    ) -> User | None:
+        normalized = email.strip().lower()
+        statement = text(
+            f"SELECT TOP (2) {self._projection()} "
+            f"FROM {self._qualified_table} "
+            "WHERE LOWER(LTRIM(RTRIM([EmailID]))) = :email "
+            "  AND [Password] = :password "
+            "ORDER BY [UserID] ASC"
+        )
+        async with self._sessionmaker() as session:
+            rows = tuple(
+                (
+                    await session.execute(
+                        statement, {"email": normalized, "password": password}
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        if len(rows) > 1:
+            raise AmbiguousUserEmailError(
+                "Test_user1 contains more than one row for this EmailID and Password"
             )
         return self._to_user(rows[0]) if rows else None
 
@@ -304,6 +377,14 @@ class NucleusUserRepository:
     @staticmethod
     def _to_user(row: Mapping[str, Any]) -> User:
         active = row.get("IsActive")
+        known_keys = {"UserID", "Name", "EmailID", "IsActive", "CreatedDate", "ModifiedDate"}
+        extra = {}
+        for k, v in row.items():
+            if k not in known_keys:
+                if hasattr(v, "isoformat") and callable(v.isoformat):
+                    extra[k] = v.isoformat()
+                else:
+                    extra[k] = v
         return User(
             id=str(row["UserID"]),
             display_name=str(row.get("Name") or "").strip(),
@@ -313,4 +394,5 @@ class NucleusUserRepository:
             ),
             created_at=row.get("CreatedDate"),
             updated_at=row.get("ModifiedDate"),
+            extra_fields=extra,
         )

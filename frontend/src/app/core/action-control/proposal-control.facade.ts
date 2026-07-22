@@ -1,6 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { catchError, finalize, tap, throwError, type Observable, type Subscription } from 'rxjs';
 import { APP_RUNTIME_CONFIG } from '../config/app-config.token';
+import { CurrentUserStore } from '../auth/current-user.store';
 import { normalizeWorkplaceError } from '../errors/error-normalizer';
 import { ActionControlApiService } from './action-control-api.service';
 import type { ActionProposalControl } from './action-control.models';
@@ -8,8 +9,9 @@ import type { ActionProposalControl } from './action-control.models';
 @Injectable()
 export class ProposalControlFacade {
   private readonly config=inject(APP_RUNTIME_CONFIG);
+  private readonly currentUser=inject(CurrentUserStore);
   private readonly api=inject(ActionControlApiService);
-  private readonly organizationId=this.config.defaultOrganizationId;
+  get organizationId(): string | null { return this.currentUser.organizationId(); }
   private readonly proposalState=signal<ActionProposalControl|null>(null);
   private readonly loadingState=signal(false);
   private readonly busyState=signal(false);

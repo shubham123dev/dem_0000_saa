@@ -8,7 +8,7 @@ database is later replaced by the real Nucleus organization API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from app.domain.enums import (
@@ -72,6 +72,7 @@ class User:
     status: UserStatus
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    extra_fields: dict = field(default_factory=dict)
 
     @property
     def is_active(self) -> bool:

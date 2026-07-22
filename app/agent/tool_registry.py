@@ -38,6 +38,12 @@ class ReadOnlyAgentToolRegistry:
             for item in WorkplaceRelationRegistry().list_definitions()
         )
         self._tool_definitions_by_name = {
+            "get_current_user_profile": AgentToolDefinition(
+                name="get_current_user_profile",
+                description=(
+                    "Read the currently authenticated user identity, display name, email, and user ID."
+                ),
+            ),
             "get_organization_overview": AgentToolDefinition(
                 name="get_organization_overview",
                 description=(

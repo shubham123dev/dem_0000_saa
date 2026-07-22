@@ -345,6 +345,14 @@ class ReadOnlyAgentOrchestrator:
                 )
             )
             result_data = entitlements
+        elif tool_call.tool_name == "get_current_user_profile":
+            result_data = {
+                "user_id": user.id,
+                "display_name": user.display_name,
+                "email": user.email,
+                "status": user.status.value,
+                "created_at": user.created_at.isoformat() if hasattr(user.created_at, "isoformat") and callable(user.created_at.isoformat) else (str(user.created_at) if user.created_at else None),
+            }
         elif tool_call.tool_name == "get_organization_profile":
             organization_profile, _ = await self._organization_service.read_profile(
                 user=user,

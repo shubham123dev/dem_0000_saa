@@ -114,7 +114,7 @@ REPLACEMENTS={'frontend/docs/DESIGN_SYSTEM.md': '# Angular workplace-agent desig
                           '    "npm": ">=10"\n'
                           '  },\n'
                           '  "scripts": {\n'
-                          '    "start": "ng serve --host 127.0.0.1 --port 4200 --proxy-config proxy.conf.json",\n'
+                          '    "start": "ng serve --host 127.0.0.1 --port 4201 --proxy-config proxy.conf.json",\n'
                           '    "build": "ng build",\n'
                           '    "build:development": "ng build --configuration development",\n'
                           '    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",\n'

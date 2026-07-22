@@ -93,15 +93,31 @@ def _require_canonical_production_ids() -> None:
         )
 
 
-def upgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
-    if "users" not in inspector.get_table_names():
-        return
-    _require_canonical_production_ids()
-    for table_name, column_name in _USER_FOREIGN_KEYS:
-        if table_name in sa.inspect(op.get_bind()).get_table_names():
-            _drop_user_foreign_key(table_name, column_name)
-    op.drop_table("users")
+    if "user_sessions" not in inspector.get_table_names():
+        op.create_table(
+            "user_sessions",
+            sa.Column("id", sa.String(), nullable=False),
+            sa.Column("user_id", sa.String(), nullable=False),
+            sa.Column("session_token_hash", sa.String(length=128), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("is_revoked", sa.Boolean(), nullable=False),
+            sa.Column("ip_address", sa.String(length=64), nullable=True),
+            sa.Column("user_agent", sa.String(length=256), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("session_token_hash"),
+        )
+        op.create_index("ix_user_sessions_id", "user_sessions", ["id"], unique=False)
+        op.create_index("ix_user_sessions_session_token_hash", "user_sessions", ["session_token_hash"], unique=False)
+        op.create_index("ix_user_sessions_user_id", "user_sessions", ["user_id"], unique=False)
+        op.create_index("ix_user_session_user_lookup", "user_sessions", ["user_id", "is_revoked"], unique=False)
+
+    if "users" in inspector.get_table_names():
+        _require_canonical_production_ids()
+        for table_name, column_name in _USER_FOREIGN_KEYS:
+            if table_name in sa.inspect(op.get_bind()).get_table_names():
+                _drop_user_foreign_key(table_name, column_name)
+        op.drop_table("users")
 
 
 def downgrade() -> None:

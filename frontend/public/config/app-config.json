@@ -1,7 +1,7 @@
 {
   "apiBaseUrl": "/api",
-  "defaultOrganizationId": "org_sandbox_001",
-  "mockUserId": "usr_admin_001",
+  "defaultOrganizationId": null,
+  "mockUserId": null,
   "requestTimeoutMs": 30000,
   "enableDebugViews": false,
   "streamTransport": "sse"

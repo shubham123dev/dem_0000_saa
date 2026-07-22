@@ -42,7 +42,7 @@ experiences follow in later phases.
 
 The browser uses the same-origin `/api` prefix. `npm start` loads
 `proxy.conf.json`, forwards `/api/*` to the local FastAPI server at
-`http://127.0.0.1:8000`, and removes the prefix. Production must provide the
+`http://127.0.0.1:8043`, and removes the prefix. Production must provide the
 same reverse-proxy contract. This avoids exposing endpoint infrastructure in the
 non-technical UI and avoids cross-origin custom-header failures.
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agent.run_contracts import AgentMessageRecord, AgentRunEventRecord, AgentRunRecord
 from app.api.agent_run_dependencies import AgentRunServiceDep
-from app.api.dependencies import SessionDep, UserDep
+from app.api.dependencies import SessionDep, UserDep, verify_organization_membership
 from app.core.config import get_settings
 from app.core.errors import REQUEST_ID_HEADER
 from app.repositories.agent_run_repository import AgentRunRepository
@@ -24,7 +24,8 @@ from app.schemas.agent_run import (
 )
 
 router = APIRouter(
-    prefix="/workplace/organizations", tags=["workplace-agent-runs"]
+    prefix="/workplace/organizations",
+    tags=["workplace-agent-runs"],
 )
 
 

@@ -25,5 +25,5 @@ class AgentModelResponseInvalidError(AppError):
 
 class AgentToolCallInvalidError(AppError):
     code = "agent_tool_call_invalid"
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     message = "Agent proposed an invalid tool call."

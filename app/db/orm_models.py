@@ -6,6 +6,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -329,3 +330,27 @@ class AuditEventORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False, index=True
     )
+
+
+class UserSessionORM(Base):
+    """Server-side session store validating HTTP-only cookies against Test_user1."""
+
+    __tablename__ = "user_sessions"
+    __table_args__ = (
+        Index("ix_user_session_user_lookup", "user_id", "is_revoked"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    # References string representation of Test_user1.UserID
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    session_token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    is_revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
+

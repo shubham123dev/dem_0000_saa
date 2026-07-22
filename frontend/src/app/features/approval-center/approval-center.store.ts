@@ -1,6 +1,7 @@
 import { computed, DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
 import type { Subscription } from 'rxjs';
 import { APP_RUNTIME_CONFIG } from '../../core/config/app-config.token';
+import { CurrentUserStore } from '../../core/auth/current-user.store';
 import { normalizeWorkplaceError } from '../../core/errors/error-normalizer';
 import { ActionControlApiService } from '../../core/action-control/action-control-api.service';
 import type { ActionConnectionState, ActionExecutionEvent, ActionProposalControl } from '../../core/action-control/action-control.models';
@@ -13,11 +14,14 @@ interface Recovery { proposalId: string; lastSequence: number; executionKey: str
 @Injectable({ providedIn: 'root' })
 export class ApprovalCenterStore {
   private readonly config = inject(APP_RUNTIME_CONFIG);
+  private readonly currentUser = inject(CurrentUserStore);
   private readonly api = inject(ActionControlApiService);
   private readonly stream = inject(ActionExecutionStreamService);
   private readonly navigation = inject(ActionNavigationStore);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly organizationId = this.config.defaultOrganizationId;
+  get organizationId(): string | null {
+    return this.currentUser.organizationId();
+  }
   private readonly proposalsState = signal<ActionProposalControl[]>([]);
   private readonly selectedState = signal<ActionProposalControl | null>(null);
   private readonly eventsState = signal<ActionExecutionEvent[]>([]);
