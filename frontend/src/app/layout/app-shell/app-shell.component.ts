@@ -108,12 +108,19 @@ export class AppShellComponent implements OnInit {
 
   private syncSectionFromRoute(): void {
     let child = this.route;
+    let isChatRoute = false;
     while (child.firstChild) {
       child = child.firstChild;
+      if (child.snapshot.routeConfig?.path === 'chat') {
+        isChatRoute = true;
+      }
     }
     const section = child.snapshot.data['section'] as ShellSectionId | undefined;
     if (section) {
       this.state.syncFromRoute(section);
+    }
+    if (isChatRoute) {
+      this.state.openAssistant();
     }
   }
 }
