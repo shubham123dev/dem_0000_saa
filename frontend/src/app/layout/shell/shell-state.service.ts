@@ -63,6 +63,15 @@ export class ShellStateService {
     if (this.assistantOverlay()) this.closeAssistant();
   }
 
+  /**
+   * Sync active section from Angular Router route data.
+   * Unlike selectSection(), this does NOT close the sidebar —
+   * the section change comes from URL navigation, not a sidebar click.
+   */
+  syncFromRoute(section: ShellSectionId): void {
+    this.activeSectionState.set(section);
+  }
+
   private readWidth(): number {
     const parsed = Number(this.readStorage(ASSISTANT_WIDTH_KEY));
     return Number.isFinite(parsed) ? Math.min(MAX_ASSISTANT_WIDTH, Math.max(MIN_ASSISTANT_WIDTH, parsed)) : DEFAULT_ASSISTANT_WIDTH;

@@ -1,4 +1,6 @@
+import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, Subject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRunApiService } from '../../core/agent-run/agent-run-api.service';
@@ -33,6 +35,8 @@ describe('AgentConversationStore durable runs', () => {
     updates = new Subject();
     cancel = vi.fn().mockReturnValue(of({ ...created.run, status: 'cancel_requested' }));
     TestBed.configureTestingModule({ providers: [
+      provideRouter([]),
+      provideLocationMocks(),
       { provide: APP_RUNTIME_CONFIG, useValue: { apiBaseUrl: '/api', defaultOrganizationId: 'org_1', mockUserId: 'usr_1', requestTimeoutMs: 30000, enableDebugViews: false, streamTransport: 'sse' } },
       { provide: WorkplaceAgentApiService, useValue: { query: vi.fn() } },
       { provide: AgentRunApiService, useValue: {

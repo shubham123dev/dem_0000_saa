@@ -31,7 +31,5 @@ export const SHELL_NAVIGATION: readonly ShellNavigationItem[] = [
 ];
 
 export function navigationItem(id: ShellSectionId): ShellNavigationItem {
-  const item = SHELL_NAVIGATION.find((candidate) => candidate.id === id);
-  if (!item) throw new Error(`Unknown shell section: ${id}`);
-  return item;
+  return SHELL_NAVIGATION.find((candidate) => candidate.id === id) ?? SHELL_NAVIGATION[0];
 }

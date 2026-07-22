@@ -7,6 +7,7 @@ import { agentRunMessageSchema } from '../../core/agent-run/agent-run.schemas';
 import { AgentRunStreamService } from '../../core/agent-run/agent-run-stream.service';
 import { WorkplaceAgentApiService } from '../../core/api/workplace-agent-api.service';
 import { CurrentUserStore } from '../../core/auth/current-user.store';
+import { OrganizationRouteService } from '../../core/routing/organization-route.service';
 import { APP_RUNTIME_CONFIG } from '../../core/config/app-config.token';
 import { normalizeWorkplaceError } from '../../core/errors/error-normalizer';
 import { WorkplaceApiError } from '../../core/errors/workplace-api.error';
@@ -42,25 +43,29 @@ export class AgentConversationStore {
   private readonly destroyRef = inject(DestroyRef);
   private readonly config = inject(APP_RUNTIME_CONFIG);
   private readonly currentUser = inject(CurrentUserStore);
+  private readonly orgRoute = inject(OrganizationRouteService);
   private readonly restApi = inject(WorkplaceAgentApiService);
   private readonly runApi = inject(AgentRunApiService);
   private readonly stream = inject(AgentRunStreamService);
 
+  /** Organization context now comes from the URL route parameter. */
   get organizationId(): string | null {
-    return this.currentUser.organizationId();
+    return this.orgRoute.organizationId();
   }
 
-  private readonly scope = this.organizationId ? organizationScope(this.organizationId) : null;
-  private readonly recovery = this.readRecovery();
+  get scope(): string | null {
+    return this.organizationId ? organizationScope(this.organizationId) : null;
+  }
+
   private readonly messagesState = signal<ConversationMessage[]>([]);
   private readonly activitiesState = signal<AgentActivityItem[]>([]);
   private readonly pendingState = signal(false);
   private readonly clarificationState = signal<PendingClarification | null>(null);
   private readonly retryMessageIdState = signal<string | null>(null);
   private readonly connectionState = signal<AgentRunConnectionState>('closed');
-  private readonly conversationIdState = signal<string | null>(this.recovery?.conversationId ?? null);
-  private readonly activeRunIdState = signal<string | null>(this.recovery?.activeRunId ?? null);
-  private readonly lastEventSequenceState = signal(this.recovery?.lastEventSequence ?? 0);
+  private readonly conversationIdState = signal<string | null>(null);
+  private readonly activeRunIdState = signal<string | null>(null);
+  private readonly lastEventSequenceState = signal(0);
   private readonly cancellationRequestedState = signal(false);
   private readonly watchingStoppedState = signal(false);
   private requestSubscription: Subscription | null = null;
@@ -86,7 +91,19 @@ export class AgentConversationStore {
   constructor() {
     effect(() => this.persistRecovery());
     this.destroyRef.onDestroy(() => this.stopAll());
-    if (this.streamingEnabled() && this.conversationIdState()) queueMicrotask(() => this.recover());
+    effect(() => {
+      const orgId = this.orgRoute.organizationId();
+      const authenticated = this.currentUser.isAuthenticated();
+      if (orgId && authenticated && this.streamingEnabled() && !this.conversationIdState()) {
+        const recovery = this.readRecovery();
+        if (recovery?.conversationId) {
+          this.conversationIdState.set(recovery.conversationId);
+          this.activeRunIdState.set(recovery.activeRunId);
+          this.lastEventSequenceState.set(recovery.lastEventSequence);
+          queueMicrotask(() => this.recover());
+        }
+      }
+    });
   }
 
   submit(text: string): void {
@@ -350,23 +367,45 @@ export class AgentConversationStore {
   private createId(): string { return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 
   private readRecovery(): AgentConversationRecovery | null {
-    if (!this.scope) return null;
     try {
-      const raw = this.document.defaultView?.sessionStorage.getItem(STORAGE_KEY);
+      const raw = this.document.defaultView?.localStorage?.getItem(STORAGE_KEY)
+               ?? this.document.defaultView?.sessionStorage?.getItem(STORAGE_KEY);
       if (!raw) return null;
       const value = JSON.parse(raw) as Partial<AgentConversationRecovery>;
-      if (value.version !== 2 || value.organizationScope !== this.scope) return null;
-      return { version:2, organizationScope:this.scope, conversationId:typeof value.conversationId === 'string' ? value.conversationId : null, activeRunId:typeof value.activeRunId === 'string' ? value.activeRunId : null, lastEventSequence:Number.isInteger(value.lastEventSequence) ? Math.max(0, Number(value.lastEventSequence)) : 0 };
+      if (value.version !== 2) return null;
+      if (this.scope && value.organizationScope && value.organizationScope !== this.scope) return null;
+      return {
+        version: 2,
+        organizationScope: value.organizationScope ?? this.scope ?? '',
+        conversationId: typeof value.conversationId === 'string' ? value.conversationId : null,
+        activeRunId: typeof value.activeRunId === 'string' ? value.activeRunId : null,
+        lastEventSequence: Number.isInteger(value.lastEventSequence) ? Math.max(0, Number(value.lastEventSequence)) : 0
+      };
     } catch { return null; }
   }
 
   private persistRecovery(): void {
     if (!this.scope || !this.streamingEnabled()) return;
-    const recovery: AgentConversationRecovery = { version:2, organizationScope:this.scope, conversationId:this.conversationIdState(), activeRunId:this.activeRunIdState(), lastEventSequence:this.lastEventSequenceState() };
-    try { this.document.defaultView?.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(recovery)); } catch { /* optional convenience */ }
+    const convId = this.conversationIdState();
+    if (!convId) return;
+
+    const recovery: AgentConversationRecovery = {
+      version: 2,
+      organizationScope: this.scope,
+      conversationId: convId,
+      activeRunId: this.activeRunIdState(),
+      lastEventSequence: this.lastEventSequenceState(),
+    };
+    try {
+      this.document.defaultView?.localStorage?.setItem(STORAGE_KEY, JSON.stringify(recovery));
+      this.document.defaultView?.sessionStorage?.setItem(STORAGE_KEY, JSON.stringify(recovery));
+    } catch { /* optional convenience */ }
   }
 
   private removeRecovery(): void {
-    try { this.document.defaultView?.sessionStorage.removeItem(STORAGE_KEY); } catch { /* storage may be disabled */ }
+    try {
+      this.document.defaultView?.localStorage?.removeItem(STORAGE_KEY);
+      this.document.defaultView?.sessionStorage?.removeItem(STORAGE_KEY);
+    } catch { /* storage may be disabled */ }
   }
 }

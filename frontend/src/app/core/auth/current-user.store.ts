@@ -26,7 +26,7 @@ export class CurrentUserStore {
   readonly organizationId = computed<string | null>(() => {
     const userProfile = this.user();
     if (userProfile) {
-      const orgId = userProfile.entitlements['OrganizationId'] ?? userProfile.entitlements['OrganizationID'] ?? userProfile.entitlements['organization_id'];
+      const orgId = userProfile.entitlements['OrganizationId'];
       if (orgId !== null && orgId !== undefined && String(orgId).trim()) {
         const cleaned = String(orgId).trim();
         if (cleaned.startsWith('org_')) return cleaned;
