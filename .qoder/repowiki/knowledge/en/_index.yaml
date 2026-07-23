@@ -1,0 +1,86 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: main
+nodes_managed: true
+exported_at: "2026-07-23T15:29:21Z"
+modules:
+    "":
+        dir_name: DBMR Workplace Agent Sandbox
+        title: DBMR Workplace Agent Sandbox
+        scope:
+            - README.md
+            - FILE_MANIFEST.md
+            - NUCLEUS_SCHEMA_MAPPING.md
+            - VALIDATION_REPORT.md
+            - SOURCE_STATE_AUDIT.md
+            - APPLY_AND_VALIDATE.md
+            - .gitignore
+            - pyproject.toml
+            - alembic.ini
+            - apply_agent_native_workplace_resources.py
+            - apply_angular_phase0_contracts.py
+            - apply_angular_phase1_foundation.py
+            - apply_angular_phase2_design_system.py
+            - apply_angular_phase3_shell_and_phase2_hardening.py
+            - apply_angular_phase4_conversation.py
+            - apply_final_workplace_workflows.py
+            - apply_nucleus_admin_control.py
+            - apply_nucleus_gateway_boundary.py
+            - apply_nucleus_multi_resource_preconditions.py
+            - apply_phase5_durable_agent_runs_sse.py
+            - apply_phase6_governed_action_control_plane.py
+            - apply_workplace_resource_runtime.py
+            - patch_extracted/
+            - scratch/
+            - tests/
+            - .env.example
+            - 01_main_page_full.png
+            - 02_main_page_viewport.png
+            - 03_ask_sara_panel.png
+            - 04_main_page_no_panel.png
+            - 05_ask_sara_panel_open.png
+            - 06_organizations_page.png
+            - 07_users_page.png
+            - 08_seat_management_page.png
+            - 09_reports_page.png
+            - 10_access_packages_page.png
+            - 11_settings_page.png
+            - 12_pending_approvals_page.png
+            - 13_audit_history_page.png
+            - 14_ask_sara_panel_detail.png
+            - 15_support_dropdown.png
+            - 16_header_banner.png
+            - 17_sidebar_navigation.png
+            - 18_main_content.png
+            - 19_ask_sara_after_toggle.png
+            - 20_composer_area_closeup.png
+            - 21_ask_sara_panel_full.png
+            - 22_main_scrolled_bottom.png
+            - 23_final_workspace_home.png
+            - 24_panel_after_toggle_attempt.png
+            - 25_organizations_with_ask_button.png
+            - 26_composer_footer_issue.png
+            - APPLY_AND_VALIDATE(2).md
+            - FILE_MANIFEST(2).md
+            - SOURCE_STATE_AUDIT(2).md
+            - apply_angular_phase0_contracts_v2.py
+            - apply_angular_phase1_foundation_v2.py
+            - nucleus_organization_schema_vertical_slice_complete.zip
+            - step1_initial_page.png
+            - step2_ask_sara_panel.png
+            - test_user1_replacement_patch_bundle.zip
+        source_files: []
+        children:
+            - docs
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: Project Documentation & Architecture Reference
+        title: Project Documentation & Architecture Reference
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -1,0 +1,1 @@
+Python 3.11+ with FastAPI + Uvicorn, Pydantic v2, SQLAlchemy 2.x with aiosqlite/aioodbc/pyodbc, Alembic for migrations, pytest + pytest-asyncio for tests, and an Angular 21 LTS frontend consumed through a single validated API facade.

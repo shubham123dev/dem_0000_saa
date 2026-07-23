@@ -13,6 +13,7 @@ from app.agent.run_contracts import AgentRunCancelled
 from app.api.action_dependencies import get_agent_action_repository
 from app.agent.run_runtime import build_run_response_service
 from app.repositories.agent_run_repository import AgentRunRepository
+from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.user_repository import UserRepository
 from app.services.agent_run_activity import DatabaseAgentRunActivitySink
 
@@ -87,6 +88,10 @@ class AgentRunExecutor:
                 await repository.complete_run(
                     run_id=run_id, completion=completion
                 )
+                # Auto-title: set conversation title from first user message
+                await self._maybe_set_conversation_title(
+                    session, run.conversation_id
+                )
             except AgentRunCancelled:
                 await session.rollback()
                 await repository.cancel_run(run_id)
@@ -113,6 +118,34 @@ class AgentRunExecutor:
                 )
                 if not renewed:
                     return
+
+    async def _maybe_set_conversation_title(
+        self, session: AsyncSession, conversation_id: str
+    ) -> None:
+        """Generate a title from the first user message if conversation has no title."""
+        try:
+            conversation_repo = ConversationRepository(session)
+            messages, _ = await conversation_repo.get_history(
+                conversation_id=conversation_id
+            )
+            # Find the first user message
+            first_user_message = next(
+                (m for m in messages if m.role == "user"), None
+            )
+            if first_user_message is None:
+                return
+            # Truncate to 60 chars for a clean title
+            title = first_user_message.content.strip()
+            if len(title) > 60:
+                title = title[:57].rstrip() + "..."
+            await conversation_repo.set_title_if_empty(
+                conversation_id=conversation_id, title=title
+            )
+        except Exception:
+            logger.debug(
+                "Auto-title generation skipped",
+                extra={"conversation_id": conversation_id},
+            )
 
 
 class AgentRunCoordinator:

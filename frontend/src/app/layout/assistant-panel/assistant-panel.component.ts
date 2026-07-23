@@ -1,11 +1,13 @@
 import { A11yModule } from '@angular/cdk/a11y';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild, computed, effect, inject, type ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, ViewChild, computed, effect, inject, signal, type ElementRef } from '@angular/core';
 import { ActionNavigationStore } from '../../core/action-control/action-navigation.store';
 import type { AgentActivityStatus } from '../../features/assistant-conversation/agent-activity.model';
 import { AgentConversationStore } from '../../features/assistant-conversation/agent-conversation.store';
 import { AssistantActivityComponent } from '../../features/assistant-conversation/assistant-activity/assistant-activity.component';
 import { AssistantComposerComponent } from '../../features/assistant-conversation/assistant-composer/assistant-composer.component';
 import { AssistantMessageComponent } from '../../features/assistant-conversation/assistant-message/assistant-message.component';
+import { ConversationListComponent } from '../../features/conversation-list/conversation-list.component';
+import { ConversationListStore } from '../../features/conversation-list/conversation-list.store';
 import { UiBadgeComponent, UiButtonComponent, UiCalloutComponent } from '../../shared/ui';
 import type { ShellSectionId } from '../shell/shell-navigation.model';
 
@@ -27,11 +29,11 @@ import { CurrentUserStore } from '../../core/auth/current-user.store';
 
 @Component({
   selector:'app-assistant-panel', standalone:true,
-  imports:[A11yModule,AssistantActivityComponent,AssistantComposerComponent,AssistantMessageComponent,UiBadgeComponent,UiButtonComponent,UiCalloutComponent],
+  imports:[A11yModule,AssistantActivityComponent,AssistantComposerComponent,AssistantMessageComponent,ConversationListComponent,UiBadgeComponent,UiButtonComponent,UiCalloutComponent],
   changeDetection:ChangeDetectionStrategy.OnPush,
   templateUrl:'./assistant-panel.component.html', styleUrl:'./assistant-panel.component.scss'
 })
-export class AssistantPanelComponent {
+export class AssistantPanelComponent implements OnInit {
   @ViewChild('transcript') private transcript?: ElementRef<HTMLElement>;
   @ViewChild(AssistantComposerComponent) private composer?: AssistantComposerComponent;
   @Input() overlay=false;
@@ -40,9 +42,11 @@ export class AssistantPanelComponent {
   @Output() readonly sectionSelected=new EventEmitter<ShellSectionId>();
   @Output() readonly loginRequested=new EventEmitter<void>();
   readonly conversation=inject(AgentConversationStore);
+  readonly conversationListStore=inject(ConversationListStore);
   readonly userStore=inject(CurrentUserStore);
   private readonly actionNavigation=inject(ActionNavigationStore);
   readonly greeting=this.createGreeting();
+  readonly sidebarCollapsed = signal(true);
   readonly activityStatus = computed<AgentActivityStatus>(() => {
     if (this.conversation.cancellationRequested()) return 'cancellation_requested';
     const connection = this.conversation.connection();
@@ -63,10 +67,19 @@ export class AssistantPanelComponent {
     return 'idle';
   });
   constructor(){effect(()=>{this.conversation.messages();this.conversation.activities();this.conversation.pending();queueMicrotask(()=>this.scrollToLatest());});}
+  ngOnInit(): void {
+    // Load conversation list when authenticated
+    if (this.userStore.isAuthenticated()) {
+      this.conversationListStore.load();
+    }
+  }
   prompts():readonly StarterPrompt[]{return SECTION_PROMPTS[this.currentSection]??DEFAULT_PROMPTS;}
   submit(text:string):void{this.conversation.submit(text);}
   submitPrompt(prompt:StarterPrompt):void{this.conversation.submit(prompt.query);}
-  startNewConversation():void{this.conversation.clearConversation();queueMicrotask(()=>this.composer?.focus());}
+  startNewConversation():void{this.conversation.clearConversation();this.conversationListStore.createNew();queueMicrotask(()=>this.composer?.focus());}
+  toggleSidebar():void{this.sidebarCollapsed.update(v=>!v);if(!this.sidebarCollapsed()){this.conversationListStore.load();}}
+  onConversationSelected(conversationId:string):void{this.conversation.loadFromServer(conversationId);this.sidebarCollapsed.set(true);}
+  onNewConversation():void{this.conversation.clearConversation();this.sidebarCollapsed.set(true);queueMicrotask(()=>this.composer?.focus());}
   reviewProposal(proposalId:string|null):void{this.actionNavigation.open(proposalId);this.sectionSelected.emit('approvals');}
   private scrollToLatest():void{const element=this.transcript?.nativeElement;if(element)element.scrollTop=element.scrollHeight;}
   private createGreeting():string{const hour=new Date().getHours();return hour<12?'Good morning.':hour<18?'Good afternoon.':'Good evening.';}

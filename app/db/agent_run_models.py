@@ -33,6 +33,13 @@ class AgentConversationORM(Base):
             "created_by_user_id",
             "updated_at",
         ),
+        Index(
+            "ix_agent_conversation_listing",
+            "organization_id",
+            "created_by_user_id",
+            "status",
+            "last_message_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -46,6 +53,13 @@ class AgentConversationORM(Base):
         nullable=False,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_message_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     next_message_sequence: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1
     )
@@ -153,6 +167,11 @@ class AgentMessageORM(Base):
             "conversation_id",
             "sequence",
         ),
+        Index(
+            "ix_agent_message_parent",
+            "conversation_id",
+            "parent_id",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -164,6 +183,11 @@ class AgentMessageORM(Base):
     run_id: Mapped[str | None] = mapped_column(
         String,
         ForeignKey("agent_runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    parent_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("agent_messages.id", ondelete="SET NULL"),
         nullable=True,
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -200,6 +224,90 @@ class AgentRunEventORM(Base):
     safe_message: Mapped[str] = mapped_column(String(240), nullable=False)
     safe_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     terminal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class AgentContextBlockORM(Base):
+    """Context memory blocks for Cloudflare-inspired conversation memory.
+
+    Block types:
+    - soul: Agent identity and instructions (readonly)
+    - memory: Important facts learned during conversation (writable)
+    - knowledge: Searchable knowledge base (searchable)
+    - skill: Loadable skill definitions (loadable)
+    """
+
+    __tablename__ = "agent_context_blocks"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "key", name="uq_context_block_key"),
+        Index(
+            "ix_agent_context_blocks_conversation_type",
+            "conversation_id",
+            "block_type",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("agent_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    block_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    key: Mapped[str] = mapped_column(String(128), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="readonly"
+    )
+    loaded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+
+class AgentCompactionOverlayORM(Base):
+    """Compaction overlays for long conversation history.
+
+    Stores summarized versions of older message ranges, preserving originals.
+    Applied transparently at read time to reduce context window usage.
+    """
+
+    __tablename__ = "agent_compaction_overlays"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "start_sequence",
+            "end_sequence",
+            name="uq_compaction_overlay_range",
+        ),
+        Index(
+            "ix_agent_compaction_overlays_conversation_seq",
+            "conversation_id",
+            "start_sequence",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("agent_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    start_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    token_estimate: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    original_message_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

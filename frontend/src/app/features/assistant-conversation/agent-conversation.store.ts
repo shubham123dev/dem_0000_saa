@@ -6,6 +6,7 @@ import type { AgentRunEvent, AgentRunMessage, AgentRunStreamUpdate } from '../..
 import { agentRunMessageSchema } from '../../core/agent-run/agent-run.schemas';
 import { AgentRunStreamService } from '../../core/agent-run/agent-run-stream.service';
 import { WorkplaceAgentApiService } from '../../core/api/workplace-agent-api.service';
+import { ConversationApiService } from '../../core/conversation/conversation-api.service';
 import { CurrentUserStore } from '../../core/auth/current-user.store';
 import { OrganizationRouteService } from '../../core/routing/organization-route.service';
 import { APP_RUNTIME_CONFIG } from '../../core/config/app-config.token';
@@ -47,6 +48,7 @@ export class AgentConversationStore {
   private readonly restApi = inject(WorkplaceAgentApiService);
   private readonly runApi = inject(AgentRunApiService);
   private readonly stream = inject(AgentRunStreamService);
+  private readonly conversationApi = inject(ConversationApiService);
 
   /** Organization context now comes from the URL route parameter. */
   get organizationId(): string | null {
@@ -175,6 +177,49 @@ export class AgentConversationStore {
     this.cancellationRequestedState.set(false);
     this.watchingStoppedState.set(false);
     this.removeRecovery();
+  }
+
+  /** Load conversation history from the server for a specific conversation. */
+  loadFromServer(conversationId: string): void {
+    const orgId = this.organizationId;
+    if (!orgId || !conversationId) return;
+
+    this.stopAll();
+    this.conversationIdState.set(conversationId);
+    this.activeRunIdState.set(null);
+    this.pendingState.set(false);
+    this.activitiesState.set([]);
+    this.clarificationState.set(null);
+
+    this.requestSubscription = this.conversationApi.getHistory(orgId, conversationId).subscribe({
+      next: (history) => {
+        const mapped = history.messages.map((m) => this.mapServerMessage(m));
+        this.messagesState.set(mapped.slice(-MAX_MESSAGES));
+        // Check if last message is a clarification request
+        const lastServerMsg = history.messages.at(-1);
+        if (lastServerMsg?.mode === 'clarification_required') {
+          this.clarificationState.set({
+            originalRequest: '',
+            collectedDetails: [],
+            question: lastServerMsg.content,
+            missingFields: []
+          });
+        }
+      },
+      error: () => {
+        this.messagesState.set([]);
+        this.conversationIdState.set(null);
+      }
+    });
+  }
+
+  private mapServerMessage(msg: { id: string; role: string; content: string; mode: string | null; answerSource: string | null; createdAt: string }): ConversationMessage {
+    const role = msg.role === 'user' ? 'user' : msg.role === 'assistant' ? 'assistant' : 'notice';
+    return {
+      ...emptyConversationMessage(role, msg.content, msg.id, msg.createdAt),
+      mode: msg.mode as ConversationMessage['mode'],
+      answerSource: msg.answerSource as ConversationMessage['answerSource']
+    };
   }
 
   private submitRun(displayText: string, existingRequestId?: string): void {

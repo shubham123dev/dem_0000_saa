@@ -1,0 +1,1 @@
+FastAPI-based Workplace Agent sandbox that layers an exact Nucleus organization schema over the existing agent runtime, exposing governed read tools, approval-gated actions, and a durable SSE-backed conversation plane with an Angular frontend.

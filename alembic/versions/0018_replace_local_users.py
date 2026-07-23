@@ -93,6 +93,9 @@ def _require_canonical_production_ids() -> None:
         )
 
 
+def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+
     if "user_sessions" not in inspector.get_table_names():
         op.create_table(
             "user_sessions",

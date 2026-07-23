@@ -1,0 +1,1 @@
+Markdown-only documentation; references SQLite exact-schema tables, NucleusOrganizationGateway/NucleusOrganizationRepository ports, and an optimistic-concurrency sidecar (nucleus_resource_versions).

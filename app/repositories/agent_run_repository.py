@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 import uuid
 from typing import Any
 
@@ -19,11 +20,15 @@ from app.agent.run_contracts import (
     terminal_event_type,
 )
 from app.db.agent_run_models import (
+    AgentContextBlockORM,
     AgentConversationORM,
     AgentMessageORM,
     AgentRunEventORM,
     AgentRunORM,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -52,6 +57,28 @@ def _proposal_metadata(completion: AgentQueryCompletion) -> dict[str, Any] | Non
         "changes": [change.model_dump(mode="json") for change in proposal.changes[:8]],
         "expires_at": proposal.expires_at.isoformat(),
     }
+
+
+# Default soul content for workplace agent
+_DEFAULT_SOUL_CONTENT = """You are SARA, the workplace assistant for this organization.
+
+Your role:
+- Answer workplace questions using available tools and data
+- Help users understand organization resources, users, and settings
+- Create governed action proposals for changes that require approval
+- Maintain a helpful, professional, and concise communication style
+
+Guidelines:
+- Always verify information before responding
+- Use available tools to fetch real data rather than guessing
+- For actions that modify data, create proposals for approval
+- Be transparent about limitations and uncertainties
+"""
+
+
+def _estimate_tokens(text: str) -> int:
+    """Simple token estimation: ~1.3 tokens per word."""
+    return int(len(text.split()) * 1.3)
 
 
 class AgentConversationBusyRepositoryError(RuntimeError):
@@ -84,6 +111,7 @@ class AgentRunRepository:
         client_request_id: str,
         conversation_id: str | None,
         request_id: str | None,
+        parent_message_id: str | None = None,
     ) -> CreatedAgentRun:
         existing = await self.get_by_client_request_id(
             organization_id=organization_id,
@@ -99,6 +127,7 @@ class AgentRunRepository:
             message = await self.require_message(existing.user_message_id)
             return CreatedAgentRun(conversation, existing, message, False)
 
+        last_integrity_error: IntegrityError | None = None
         for _attempt in range(20):
             existing = await self.get_by_client_request_id(
                 organization_id=organization_id,
@@ -123,10 +152,21 @@ class AgentRunRepository:
                         status="active",
                         next_message_sequence=2,
                         version=1,
+                        message_count=1,
+                        last_message_at=now,
                         created_at=now,
                         updated_at=now,
                     )
                     self._session.add(conversation_row)
+                    # Persist the parent conversation before its context blocks.
+                    # These ORM classes intentionally use bare foreign keys (no
+                    # relationship()), so the unit-of-work does not guarantee
+                    # parent-before-child insert order within a single flush.
+                    # Under PRAGMA foreign_keys=ON that violates the FK on
+                    # agent_context_blocks. Flushing first makes ordering explicit.
+                    await self._session.flush()
+                    # Initialize context memory blocks for new conversation
+                    self._session.add_all(self._create_default_context_blocks(conversation_row.id, now))
                     message_sequence = 1
                 else:
                     conversation_row = await self._conversation_row(
@@ -146,6 +186,8 @@ class AgentRunRepository:
                         .values(
                             next_message_sequence=message_sequence + 1,
                             version=conversation_row.version + 1,
+                            message_count=conversation_row.message_count + 1,
+                            last_message_at=now,
                             updated_at=now,
                         )
                     )
@@ -159,6 +201,7 @@ class AgentRunRepository:
                     id=message_id,
                     conversation_id=conversation_row.id,
                     run_id=run_id,
+                    parent_id=parent_message_id,
                     sequence=message_sequence,
                     role="user",
                     content=query,
@@ -205,7 +248,14 @@ class AgentRunRepository:
                     self._message_to_record(message_row),
                     True,
                 )
-            except IntegrityError:
+            except IntegrityError as exc:
+                last_integrity_error = exc
+                logger.warning(
+                    "create_run integrity error (attempt %s, conversation_id=%s)",
+                    _attempt,
+                    conversation_id,
+                    exc_info=exc,
+                )
                 await self._session.rollback()
                 self._session.expunge_all()
                 existing = await self.get_by_client_request_id(
@@ -227,7 +277,14 @@ class AgentRunRepository:
                     )
                     if active is not None:
                         raise AgentConversationBusyRepositoryError()
-        raise RuntimeError("Could not allocate a conversation message sequence")
+        raise RuntimeError(
+            "Could not allocate a conversation message sequence"
+            + (
+                f" (last integrity error: {last_integrity_error})"
+                if last_integrity_error is not None
+                else ""
+            )
+        )
 
     async def get_by_client_request_id(
         self,
@@ -552,6 +609,8 @@ class AgentRunRepository:
                 .values(
                     next_message_sequence=message_sequence + 1,
                     version=conversation.version + 1,
+                    message_count=conversation.message_count + 1,
+                    last_message_at=now,
                     updated_at=now,
                 )
             )
@@ -591,10 +650,13 @@ class AgentRunRepository:
                 self._session.expire_all()
                 continue
             metadata = _completion_metadata(completion)
+            # Get the user message to set parent_id for the assistant response
+            user_message = await self._session.get(AgentMessageORM, run.user_message_id)
             message = AgentMessageORM(
                 id=message_id,
                 conversation_id=conversation.id,
                 run_id=run_id,
+                parent_id=run.user_message_id,
                 sequence=message_sequence,
                 role="assistant",
                 content=_bounded_text(completion.answer, 8000),
@@ -794,3 +856,53 @@ class AgentRunRepository:
             "safe_metadata": metadata if metadata is not None else row.safe_metadata_json,
             "created_at": row.created_at.isoformat(),
         }
+
+    @staticmethod
+    def _create_default_context_blocks(
+        conversation_id: str, now: datetime
+    ) -> list[AgentContextBlockORM]:
+        """Create default context memory blocks for a new conversation."""
+        return [
+            AgentContextBlockORM(
+                id=uuid.uuid4().hex,
+                conversation_id=conversation_id,
+                block_type="soul",
+                key="soul",
+                content=_DEFAULT_SOUL_CONTENT,
+                description="Agent identity and instructions",
+                max_tokens=None,
+                current_tokens=_estimate_tokens(_DEFAULT_SOUL_CONTENT),
+                provider_type="readonly",
+                loaded=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            AgentContextBlockORM(
+                id=uuid.uuid4().hex,
+                conversation_id=conversation_id,
+                block_type="memory",
+                key="memory",
+                content="",
+                description="Important facts learned during this conversation",
+                max_tokens=1100,
+                current_tokens=0,
+                provider_type="writable",
+                loaded=True,
+                created_at=now,
+                updated_at=now,
+            ),
+            AgentContextBlockORM(
+                id=uuid.uuid4().hex,
+                conversation_id=conversation_id,
+                block_type="memory",
+                key="todos",
+                content="",
+                description="Task tracking for this conversation",
+                max_tokens=2000,
+                current_tokens=0,
+                provider_type="writable",
+                loaded=True,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]

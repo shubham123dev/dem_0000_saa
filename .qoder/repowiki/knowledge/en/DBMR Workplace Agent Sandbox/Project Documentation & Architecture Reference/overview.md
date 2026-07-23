@@ -1,0 +1,1 @@
+Reference documentation covering the Workplace Agent backend architecture, security model, Nucleus schema mapping, API contracts, governed actions, and workplace workflows.

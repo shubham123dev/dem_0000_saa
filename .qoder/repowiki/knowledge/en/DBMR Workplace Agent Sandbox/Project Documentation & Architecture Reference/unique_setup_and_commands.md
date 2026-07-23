@@ -1,0 +1,1 @@
+No build or runtime commands — this is pure documentation. Authors should keep these files synchronized with the backend's domain contracts, permission names, and Nucleus schema mappings.

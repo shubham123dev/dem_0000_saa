@@ -16,6 +16,7 @@ from app.api import (
     agent_routes,
     agent_run_routes,
     auth_routes,
+    conversation_routes,
     health_routes,
     nucleus_routes,
     workplace_resource_routes,
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     application.include_router(nucleus_routes.router)
     application.include_router(workplace_resource_routes.router)
     application.include_router(agent_routes.router)
+    application.include_router(conversation_routes.router)
     application.include_router(agent_run_routes.router)
     application.include_router(action_control_routes.router)
     application.include_router(action_conversation_control_routes.router)

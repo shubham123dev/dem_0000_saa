@@ -1,0 +1,140 @@
+<div class="conversation-sidebar" [class.conversation-sidebar--collapsed]="collapsed">
+  <div class="sidebar-header">
+    <button type="button" class="new-conversation-btn" (click)="createNew()" title="Start new conversation">
+      <span class="new-icon" aria-hidden="true">＋</span>
+      <span>New conversation</span>
+    </button>
+  </div>
+
+  <div class="sidebar-search">
+    <div class="search-container">
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Search conversations..."
+        [value]="store.searchQuery()"
+        (input)="onSearchInput($event)"
+        aria-label="Search conversations"
+      />
+      @if (store.searchQuery()) {
+        <button type="button" class="clear-search-btn" (click)="clearSearch()" aria-label="Clear search">×</button>
+      }
+    </div>
+  </div>
+
+  <div class="sidebar-list" role="listbox" aria-label="Conversation history">
+    @if (store.loading()) {
+      <div class="loading-state">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span>Loading...</span>
+      </div>
+    } @else if (store.searchMode()) {
+      <!-- Cross-conversation search results -->
+      @if (store.searchResults().length === 0) {
+        <div class="empty-state">
+          <p>No results for "{{ store.searchQuery() }}"</p>
+          <small>Try different keywords</small>
+        </div>
+      } @else {
+        <div class="search-results-header">
+          <span>{{ store.searchResults().length }} result{{ store.searchResults().length === 1 ? '' : 's' }}</span>
+        </div>
+        @for (result of store.searchResults(); track result.messageId) {
+          <div
+            class="search-result-item"
+            tabindex="0"
+            (click)="selectSearchResult(result)"
+            (keydown.enter)="selectSearchResult(result)"
+          >
+            <div class="result-conversation">{{ result.conversationTitle || 'Untitled' }}</div>
+            <div class="result-snippet">{{ result.snippet }}</div>
+            <div class="result-meta">
+              <span class="result-role">{{ result.role }}</span>
+              <span class="result-time">{{ relativeTime(result.createdAt) }}</span>
+            </div>
+          </div>
+        }
+      }
+    } @else if (store.conversations().length === 0) {
+      <div class="empty-state">
+        @if (store.searchQuery()) {
+          <p>No conversations match "{{ store.searchQuery() }}"</p>
+        } @else {
+          <p>No conversations yet</p>
+          <small>Start a new conversation to begin</small>
+        }
+      </div>
+    } @else {
+      @for (item of store.conversations(); track trackById($index, item)) {
+        <div
+          class="conversation-item"
+          [class.conversation-item--active]="store.activeConversationId() === item.id"
+          [class.conversation-item--pinned]="item.pinned"
+          role="option"
+          [attr.aria-selected]="store.activeConversationId() === item.id"
+          tabindex="0"
+          (click)="selectConversation(item)"
+          (keydown.enter)="selectConversation(item)"
+        >
+          @if (isRenaming === item.id) {
+            <div class="rename-container" (click)="$event.stopPropagation()">
+              <input
+                type="text"
+                class="rename-input"
+                [value]="renameValue"
+                (input)="renameValue = $any($event.target).value"
+                (keydown)="onRenameKeydown($event, item.id)"
+                (blur)="confirmRename(item.id)"
+                autofocus
+              />
+            </div>
+          } @else {
+            <div class="item-content">
+              <div class="item-title">
+                @if (item.pinned) {
+                  <span class="pin-indicator" aria-hidden="true" title="Pinned">📌</span>
+                }
+                <span class="title-text">{{ item.title || 'Untitled conversation' }}</span>
+              </div>
+              <div class="item-meta">
+                <span class="message-count">{{ item.messageCount }} messages</span>
+                <span class="timestamp">{{ relativeTime(item.lastMessageAt) }}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="item-menu-btn"
+              aria-label="Conversation options"
+              (click)="openMenu(item.id, $event)"
+            >⋯</button>
+          }
+
+          @if (menuOpenId() === item.id) {
+            <div class="context-menu" (click)="$event.stopPropagation()">
+              <button type="button" class="menu-item" (click)="startRename(item, $event)">
+                <span aria-hidden="true">✏️</span> Rename
+              </button>
+              <button type="button" class="menu-item" (click)="togglePin(item.id, $event)">
+                <span aria-hidden="true">{{ item.pinned ? '📌' : '📍' }}</span>
+                {{ item.pinned ? 'Unpin' : 'Pin' }}
+              </button>
+              <button type="button" class="menu-item menu-item--danger" (click)="removeConversation(item.id, $event)">
+                <span aria-hidden="true">🗑️</span> Delete
+              </button>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+
+  @if (store.total() > store.conversations().length) {
+    <div class="sidebar-footer">
+      <span class="total-count">{{ store.total() }} total conversations</span>
+    </div>
+  }
+</div>
+
+@if (menuOpenId()) {
+  <div class="menu-backdrop" (click)="closeMenu()"></div>
+}

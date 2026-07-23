@@ -1,0 +1,4 @@
+- Each document uses a top-level heading followed by concise bullet lists and ASCII flow diagrams to describe request/response lifecycles.
+- Security-sensitive concepts (passwords, usernames, license fields) are explicitly declared outside all action/model/audit contracts rather than being hidden in code comments.
+- Cross-store operations are described with before/after proposal semantics, fingerprint versions, and deterministic reconciliation rules instead of ad-hoc transaction descriptions.
+- Permission and action names are quoted verbatim (e.g. `organization.account.read`, `update_nucleus_organization_permissions`) to anchor the docs to the implementation surface.

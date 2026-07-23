@@ -1,0 +1,5 @@
+- All database changes are expressed as idempotent Alembic migrations that preserve exact Nucleus table/column names and never modify existing lowercase Workplace Agent tables.
+- Every write action follows the same approval-gated pipeline: immutable before/after proposal, configurable approval threshold, permission + fingerprint + resource-precondition revalidation, optimistic version check, idempotent execution, exact reconciliation, and audit logging.
+- Backend operations are exposed through the framework-neutral `NucleusOrganizationGateway` protocol so the SQLite implementation can be swapped without touching routes, services, or handlers.
+- Sensitive operations require two independent approvals and prohibit requester self-approval; actor IDs, timestamps, and approval state are always derived from the backend, never supplied by callers.
+- Tests are organized one-per-feature under `tests/` with `pytest-asyncio` auto mode and assert both HTTP endpoints and internal domain behavior.

@@ -1,8 +1,25 @@
 <aside class="assistant-panel" aria-label="Ask SARA" [cdkTrapFocus]="overlay" [cdkTrapFocusAutoCapture]="overlay">
   <header>
-    <div class="assistant-title"><img class="assistant-title__orb" src="sara-ai-orb.svg" alt="" aria-hidden="true" /><strong>Ask SARA</strong><app-ui-badge [tone]="conversation.streamingEnabled() ? 'success' : 'info'">{{ conversation.streamingEnabled() ? 'Resumable activity' : 'REST fallback' }}</app-ui-badge></div>
-    <div><button type="button" class="assistant-icon-button" aria-label="Start new conversation" title="Start new conversation" (click)="startNewConversation()">＋</button><button type="button" class="assistant-icon-button" aria-label="Close Ask SARA" title="Close Ask SARA" (click)="closePressed.emit()">×</button></div>
+    <div class="assistant-title">
+      <button type="button" class="assistant-icon-button sidebar-toggle" aria-label="Toggle conversation history" title="Conversation history" (click)="toggleSidebar()">☰</button>
+      <img class="assistant-title__orb" src="sara-ai-orb.svg" alt="" aria-hidden="true" />
+      <strong>Ask SARA</strong>
+      <app-ui-badge [tone]="conversation.streamingEnabled() ? 'success' : 'info'">{{ conversation.streamingEnabled() ? 'Resumable activity' : 'REST fallback' }}</app-ui-badge>
+    </div>
+    <div>
+      <button type="button" class="assistant-icon-button" aria-label="Start new conversation" title="Start new conversation" (click)="startNewConversation()">＋</button>
+      <button type="button" class="assistant-icon-button" aria-label="Close Ask SARA" title="Close Ask SARA" (click)="closePressed.emit()">×</button>
+    </div>
   </header>
+  <div class="assistant-content">
+    <app-conversation-list
+      class="assistant-sidebar"
+      [class.assistant-sidebar--collapsed]="sidebarCollapsed()"
+      [collapsed]="sidebarCollapsed()"
+      (conversationSelected)="onConversationSelected($event)"
+      (newConversation)="onNewConversation()"
+    />
+    <div class="assistant-main">
   <div #transcript class="assistant-body ui-dot-grid" role="log" aria-label="Conversation" aria-live="polite" [attr.aria-busy]="conversation.pending()">
     @if (!userStore.isAuthenticated()) {
       <app-ui-callout tone="warning" title="Authentication Required">
@@ -27,4 +44,6 @@
     <p class="session-note">Conversation state and run events are authoritative on the backend. This tab keeps only recovery identifiers.</p>
     <app-assistant-composer [disabled]="!userStore.isAuthenticated() || !conversation.configured() || conversation.canResume()" [pending]="conversation.pending()" [maxLength]="conversation.inputLimit()" [clarificationActive]="conversation.pendingClarification() !== null" [cancelAvailable]="conversation.canCancel()" (submitted)="submit($event)" (stopRequested)="conversation.stopWaiting()" (cancelRequested)="conversation.cancelActiveRun()" (clarificationCancelled)="conversation.dismissClarification()" />
   </footer>
-</aside>
+    </div>
+  </div>
+</aside>
