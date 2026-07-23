@@ -129,7 +129,7 @@ class NucleusUserRepository:
 
     @property
     def creation_enabled(self) -> bool:
-        return self._settings.nucleus_user_writes_enabled
+        return False
 
     async def ping(self) -> None:
         statement = text(
@@ -224,105 +224,11 @@ class NucleusUserRepository:
         return result
 
     async def create_user(self, command: CreateUserCommand) -> User:
-        if not self.creation_enabled:
-            raise UserDirectoryWriteDisabledError(
-                "Test_user1 writes are disabled; set "
-                "WORKPLACE_NUCLEUS_USER_WRITES_ENABLED=true only after "
-                "validating the production creation contract"
-            )
-        existing = await self.get_by_email(command.email)
-        if existing is not None:
-            return existing
-        actor_user_id = self._numeric_actor(command.actor_user_id)
-        metadata = await self._column_metadata()
-        now = datetime.now(timezone.utc)
-        values: dict[str, Any] = dict(self._settings.nucleus_user_create_defaults)
-        values.update(dict(command.trusted_defaults))
-        if "Password" in values:
-            raise UserCreationContractError(
-                "Password cannot be written through the workplace user adapter"
-            )
-        values.update(
-            {
-                "Name": command.display_name,
-                "EmailID": command.email.strip().lower(),
-                "IsActive": command.is_active,
-                "CreatedDate": now,
-                "ModifiedDate": now,
-                "CreatedBy": actor_user_id,
-                "ModifiedBy": actor_user_id,
-            }
+        raise UserDirectoryWriteDisabledError(
+            "Test_user1 writes are disabled; direct user creation in "
+            "dbo.Test_user1 is not supported."
         )
-        user_type_id = (
-            command.user_type_id
-            if command.user_type_id is not None
-            else self._settings.nucleus_user_default_type_id
-        )
-        if user_type_id is not None:
-            values["UserTypeID"] = user_type_id
-        source = command.source or self._settings.nucleus_user_default_source
-        if source is not None:
-            values["userSource"] = source
 
-        unknown = sorted(set(values) - set(metadata))
-        if unknown:
-            raise UserCreationContractError(
-                "Configured Test_user1 creation fields do not exist: "
-                + ", ".join(unknown)
-            )
-        protected = sorted(set(values) & _PROTECTED_CREATE_COLUMNS)
-        if protected:
-            raise UserCreationContractError(
-                "Protected Test_user1 creation fields were supplied: "
-                + ", ".join(protected)
-            )
-        insertable = {
-            name: value
-            for name, value in values.items()
-            if not metadata[name].database_generated
-        }
-        required_missing = sorted(
-            column.name
-            for column in metadata.values()
-            if not column.nullable
-            and not column.database_generated
-            and not column.has_default
-            and (
-                column.name not in insertable
-                or insertable[column.name] is None
-            )
-        )
-        if "Password" in required_missing:
-            raise UserCreationContractError(
-                "Password is required without a database default. Use the "
-                "official Nucleus user-creation/authentication procedure; "
-                "direct plaintext password insertion is prohibited."
-            )
-        if required_missing:
-            raise UserCreationContractError(
-                "Test_user1 requires trusted creation defaults for: "
-                + ", ".join(required_missing)
-            )
-        if not insertable:
-            raise UserCreationContractError("No insertable Test_user1 fields")
-
-        columns = list(insertable)
-        parameters = {f"p{index}": insertable[name] for index, name in enumerate(columns)}
-        column_sql = ", ".join(_quote_identifier(name) for name in columns)
-        values_sql = ", ".join(f":p{index}" for index in range(len(columns)))
-        statement = text(
-            f"INSERT INTO {self._qualified_table} ({column_sql}) "
-            f"OUTPUT INSERTED.[UserID] VALUES ({values_sql})"
-        )
-        async with self._sessionmaker() as session:
-            user_id = (await session.execute(statement, parameters)).scalar_one()
-            await session.commit()
-        created = await self.get_by_id(str(user_id))
-        if created is None:
-            raise UserCreationContractError(
-                "Test_user1 INSERT succeeded but the created user could not be reread"
-            )
-        return created
 
     async def _column_metadata(self) -> dict[str, _ColumnMetadata]:
         if self._metadata_cache is not None:

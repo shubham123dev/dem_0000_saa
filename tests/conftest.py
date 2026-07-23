@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 import os
 
 os.environ.setdefault("WORKPLACE_ENABLE_RAW_MOCK_API", "true")
+os.environ.setdefault("WORKPLACE_ENVIRONMENT", "sandbox")
 
 import pytest
 import pytest_asyncio
